@@ -6,6 +6,8 @@ import Login from './pages/Login'
 import Queue from './pages/Queue'
 import Booked from './pages/Booked'
 import Users from './pages/Users'
+import Script from './pages/Script'
+import Training from './pages/Training'
 
 const queryClient = new QueryClient()
 
@@ -60,6 +62,8 @@ export default function App() {
                     </RoleRoute>
                   }
                 />
+                <Route path="/script" element={<Script />} />
+                <Route path="/training" element={<Training />} />
               </Route>
             </Routes>
           </Gate>
