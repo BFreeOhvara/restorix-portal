@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { Bell, LogOut, Phone, CalendarCheck, Users as UsersIcon, FileText, GraduationCap } from 'lucide-react'
+import { Bell, LogOut, Phone, CalendarCheck, Users as UsersIcon, FileText, GraduationCap, BarChart2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
 const NAV = [
+  { to: '/overview', label: 'Overview', icon: BarChart2, roles: ['setter', 'admin', 'closer'] },
   { to: '/queue', label: 'Queue', icon: Phone, roles: ['setter', 'admin'] },
   { to: '/booked', label: 'Booked', icon: CalendarCheck, roles: ['setter', 'admin', 'closer'] },
   { to: '/users', label: 'Users', icon: UsersIcon, roles: ['admin'] },

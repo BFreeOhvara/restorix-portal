@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import Layout from './components/Layout'
 import Login from './pages/Login'
+import Overview from './pages/Overview'
 import Queue from './pages/Queue'
 import Booked from './pages/Booked'
 import Users from './pages/Users'
@@ -45,6 +46,7 @@ export default function App() {
             <Routes>
               <Route element={<Layout />}>
                 <Route path="/" element={<Home />} />
+                <Route path="/overview" element={<Overview />} />
                 <Route
                   path="/queue"
                   element={
