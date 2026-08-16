@@ -2,10 +2,11 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 
 // Stats are computed client-side from the leads table rather than a DB view
-// or RPC — this project has no per-action call-log timestamp (only
-// created_at on the lead itself), so "logged in range" uses created_at as
-// the closest available proxy. Booking milestones (badges) are all-time,
-// not date-range-scoped, since they're cumulative achievements.
+// or RPC. "Logged in range" filters on updated_at, not created_at — leads
+// has a leads_set_updated_at trigger that bumps updated_at on every UPDATE,
+// and logging a call is always an UPDATE (see useLogCall), so updated_at
+// reflects when the call was actually logged. Booking milestones (badges)
+// are all-time, not date-range-scoped, since they're cumulative achievements.
 
 export function useAllLeadsForStats() {
   return useQuery({
@@ -13,7 +14,7 @@ export function useAllLeadsForStats() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('leads')
-        .select('id, created_by, assigned_closer, status, created_at, strategy_call_at')
+        .select('id, created_by, assigned_closer, status, created_at, updated_at, strategy_call_at')
       if (error) throw error
       return data
     },
@@ -44,9 +45,9 @@ export function inRange(iso, start, end) {
 }
 
 export function statsForUser(leads, userId, start, end) {
-  const owned = leads.filter((l) => l.created_by === userId && inRange(l.created_at, start, end))
-  const logged = owned.filter((l) => l.status !== 'new')
-  const booked = owned.filter((l) => l.status === 'booked')
+  const owned = leads.filter((l) => l.created_by === userId)
+  const logged = owned.filter((l) => l.status !== 'new' && inRange(l.updated_at, start, end))
+  const booked = logged.filter((l) => l.status === 'booked')
   return {
     logged: logged.length,
     booked: booked.length,
