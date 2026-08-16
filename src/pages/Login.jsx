@@ -26,8 +26,7 @@ export default function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-base px-6">
       <div className="w-full max-w-sm rounded-card border border-line bg-elevated p-8">
-        <span className="font-display text-xl font-semibold tracking-tight text-fg-primary">Restorix</span>
-        <p className="mt-1 font-sans text-sm text-fg-secondary">Setter portal</p>
+        <span className="font-display text-xl font-semibold tracking-tight text-fg-primary">Restorix Portal</span>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
           <Field label="Username">
