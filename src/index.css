@@ -1,0 +1,48 @@
+@import '@fontsource/space-grotesk/500.css';
+@import '@fontsource/space-grotesk/600.css';
+@import '@fontsource/space-grotesk/700.css';
+@import '@fontsource/manrope/400.css';
+@import '@fontsource/manrope/500.css';
+@import '@fontsource/manrope/600.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-base: #e5ecea;
+  --bg-surface: #f2f6f5;
+  --bg-elevated: #ffffff;
+  --bg-muted: #cfd9d6;
+  --text-primary: #0f1f1b;
+  --text-secondary: rgba(15, 31, 27, 0.68);
+  --text-faint: rgba(15, 31, 27, 0.45);
+  --accent: #3a63d6;
+  --accent-bright: #7c9eff;
+  --accent-deep: #24469e;
+  --border: rgba(14, 26, 24, 0.14);
+  --border-strong: rgba(14, 26, 24, 0.22);
+  --danger: #c8452a;
+  --success: #1f8a5f;
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'Manrope', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+}
