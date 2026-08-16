@@ -81,10 +81,8 @@ export default function Overview() {
   }, [leads, profile, start, end, isCloser])
 
   const myAllTimeBooked = useMemo(() => {
-    if (!leads) return 0
-    return isCloser
-      ? statsForCloser(leads, profile.id).assigned
-      : statsForUser(leads, profile.id).booked
+    if (!leads || isCloser) return 0
+    return statsForUser(leads, profile.id).booked
   }, [leads, profile, isCloser])
 
   const rollup = useMemo(() => {
@@ -124,9 +122,11 @@ export default function Overview() {
         )}
       </div>
 
-      <div className="mt-4">
-        <BadgeRow bookedCount={myAllTimeBooked} />
-      </div>
+      {!isCloser && (
+        <div className="mt-4">
+          <BadgeRow bookedCount={myAllTimeBooked} />
+        </div>
+      )}
 
       {isAdmin && rollup && (
         <div className="mt-8 space-y-6">
@@ -196,9 +196,11 @@ export default function Overview() {
         </div>
       )}
 
-      <p className="mt-6 font-sans text-xs text-fg-faint">
-        Badges: {BADGE_TIERS.map((t) => t.label).join(' · ')}, based on all-time booked calls.
-      </p>
+      {!isCloser && (
+        <p className="mt-6 font-sans text-xs text-fg-faint">
+          Badges: {BADGE_TIERS.map((t) => t.label).join(' · ')}, based on all-time booked calls.
+        </p>
+      )}
     </div>
   )
 }
