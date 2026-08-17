@@ -3,26 +3,50 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { Bell, LogOut, Phone, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
-// Nav order (Prompt 441, My Goals added Prompt 442, Messages + My Calls
-// added Prompt 445/447): Overview first, admin-only Queue/Users kept
-// right after it (their primary daily tools), then Training, then
-// Messages (a utility page like Training, not a performance metric —
-// kept out of the Activity/Goals/Stats/Commissions KPI grouping), then
-// the setter/closer-specific activity view, then My Calls (a record of
-// what happened, same grouping as Activity), then My Goals (setter/admin
-// only), then Stats, then Commissions.
-const NAV = [
-  { to: '/overview', label: 'Overview', icon: BarChart2, roles: ['setter', 'admin', 'closer'] },
-  { to: '/queue', label: 'Queue', icon: Phone, roles: ['admin'] },
-  { to: '/users', label: 'Users', icon: UsersIcon, roles: ['admin'] },
-  { to: '/training', label: 'Training', icon: GraduationCap, roles: ['setter', 'admin', 'closer'] },
-  { to: '/messages', label: 'Messages', icon: MessageSquare, roles: ['setter', 'admin', 'closer'] },
-  { to: '/activity', label: 'Activity', icon: ActivityIcon, roles: ['setter'] },
-  { to: '/setter-activity', label: 'Setter Activity', icon: Users2, roles: ['closer'] },
-  { to: '/my-calls', label: 'My Calls', icon: PhoneCall, roles: ['setter', 'admin', 'closer'] },
-  { to: '/goals', label: 'My Goals', icon: Target, roles: ['setter', 'admin'] },
-  { to: '/stats', label: 'Stats', icon: TrendingUp, roles: ['setter', 'admin', 'closer'] },
-  { to: '/commissions', label: 'Commissions', icon: DollarSign, roles: ['setter', 'admin', 'closer'] },
+// Prompt 448: grouped into labeled sections (matching ohvara-dashboard's
+// Sidebar.jsx grouped-nav pattern) instead of one flat list. Bucket names
+// are ours, not Brayden's — he asked for the grouped structure, not
+// specific labels. Queue/Users move out of pole position into their own
+// admin-only ADMIN group now that groups do the visual separation work
+// flat order used to (previously admin's daily tools sat right after
+// Overview specifically to read as "primary" in a flat list).
+const NAV_GROUPS = [
+  {
+    label: 'TODAY',
+    items: [
+      { to: '/overview', label: 'Overview', icon: BarChart2, roles: ['setter', 'admin', 'closer'] },
+    ],
+  },
+  {
+    label: 'WORK',
+    items: [
+      { to: '/my-calls', label: 'My Calls', icon: PhoneCall, roles: ['setter', 'admin', 'closer'] },
+      { to: '/messages', label: 'Messages', icon: MessageSquare, roles: ['setter', 'admin', 'closer'] },
+    ],
+  },
+  {
+    label: 'PERFORMANCE',
+    items: [
+      { to: '/goals', label: 'My Goals', icon: Target, roles: ['setter', 'admin'] },
+      { to: '/stats', label: 'Stats', icon: TrendingUp, roles: ['setter', 'admin', 'closer'] },
+      { to: '/activity', label: 'Activity', icon: ActivityIcon, roles: ['setter'] },
+      { to: '/setter-activity', label: 'Setter Activity', icon: Users2, roles: ['closer'] },
+      { to: '/commissions', label: 'Commissions', icon: DollarSign, roles: ['setter', 'admin', 'closer'] },
+    ],
+  },
+  {
+    label: 'RESOURCES',
+    items: [
+      { to: '/training', label: 'Training', icon: GraduationCap, roles: ['setter', 'admin', 'closer'] },
+    ],
+  },
+  {
+    label: 'ADMIN',
+    items: [
+      { to: '/queue', label: 'Queue', icon: Phone, roles: ['admin'] },
+      { to: '/users', label: 'Users', icon: UsersIcon, roles: ['admin'] },
+    ],
+  },
 ]
 
 function NotificationBell() {
@@ -86,7 +110,6 @@ function HeaderName({ profile }) {
 
 export default function Layout() {
   const { profile, signOut } = useAuth()
-  const links = NAV.filter((l) => l.roles.includes(profile?.role))
 
   return (
     <div className="min-h-screen bg-base">
@@ -99,23 +122,34 @@ export default function Layout() {
           <span className="font-display text-lg font-semibold tracking-tight text-fg-primary">Restorix Portal</span>
         </div>
 
-        <nav className="flex-1 space-y-1 px-3">
-          {links.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2 font-sans text-sm transition-colors ${
-                  isActive
-                    ? 'bg-surface font-semibold text-accent'
-                    : 'text-fg-secondary hover:bg-surface hover:text-fg-primary'
-                }`
-              }
-            >
-              <Icon size={17} />
-              {label}
-            </NavLink>
-          ))}
+        <nav className="flex-1 space-y-4 px-3">
+          {NAV_GROUPS.map(({ label: groupLabel, items }) => {
+            const visible = items.filter((l) => l.roles.includes(profile?.role))
+            if (visible.length === 0) return null
+            return (
+              <div key={groupLabel}>
+                <p className="eyebrow !text-fg-faint px-3 pb-1.5">{groupLabel}</p>
+                <div className="space-y-1">
+                  {visible.map(({ to, label, icon: Icon }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 rounded-lg px-3 py-2 font-sans text-sm transition-colors ${
+                          isActive
+                            ? 'bg-surface font-semibold text-accent'
+                            : 'text-fg-secondary hover:bg-surface hover:text-fg-primary'
+                        }`
+                      }
+                    >
+                      <Icon size={17} />
+                      {label}
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </nav>
 
         <SidebarAccountFooter profile={profile} onSignOut={signOut} />
