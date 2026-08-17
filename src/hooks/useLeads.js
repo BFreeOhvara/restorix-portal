@@ -50,10 +50,21 @@ export function useLogCall() {
       const { error } = await supabase.from('leads').update(patch).eq('id', id)
       if (error) throw error
     },
+    // Prompt 459: was missing 'leads-stats' (useAllLeadsForStats, in
+    // useStats.js) — the query key behind Overview's Calls Made
+    // Today/Booked Today/Booking Rate tiles, My Goals' progress tiles,
+    // and Stats' KPI tiles. Without it, a real logged call updated the
+    // pool table instantly (invalidated via 'my-pool') but those stats
+    // tiles stayed stale until an unrelated refetch happened — a real
+    // user-facing bug, not the seeding-artifact half of this prompt's
+    // audit. Traced by logging one real call through the actual modal
+    // and watching the pool count update while the stats tile didn't,
+    // confirmed the underlying write was correct via a hard reload.
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['my-pool'] })
       queryClient.invalidateQueries({ queryKey: ['my-booked'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
     },
   })
 }

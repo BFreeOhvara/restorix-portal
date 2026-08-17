@@ -30,6 +30,11 @@ export function useAllLeadsForStats() {
       if (error) throw error
       return data
     },
+    // Prompt 459: same 15s safety net useMyPool/useLeads already have
+    // (useLeads.js) — belt-and-suspenders so this self-heals even if some
+    // future write path forgets to invalidate 'leads-stats' explicitly,
+    // same reasoning that already justified the interval on those hooks.
+    refetchInterval: 15000,
   })
 }
 
