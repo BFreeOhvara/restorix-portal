@@ -37,14 +37,11 @@ const NAV_GROUPS = [
     ],
   },
   {
+    // Prompt 454: Messages and Settings pulled back out — WORK is just
+    // My Calls again now.
     label: 'WORK',
     items: [
       { to: '/my-calls', label: 'My Calls', icon: PhoneCall, roles: ['setter', 'admin', 'closer'] },
-      { to: '/messages', label: 'Messages', icon: MessageSquare, roles: ['setter', 'admin', 'closer'] },
-      // Prompt 453: Settings needs its own nav entry, separate from the
-      // Profile/Sign out popover. Placement/section weren't specified —
-      // WORK was Brayden's own suggested reasonable fit.
-      { to: '/settings', label: 'Settings', icon: SettingsIcon, roles: ['setter', 'admin', 'closer'] },
     ],
   },
   {
@@ -54,6 +51,20 @@ const NAV_GROUPS = [
       { to: '/users', label: 'Users', icon: UsersIcon, roles: ['admin'] },
     ],
   },
+]
+
+// Prompt 454: Messages and Settings don't get their own labeled group —
+// Brayden specifically didn't want a section header that just repeats
+// the single item's own name (a "SETTINGS" label over a "Settings" link
+// reads redundant). Rendered ungrouped at the bottom of the sidebar
+// instead, below every labeled section including ADMIN — his instruction
+// named the four always-visible groups (TODAY/RESOURCES/PERFORMANCE/WORK)
+// since ADMIN only exists for the one admin role, but "bottom of the
+// sidebar" reads most literally as last overall, not squeezed above the
+// admin-only group.
+const NAV_STANDALONE = [
+  { to: '/messages', label: 'Messages', icon: MessageSquare, roles: ['setter', 'admin', 'closer'] },
+  { to: '/settings', label: 'Settings', icon: SettingsIcon, roles: ['setter', 'admin', 'closer'] },
 ]
 
 function NotificationBell() {
@@ -139,6 +150,24 @@ function AccountPopover({ profile, onSignOut, onNavigate }) {
   )
 }
 
+function NavItemLink({ to, label, icon: Icon }) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        `flex items-center gap-3 rounded-lg px-3 py-2 font-sans text-sm transition-colors ${
+          isActive
+            ? 'bg-surface font-semibold text-accent'
+            : 'text-fg-secondary hover:bg-surface hover:text-fg-primary'
+        }`
+      }
+    >
+      <Icon size={17} />
+      {label}
+    </NavLink>
+  )
+}
+
 function HeaderName({ profile }) {
   return (
     <div className="flex items-center gap-3">
@@ -171,26 +200,18 @@ export default function Layout() {
               <div key={groupLabel}>
                 <p className="eyebrow !text-fg-faint px-3 pb-1.5">{groupLabel}</p>
                 <div className="space-y-1">
-                  {visible.map(({ to, label, icon: Icon }) => (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 rounded-lg px-3 py-2 font-sans text-sm transition-colors ${
-                          isActive
-                            ? 'bg-surface font-semibold text-accent'
-                            : 'text-fg-secondary hover:bg-surface hover:text-fg-primary'
-                        }`
-                      }
-                    >
-                      <Icon size={17} />
-                      {label}
-                    </NavLink>
-                  ))}
+                  {visible.map((item) => <NavItemLink key={item.to} {...item} />)}
                 </div>
               </div>
             )
           })}
+
+          {/* Prompt 454: ungrouped, no header — see NAV_STANDALONE comment. */}
+          <div className="space-y-1">
+            {NAV_STANDALONE.filter((l) => l.roles.includes(profile?.role)).map((item) => (
+              <NavItemLink key={item.to} {...item} />
+            ))}
+          </div>
         </nav>
 
         <AccountPopover profile={profile} onSignOut={signOut} onNavigate={navigate} />
