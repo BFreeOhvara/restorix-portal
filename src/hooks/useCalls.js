@@ -33,6 +33,12 @@ export function useUpdateCall() {
 // Prompt 451: day-scoped instead of a flat "last 100" recency cap, same
 // day-by-day pattern as Activity — replaced rather than kept alongside,
 // per the prompt's own "replaces the current flat list" instruction.
+// Prompt 455: excludes `no_answer` — nobody picked up, so there was never
+// a connected conversation to have logged. `outcome.is.null` stays
+// included alongside the `neq` (a plain `.neq('outcome', 'no_answer')`
+// would silently drop in-progress calls too, since SQL's `!=` against
+// NULL is NULL, not true — those still-open rows are a separate existing
+// UI state, not something this prompt asked to touch).
 export function useMyCallsForDay(date) {
   return useQuery({
     queryKey: ['calls', date],
@@ -43,6 +49,7 @@ export function useMyCallsForDay(date) {
         .select('id, outcome, duration_seconds, recording_url, created_at, leads(facility_name), profiles(full_name)')
         .gte('created_at', start)
         .lt('created_at', end)
+        .or('outcome.neq.no_answer,outcome.is.null')
         .order('created_at', { ascending: false })
       if (error) throw error
       return data
