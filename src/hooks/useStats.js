@@ -84,15 +84,3 @@ export function statsForCloser(leads, closerId, start, end) {
   )
   return { assigned: assigned.length }
 }
-
-export const BADGE_TIERS = [
-  { threshold: 5, label: '5 Booked' },
-  { threshold: 25, label: '25 Booked' },
-  { threshold: 50, label: '50 Booked' },
-]
-
-export function badgesForCount(allTimeBookedCount) {
-  const earned = BADGE_TIERS.filter((t) => allTimeBookedCount >= t.threshold)
-  const next = BADGE_TIERS.find((t) => allTimeBookedCount < t.threshold)
-  return { earned, next }
-}
