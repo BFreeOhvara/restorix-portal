@@ -1,14 +1,17 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { Bell, LogOut, Phone, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp } from 'lucide-react'
+import { Bell, LogOut, Phone, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
 const NAV = [
   { to: '/overview', label: 'Overview', icon: BarChart2, roles: ['setter', 'admin', 'closer'] },
   { to: '/stats', label: 'Stats', icon: TrendingUp, roles: ['setter', 'admin', 'closer'] },
+  { to: '/activity', label: 'Activity', icon: ActivityIcon, roles: ['setter'] },
+  { to: '/setter-activity', label: 'Setter Activity', icon: Users2, roles: ['closer'] },
   { to: '/queue', label: 'Queue', icon: Phone, roles: ['admin'] },
   { to: '/users', label: 'Users', icon: UsersIcon, roles: ['admin'] },
   { to: '/training', label: 'Training', icon: GraduationCap, roles: ['setter', 'admin', 'closer'] },
+  { to: '/commissions', label: 'Commissions', icon: DollarSign, roles: ['setter', 'admin', 'closer'] },
 ]
 
 function NotificationBell() {

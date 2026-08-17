@@ -9,6 +9,9 @@ import Stats from './pages/Stats'
 import Queue from './pages/Queue'
 import Users from './pages/Users'
 import Training from './pages/Training'
+import Activity from './pages/Activity'
+import SetterActivity from './pages/SetterActivity'
+import Commissions from './pages/Commissions'
 
 const queryClient = new QueryClient()
 
@@ -69,6 +72,23 @@ export default function App() {
                         }
                       />
                       <Route path="/training" element={<Training />} />
+                      <Route path="/commissions" element={<Commissions />} />
+                      <Route
+                        path="/activity"
+                        element={
+                          <RoleRoute roles={['setter']}>
+                            <Activity />
+                          </RoleRoute>
+                        }
+                      />
+                      <Route
+                        path="/setter-activity"
+                        element={
+                          <RoleRoute roles={['closer']}>
+                            <SetterActivity />
+                          </RoleRoute>
+                        }
+                      />
                     </Route>
                   </Routes>
                 </Gate>

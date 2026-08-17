@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Phone } from 'lucide-react'
+import { Phone, Search } from 'lucide-react'
+import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useMyPool, useMyBooked, usePipelineHealth } from '../hooks/useLeads'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser } from '../hooks/useStats'
@@ -23,9 +24,58 @@ function Tile({ label, value }) {
   )
 }
 
+// Right now — not the historical/date-range numbers on the Stats page.
+function TodayStrip({ profile }) {
+  const { data: leads, isLoading } = useAllLeadsForStats()
+  const todayStr = new Date().toISOString().split('T')[0]
+  const today = useMemo(() => {
+    if (!leads) return { logged: 0, booked: 0, bookingPct: 0 }
+    return statsForUser(leads, profile.id, todayStr, todayStr)
+  }, [leads, profile.id, todayStr])
+
+  return (
+    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <Tile label="Calls Made Today" value={isLoading ? '—' : today.logged} />
+      <Tile label="Booked Today" value={isLoading ? '—' : today.booked} />
+      <Tile label="Today's Booking Rate" value={isLoading ? '—' : `${today.bookingPct}%`} />
+    </div>
+  )
+}
+
+const STATUS_TABS = [
+  { value: 'new', label: 'New' },
+  { value: 'no_answer', label: 'No Answer' },
+  { value: 'follow_up', label: 'Follow-up' },
+  { value: 'not_interested', label: 'Not Interested' },
+  { value: 'appointment_booked', label: 'Appointment Booked' },
+]
+
 function SetterOverview({ profile }) {
   const { data: leads, isLoading } = useMyPool(profile.id)
   const [callLead, setCallLead] = useState(null)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('new')
+
+  const filtered = useMemo(() => {
+    if (!leads) return []
+    const q = search.trim().toLowerCase()
+    return leads.filter((lead) => {
+      if (lead.status !== statusFilter) return false
+      if (!q) return true
+      return (
+        lead.facility_name?.toLowerCase().includes(q) ||
+        lead.contact_name?.toLowerCase().includes(q) ||
+        lead.phone?.toLowerCase().includes(q)
+      )
+    })
+  }, [leads, search, statusFilter])
+
+  const counts = useMemo(() => {
+    const c = {}
+    for (const tab of STATUS_TABS) c[tab.value] = 0
+    for (const lead of leads || []) c[lead.status] = (c[lead.status] || 0) + 1
+    return c
+  }, [leads])
 
   return (
     <div>
@@ -34,12 +84,46 @@ function SetterOverview({ profile }) {
         {leads?.length ?? 0} lead{leads?.length === 1 ? '' : 's'} in your pool
       </p>
 
+      <TodayStrip profile={profile} />
+
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-secondary" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search facility, contact, or phone…"
+            className="w-full rounded-lg border border-line bg-base py-2 pl-9 pr-3 font-sans text-sm text-fg-primary outline-none focus:border-accent"
+          />
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {STATUS_TABS.map((tab) => (
+          <button
+            key={tab.value}
+            onClick={() => setStatusFilter(tab.value)}
+            className={clsx(
+              'eyebrow rounded-full px-3.5 py-2 transition-colors',
+              statusFilter === tab.value
+                ? 'bg-accent !text-white'
+                : 'border border-line bg-elevated !text-fg-secondary hover:border-fg-primary/40'
+            )}
+          >
+            {tab.label} ({counts[tab.value] || 0})
+          </button>
+        ))}
+      </div>
+
       <div className="mt-6 overflow-hidden rounded-card border border-line bg-elevated">
         {isLoading ? (
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
-        ) : !leads?.length ? (
+        ) : !filtered.length ? (
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">
-            Your pool is empty right now — new leads are assigned automatically.
+            {leads?.length
+              ? 'No leads match this filter.'
+              : 'Your pool is empty right now — new leads are assigned automatically.'}
           </p>
         ) : (
           <table className="w-full text-left">
@@ -54,7 +138,7 @@ function SetterOverview({ profile }) {
               </tr>
             </thead>
             <tbody>
-              {leads.map((lead) => (
+              {filtered.map((lead) => (
                 <tr key={lead.id} className="border-t border-line font-sans text-sm hover:bg-surface">
                   <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
                   <td className="px-5 py-4 text-fg-secondary">{lead.contact_name || '—'}</td>
