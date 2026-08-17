@@ -4,7 +4,8 @@ import { useAllLeadsForStats, useReps, statsForUser, statsForCloser } from '../h
 import { useMyAllCalls, groupCallsByDay, isPerfectDay, PERFECT_DAY_DIALS } from '../hooks/useBadges'
 import { Field, inputClass } from '../components/ui/Field'
 import { WeekPaginator } from '../components/ui/WeekPaginator'
-import { todayUTCStr, mondayOf, shiftDay } from '../lib/dates'
+import { zonedDateStr, zonedDayRange, mondayOf, shiftDay } from '../lib/dates'
+import { DEFAULT_TIMEZONE } from '../lib/timezones'
 
 function Tile({ label, value, sub }) {
   return (
@@ -137,7 +138,8 @@ export default function Stats() {
   const { data: allCalls } = useMyAllCalls(profile?.id)
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
-  const [weekMonday, setWeekMonday] = useState(() => mondayOf(todayUTCStr()))
+  const tz = profile?.timezone || DEFAULT_TIMEZONE
+  const [weekMonday, setWeekMonday] = useState(() => mondayOf(zonedDateStr(Date.now(), tz)))
 
   const isAdmin = profile?.role === 'admin'
   const isCloser = profile?.role === 'closer'
@@ -145,7 +147,9 @@ export default function Stats() {
   // Prompt 450: line chart + heatmap, setter/admin only — closers don't
   // dial, same scoping precedent as the badge row on My Goals ("closers
   // don't make calls, so a call-volume goal doesn't apply to them").
-  const byDay = useMemo(() => groupCallsByDay(allCalls || []), [allCalls])
+  // Prompt 458: grouped by the viewing user's own timezone — this is their
+  // own dial history, so their own "today"/"this week" applies.
+  const byDay = useMemo(() => groupCallsByDay(allCalls || [], tz), [allCalls, tz])
 
   const weekDays = useMemo(() => {
     return Array.from({ length: 5 }, (_, i) => {
@@ -155,25 +159,45 @@ export default function Stats() {
   }, [weekMonday, byDay])
 
   const heatmapDays = useMemo(() => {
-    const today = todayUTCStr()
+    const today = zonedDateStr(Date.now(), tz)
     return Array.from({ length: 21 }, (_, i) => {
       const date = shiftDay(today, i - 20)
       return { date, ...(byDay.get(date) || { dials: 0, bookings: 0 }) }
     })
-  }, [byDay])
+  }, [byDay, tz])
 
+  // Prompt 458: the date-range picker's plain YYYY-MM-DD values are
+  // interpreted as calendar days in the VIEWING user's own timezone
+  // before querying — "Aug 17" means Aug 17 where I am, not UTC Aug 17.
+  // Empty stays empty (no filter = all-time), same as before.
   const myStats = useMemo(() => {
     if (!leads) return null
-    return isCloser ? statsForCloser(leads, profile.id, start, end) : statsForUser(leads, profile.id, start, end)
-  }, [leads, profile, start, end, isCloser])
+    const zStart = start ? zonedDayRange(start, tz).start : ''
+    const zEnd = end ? zonedDayRange(end, tz).end : ''
+    return isCloser ? statsForCloser(leads, profile.id, zStart, zEnd) : statsForUser(leads, profile.id, zStart, zEnd)
+  }, [leads, profile, start, end, tz, isCloser])
 
+  // Prompt 458: per Brayden's answer, each rep's row uses THAT rep's own
+  // saved timezone to resolve the same picked date range — not the
+  // viewing admin's — so "Aug 17" means Aug 17 in each rep's own zone,
+  // per row, even though every row shares the same nominal date picker.
   const rollup = useMemo(() => {
     if (!leads) return null
     const setters = (reps || []).filter((r) => r.role === 'setter')
     const closers = (reps || []).filter((r) => r.role === 'closer')
+    const rangeFor = (repTz) => ({
+      start: start ? zonedDayRange(start, repTz || DEFAULT_TIMEZONE).start : '',
+      end: end ? zonedDayRange(end, repTz || DEFAULT_TIMEZONE).end : '',
+    })
     return {
-      setters: setters.map((s) => ({ ...s, ...statsForUser(leads, s.id, start, end) })),
-      closers: closers.map((c) => ({ ...c, ...statsForCloser(leads, c.id, start, end) })),
+      setters: setters.map((s) => {
+        const r = rangeFor(s.timezone)
+        return { ...s, ...statsForUser(leads, s.id, r.start, r.end) }
+      }),
+      closers: closers.map((c) => {
+        const r = rangeFor(c.timezone)
+        return { ...c, ...statsForCloser(leads, c.id, r.start, r.end) }
+      }),
     }
   }, [leads, reps, start, end])
 
@@ -209,7 +233,7 @@ export default function Stats() {
           <div>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-display text-lg font-medium text-fg-primary">Weekly Activity</h2>
-              <WeekPaginator monday={weekMonday} onChange={setWeekMonday} />
+              <WeekPaginator monday={weekMonday} onChange={setWeekMonday} timezone={tz} />
             </div>
             <div className="mt-3 rounded-card border border-line bg-elevated p-5">
               <WeeklyLineChart days={weekDays} />

@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { supabase, SUPABASE_URL } from '../lib/supabase'
-import { dayRange } from '../lib/dates'
+import { zonedDayRange } from '../lib/dates'
 
 // Created at the same "call attempted" moment Prompt 446 gates outcomes
 // on — one row per real dial, updated in place as more becomes known
@@ -39,11 +39,14 @@ export function useUpdateCall() {
 // would silently drop in-progress calls too, since SQL's `!=` against
 // NULL is NULL, not true — those still-open rows are a separate existing
 // UI state, not something this prompt asked to touch).
-export function useMyCallsForDay(date) {
+// Prompt 458: `timezone` decides which UTC instants "this day" actually
+// spans — the viewing user's own saved timezone (setter viewing their own
+// calls, or admin viewing everyone's for the day as they define it).
+export function useMyCallsForDay(date, timezone) {
   return useQuery({
-    queryKey: ['calls', date],
+    queryKey: ['calls', date, timezone],
     queryFn: async () => {
-      const { start, end } = dayRange(date)
+      const { start, end } = zonedDayRange(date, timezone)
       const { data, error } = await supabase
         .from('calls')
         .select('id, outcome, duration_seconds, recording_url, created_at, leads(facility_name), profiles(full_name)')

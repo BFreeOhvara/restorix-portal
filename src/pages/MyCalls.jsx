@@ -4,7 +4,8 @@ import { useAuth } from '../hooks/useAuth'
 import { useMyCallsForDay, fetchRecordingUrl } from '../hooks/useCalls'
 import StatusBadge from '../components/ui/StatusBadge'
 import { DayPaginator } from '../components/ui/DayPaginator'
-import { todayUTCStr } from '../lib/dates'
+import { zonedDateStr } from '../lib/dates'
+import { DEFAULT_TIMEZONE } from '../lib/timezones'
 
 function fmt(dt) {
   return new Date(dt).toLocaleString(undefined, {
@@ -63,8 +64,9 @@ function RecordingPlayer({ callId }) {
 
 export default function MyCalls() {
   const { profile } = useAuth()
-  const [date, setDate] = useState(todayUTCStr())
-  const { data: calls, isLoading } = useMyCallsForDay(date)
+  const tz = profile?.timezone || DEFAULT_TIMEZONE
+  const [date, setDate] = useState(() => zonedDateStr(Date.now(), tz))
+  const { data: calls, isLoading } = useMyCallsForDay(date, tz)
   const isAdmin = profile?.role === 'admin'
 
   return (
@@ -76,7 +78,7 @@ export default function MyCalls() {
             {isAdmin ? 'Every call placed through the dashboard, this day' : 'Calls you\'ve placed through the dashboard, this day'}
           </p>
         </div>
-        <DayPaginator date={date} onChange={setDate} />
+        <DayPaginator date={date} onChange={setDate} timezone={tz} />
       </div>
 
       {/* Own scroll region, same treatment as Overview's lead table

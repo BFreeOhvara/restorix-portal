@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { todayUTCStr, mondayOf, shiftDay, shiftWeek } from '../../lib/dates'
+import { zonedDateStr, mondayOf, shiftDay, shiftWeek } from '../../lib/dates'
+import { DEFAULT_TIMEZONE } from '../../lib/timezones'
 
 function formatShort(dateStr) {
   return new Date(`${dateStr}T00:00:00.000Z`).toLocaleDateString(undefined, {
@@ -13,8 +14,11 @@ function formatShort(dateStr) {
 // Monday string (the week's anchor); "Next" disabled once the selected
 // week already contains today, same "no future data" reasoning as
 // DayPaginator's today-edge disable.
-export function WeekPaginator({ monday, onChange }) {
-  const isCurrentWeek = monday === mondayOf(todayUTCStr())
+// Prompt 458: `timezone` decides what "today"/"this week" means — the
+// caller's own saved timezone, not UTC.
+export function WeekPaginator({ monday, onChange, timezone }) {
+  const tz = timezone || DEFAULT_TIMEZONE
+  const isCurrentWeek = monday === mondayOf(zonedDateStr(Date.now(), tz))
   const friday = shiftDay(monday, 4)
   return (
     <div className="flex items-center gap-1 rounded-full border border-line bg-elevated p-1">

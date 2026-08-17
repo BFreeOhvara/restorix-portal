@@ -5,7 +5,8 @@ import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useAllLeadsForStats, statsForUser } from '../hooks/useStats'
 import { useMyAllCalls, computeBadgeProgress, tieredProgress, DIAL_TIERS, BOOKING_TIERS, PERFECT_DAY_TIERS, COMMISSION_TIERS } from '../hooks/useBadges'
-import { todayUTCStr, mondayOf } from '../lib/dates'
+import { zonedDateStr, zonedDayRange, mondayOf } from '../lib/dates'
+import { DEFAULT_TIMEZONE } from '../lib/timezones'
 
 // v1 daily target is hardcoded (150 dials / 2 booked = "perfect day"),
 // weekly/monthly are that same target scaled to a 5-day work week and a
@@ -18,20 +19,22 @@ const PERIODS = {
   monthly: { label: 'Monthly', noun: 'This Month', callsTarget: 3255, bookedTarget: 43 },
 }
 
-function firstOfThisMonth() {
-  const now = new Date()
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-}
-
-function toDateStr(d) {
-  return d.toISOString().split('T')[0]
-}
-
-function rangeForPeriod(period) {
-  const today = todayUTCStr()
-  if (period === 'daily') return { start: today, end: today }
-  if (period === 'weekly') return { start: mondayOf(today), end: today }
-  return { start: toDateStr(firstOfThisMonth()), end: today }
+// Prompt 458: "today"/"this week"/"this month" now follow the viewing
+// user's own saved timezone instead of the UTC calendar day — daily/
+// weekly/monthly all resolve to real instant bounds via zonedDayRange
+// rather than bare UTC date strings.
+function rangeForPeriod(period, tz) {
+  const today = zonedDateStr(Date.now(), tz)
+  if (period === 'daily') return zonedDayRange(today, tz)
+  if (period === 'weekly') {
+    const { start } = zonedDayRange(mondayOf(today), tz)
+    const { end } = zonedDayRange(today, tz)
+    return { start, end }
+  }
+  const firstOfMonth = `${today.slice(0, 7)}-01`
+  const { start } = zonedDayRange(firstOfMonth, tz)
+  const { end } = zonedDayRange(today, tz)
+  return { start, end }
 }
 
 function ProgressTile({ label, value, target }) {
@@ -122,17 +125,18 @@ export default function MyGoals() {
   const [period, setPeriod] = useState('daily')
 
   const isLoading = leadsLoading || callsLoading
+  const tz = profile?.timezone || DEFAULT_TIMEZONE
 
   const periodStats = useMemo(() => {
     if (!leads) return { logged: 0, booked: 0 }
-    const { start, end } = rangeForPeriod(period)
+    const { start, end } = rangeForPeriod(period, tz)
     return statsForUser(leads, profile.id, start, end)
-  }, [leads, profile?.id, period])
+  }, [leads, profile?.id, period, tz])
 
   const badgeProgress = useMemo(() => {
     if (!calls) return { dials: 0, bookings: 0, perfectDays: 0, backToBack: false, hatTrick: false }
-    return computeBadgeProgress(calls)
-  }, [calls])
+    return computeBadgeProgress(calls, tz)
+  }, [calls, tz])
 
   const target = PERIODS[period]
   const isPerfectDay = period === 'daily' && periodStats.logged >= target.callsTarget && periodStats.booked >= target.bookedTarget

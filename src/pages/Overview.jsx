@@ -5,7 +5,10 @@ import { useAuth } from '../hooks/useAuth'
 import { useMyPool, useMyBooked, usePipelineHealth } from '../hooks/useLeads'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, followUpsDueToday } from '../hooks/useStats'
 import StatusBadge, { STATUS_LABELS, STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
+import { LiveClock } from '../components/ui/LiveClock'
 import LogCallModal from '../components/LogCallModal'
+import { zonedDateStr, zonedDayRange } from '../lib/dates'
+import { DEFAULT_TIMEZONE } from '../lib/timezones'
 
 function fmt(dt) {
   if (!dt) return '—'
@@ -23,25 +26,48 @@ function Tile({ label, value }) {
   )
 }
 
+// Prompt 458: date label + LiveClock, positioned above the stat-card row —
+// same "date text + clock pill" pattern as ohvara-dashboard's MyLeads
+// (components/ui/LiveClock.jsx usage), read directly for the treatment.
+function DateClockRow({ timezone }) {
+  const dateLabel = new Date().toLocaleDateString('en-US', {
+    timeZone: timezone, weekday: 'long', month: 'short', day: 'numeric',
+  })
+  return (
+    <div className="mt-4 flex items-center gap-3">
+      <span className="font-mono text-xs text-fg-faint [font-variant-numeric:tabular-nums]">{dateLabel}</span>
+      <LiveClock timezone={timezone} />
+    </div>
+  )
+}
+
 // Right now — not the historical/date-range numbers on the Stats page.
+// Prompt 458: "today" now follows the viewing user's own saved timezone
+// (defaulting to DEFAULT_TIMEZONE for accounts that predate this column)
+// instead of the UTC calendar day — both the label above and the actual
+// query boundaries feeding statsForUser/followUpsDueToday.
 function TodayStrip({ profile }) {
   const { data: leads, isLoading } = useAllLeadsForStats()
-  const todayStr = new Date().toISOString().split('T')[0]
+  const tz = profile.timezone || DEFAULT_TIMEZONE
+  const { start, end } = useMemo(() => zonedDayRange(zonedDateStr(Date.now(), tz), tz), [tz])
   const today = useMemo(() => {
     if (!leads) return { logged: 0, booked: 0, bookingPct: 0, followUpsDue: 0 }
     return {
-      ...statsForUser(leads, profile.id, todayStr, todayStr),
-      followUpsDue: followUpsDueToday(leads, profile.id, todayStr),
+      ...statsForUser(leads, profile.id, start, end),
+      followUpsDue: followUpsDueToday(leads, profile.id, start, end),
     }
-  }, [leads, profile.id, todayStr])
+  }, [leads, profile.id, start, end])
 
   return (
-    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <Tile label="Calls Made Today" value={isLoading ? '—' : today.logged} />
-      <Tile label="Booked Today" value={isLoading ? '—' : today.booked} />
-      <Tile label="Today's Booking Rate" value={isLoading ? '—' : `${today.bookingPct}%`} />
-      <Tile label="Follow-ups Due Today" value={isLoading ? '—' : today.followUpsDue} />
-    </div>
+    <>
+      <DateClockRow timezone={tz} />
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Tile label="Calls Made Today" value={isLoading ? '—' : today.logged} />
+        <Tile label="Booked Today" value={isLoading ? '—' : today.booked} />
+        <Tile label="Today's Booking Rate" value={isLoading ? '—' : `${today.bookingPct}%`} />
+        <Tile label="Follow-ups Due Today" value={isLoading ? '—' : today.followUpsDue} />
+      </div>
+    </>
   )
 }
 
@@ -210,10 +236,11 @@ function CloserOverview({ profile }) {
   )
 }
 
-function AdminOverview() {
+function AdminOverview({ profile }) {
   const { data: leads, isLoading: leadsLoading } = useAllLeadsForStats()
   const { data: reps } = useReps()
   const { data: health, isLoading: healthLoading } = usePipelineHealth()
+  const tz = profile.timezone || DEFAULT_TIMEZONE
 
   const rollup = useMemo(() => {
     if (!leads) return null
@@ -231,7 +258,8 @@ function AdminOverview() {
       <p className="mt-1 font-sans text-sm text-fg-secondary">Team performance and pipeline health</p>
 
       <h2 className="mt-6 font-display text-lg font-medium text-fg-primary">Pipeline health</h2>
-      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <DateClockRow timezone={tz} />
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Tile label="Unassigned Pool" value={healthLoading ? '—' : health.unassignedPool} />
         <Tile label="No-Answer Cooldown" value={healthLoading ? '—' : health.noAnswerCooldown} />
         <Tile label="Follow-ups Due Today" value={healthLoading ? '—' : health.followUpsDueToday} />
@@ -315,5 +343,5 @@ export default function Overview() {
 
   if (profile?.role === 'setter') return <SetterOverview profile={profile} />
   if (profile?.role === 'closer') return <CloserOverview profile={profile} />
-  return <AdminOverview />
+  return <AdminOverview profile={profile} />
 }

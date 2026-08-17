@@ -44,7 +44,7 @@ export function useReps() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, role')
+        .select('id, full_name, role, timezone')
         .in('role', ['setter', 'closer'])
         .order('full_name')
       if (error) throw error
@@ -53,11 +53,18 @@ export function useReps() {
   })
 }
 
+// Prompt 458: `start`/`end` are now real instant strings (start inclusive,
+// end EXCLUSIVE) — e.g. from zonedDayRange/zonedTimeToUtcIso in lib/dates.js
+// — not bare 'YYYY-MM-DD' strings. Previously this assumed UTC-midnight
+// bounds and fudged `end` by +86400000-1 to cover a whole calendar day;
+// callers now compute the real per-user zoned day boundaries themselves,
+// so a "day" here means whichever user's calendar day is relevant, not
+// always UTC's.
 export function inRange(iso, start, end) {
   if (!iso) return false
   const t = new Date(iso).getTime()
   if (start && t < new Date(start).getTime()) return false
-  if (end && t > new Date(end).getTime() + 86400000 - 1) return false
+  if (end && t >= new Date(end).getTime()) return false
   return true
 }
 
@@ -77,9 +84,11 @@ export function statsForUser(leads, userId, start, end) {
 // assigned_setter columns, since those get reset by process_follow_up_returns
 // well before the due date if a different lead cycles through in the
 // meantime; last_action_by/status/follow_up_at aren't touched again once set.
-export function followUpsDueToday(leads, userId, todayStr) {
+// Prompt 458: takes explicit start/end instants (e.g. from zonedDayRange)
+// instead of a single todayStr, same shape as statsForUser now.
+export function followUpsDueToday(leads, userId, start, end) {
   return leads.filter(
-    (l) => l.last_action_by === userId && l.last_action_status === 'follow_up' && inRange(l.follow_up_at, todayStr, todayStr)
+    (l) => l.last_action_by === userId && l.last_action_status === 'follow_up' && inRange(l.follow_up_at, start, end)
   ).length
 }
 

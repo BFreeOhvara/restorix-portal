@@ -1,25 +1,26 @@
 // Prompt 451 — pure date-math shared by the Activity/My Calls day
 // paginator (components/ui/DayPaginator.jsx) and their data-fetching
-// hooks. Split out so hooks don't import from components/ui. UTC
-// calendar days throughout, same convention already used everywhere else
-// in this app for "today" (Overview's TodayStrip, My Goals' daily target,
-// the badge system's Perfect Day grouping).
+// hooks. Split out so hooks don't import from components/ui.
+//
+// Prompt 458: this file used to be UTC-only throughout (todayUTCStr/
+// dayRange, removed — every call site now goes through the zoned*
+// functions below instead). shiftDay/mondayOf/shiftWeek stay UTC-flavored
+// internally (new Date(`${str}T00:00:00Z`)) but that's fine — they're pure
+// calendar-string arithmetic (add N days, find Monday) that doesn't
+// actually care what wall-clock zone the string came from, as long as the
+// STRING itself was computed correctly for the right zone to begin with.
+// That's what the zoned* functions below are for: zonedDateStr answers
+// "what calendar day is it right now, in this user's zone" (the "today"
+// entry point), and zonedDayRange answers "what real UTC instants bound
+// that calendar day in that zone" (for DB query .gte()/.lt() bounds).
 function toDateStr(d) {
   return d.toISOString().split('T')[0]
-}
-
-export function todayUTCStr() {
-  return toDateStr(new Date())
 }
 
 export function shiftDay(dateStr, delta) {
   const d = new Date(`${dateStr}T00:00:00.000Z`)
   d.setUTCDate(d.getUTCDate() + delta)
   return toDateStr(d)
-}
-
-export function dayRange(dateStr) {
-  return { start: `${dateStr}T00:00:00.000Z`, end: `${shiftDay(dateStr, 1)}T00:00:00.000Z` }
 }
 
 // Prompt 450 — generalized out of MyGoals.jsx's old page-local
@@ -37,4 +38,52 @@ export function mondayOf(dateStr) {
 
 export function shiftWeek(mondayStr, deltaWeeks) {
   return shiftDay(mondayStr, deltaWeeks * 7)
+}
+
+// The UTC offset (minutes) of `timeZone` at the instant `date` represents.
+// Ported from ohvara-dashboard's lib/timezones.js.
+function getTimezoneOffsetMinutes(timeZone, date) {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  })
+  const parts = dtf.formatToParts(date).reduce((acc, p) => { acc[p.type] = p.value; return acc }, {})
+  const asUTC = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second)
+  return (asUTC - date.getTime()) / 60000
+}
+
+// Interprets a "YYYY-MM-DDTHH:mm" wall-clock string AS IF it were local
+// time in `timeZone`, returning the equivalent UTC ISO instant. Two-pass
+// DST correction (ported from Ohvara) — converges in one pass outside the
+// literal hour of a transition, the second pass catches that edge case.
+export function zonedTimeToUtcIso(dateTimeLocalStr, timeZone) {
+  const [datePart, timePart] = dateTimeLocalStr.split('T')
+  const [year, month, day] = datePart.split('-').map(Number)
+  const [hour, minute] = (timePart || '00:00').split(':').map(Number)
+
+  let guess = Date.UTC(year, month - 1, day, hour, minute)
+  for (let i = 0; i < 2; i++) {
+    const offset = getTimezoneOffsetMinutes(timeZone, new Date(guess))
+    guess = Date.UTC(year, month - 1, day, hour, minute) - offset * 60000
+  }
+  return new Date(guess).toISOString()
+}
+
+// The calendar day (YYYY-MM-DD) that `nowMs` falls on from the perspective
+// of `timeZone` — a user's own local day, not the UTC day. en-CA locale
+// formats dates as YYYY-MM-DD natively, so no manual part-assembly needed.
+export function zonedDateStr(nowMs, timeZone) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: timeZone || 'UTC' }).format(new Date(nowMs))
+}
+
+// zonedDayRange's answer to "what real UTC instants bound this calendar
+// day in this zone" — the timezone-aware counterpart to dayRange(), which
+// assumes the date string is a UTC day. Use this (not dayRange) for any
+// query filtering by a specific user's "today"/"that day".
+export function zonedDayRange(dateStr, timeZone) {
+  return {
+    start: zonedTimeToUtcIso(`${dateStr}T00:00`, timeZone),
+    end: zonedTimeToUtcIso(`${shiftDay(dateStr, 1)}T00:00`, timeZone),
+  }
 }

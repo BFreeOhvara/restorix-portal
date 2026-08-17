@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { zonedDateStr, zonedDayRange } from '../lib/dates'
+import { DEFAULT_TIMEZONE } from '../lib/timezones'
 
 export function useLeads(statusFilter) {
   return useQuery({
@@ -109,26 +111,38 @@ export function useMyBooked(closerId) {
 }
 
 // Admin-only pipeline health: pool size, no-answer cooldown, follow-ups due.
+// Prompt 458: "follow-ups due" used to compare against
+// `new Date().setHours(23,59,59,999)` — the admin's own browser clock, not
+// any saved timezone at all. Each follow-up now compares against its own
+// setter's saved timezone (per-row owner, not the viewing admin's) — a
+// follow-up due at 11pm Pacific shouldn't count as "due today" for an
+// admin in New York just because it's already tomorrow there.
 export function usePipelineHealth() {
   return useQuery({
     queryKey: ['pipeline-health'],
     queryFn: async () => {
-      const [unassigned, cooldown, followUpsDue] = await Promise.all([
+      const [unassigned, cooldown, followUpRows] = await Promise.all([
         supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new').is('assigned_setter', null),
         supabase.from('no_answer_queue').select('id', { count: 'exact', head: true }).is('redistributed_at', null),
         supabase
           .from('follow_up_queue')
-          .select('id', { count: 'exact', head: true })
-          .is('completed_at', null)
-          .lte('follow_up_at', new Date(new Date().setHours(23, 59, 59, 999)).toISOString()),
+          .select('follow_up_at, setter:setter_id(timezone)')
+          .is('completed_at', null),
       ])
       if (unassigned.error) throw unassigned.error
       if (cooldown.error) throw cooldown.error
-      if (followUpsDue.error) throw followUpsDue.error
+      if (followUpRows.error) throw followUpRows.error
+
+      const followUpsDueToday = (followUpRows.data || []).filter((r) => {
+        const tz = r.setter?.timezone || DEFAULT_TIMEZONE
+        const { end } = zonedDayRange(zonedDateStr(Date.now(), tz), tz)
+        return new Date(r.follow_up_at).getTime() < new Date(end).getTime()
+      }).length
+
       return {
         unassignedPool: unassigned.count ?? 0,
         noAnswerCooldown: cooldown.count ?? 0,
-        followUpsDueToday: followUpsDue.count ?? 0,
+        followUpsDueToday,
       }
     },
     refetchInterval: 30000,

@@ -4,7 +4,8 @@ import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import StatusBadge from '../components/ui/StatusBadge'
 import { DayPaginator } from '../components/ui/DayPaginator'
-import { todayUTCStr, dayRange } from '../lib/dates'
+import { zonedDateStr, zonedDayRange } from '../lib/dates'
+import { DEFAULT_TIMEZONE } from '../lib/timezones'
 
 // Prompt 451: switched from `leads.last_action_*` to the `calls` table
 // (Prompt 447) — the same reasoning Prompt 443's badge system already
@@ -14,11 +15,14 @@ import { todayUTCStr, dayRange } from '../lib/dates'
 // would show — the day-filter this prompt asks for would silently drop
 // the earlier attempt. `calls` has one row per real dial, so a day's
 // activity is actually complete.
-function useMyActivityForDay(setterId, date) {
+// Prompt 458: day boundaries now come from the setter's own timezone
+// (zonedDayRange) — these are always the setter's own calls, so their own
+// "today" applies.
+function useMyActivityForDay(setterId, date, timezone) {
   return useQuery({
-    queryKey: ['my-activity', setterId, date],
+    queryKey: ['my-activity', setterId, date, timezone],
     queryFn: async () => {
-      const { start, end } = dayRange(date)
+      const { start, end } = zonedDayRange(date, timezone)
       const { data, error } = await supabase
         .from('calls')
         .select('id, outcome, created_at, leads(facility_name, contact_name)')
@@ -39,8 +43,9 @@ function fmtTime(dt) {
 
 export default function Activity() {
   const { profile } = useAuth()
-  const [date, setDate] = useState(todayUTCStr())
-  const { data: rows, isLoading } = useMyActivityForDay(profile?.id, date)
+  const tz = profile?.timezone || DEFAULT_TIMEZONE
+  const [date, setDate] = useState(() => zonedDateStr(Date.now(), tz))
+  const { data: rows, isLoading } = useMyActivityForDay(profile?.id, date, tz)
 
   return (
     <div>
@@ -49,7 +54,7 @@ export default function Activity() {
           <h1 className="font-display text-2xl font-medium text-fg-primary">Activity</h1>
           <p className="mt-1 font-sans text-sm text-fg-secondary">Calls you logged this day</p>
         </div>
-        <DayPaginator date={date} onChange={setDate} />
+        <DayPaginator date={date} onChange={setDate} timezone={tz} />
       </div>
 
       {/* Own scroll region, same treatment as Overview's lead table

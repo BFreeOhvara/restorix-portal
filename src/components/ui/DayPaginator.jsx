@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { todayUTCStr, shiftDay } from '../../lib/dates'
+import { zonedDateStr, shiftDay } from '../../lib/dates'
+import { DEFAULT_TIMEZONE } from '../../lib/timezones'
 
 function formatDayLabel(dateStr) {
   return new Date(`${dateStr}T00:00:00.000Z`).toLocaleDateString(undefined, {
@@ -11,8 +12,11 @@ function formatDayLabel(dateStr) {
 // "Next" disabled at today — not explicitly specified, but a future-dated
 // empty view isn't useful and every other date-scoped view in this app
 // (Overview, My Goals) already treats "today" as the forward edge.
-export function DayPaginator({ date, onChange }) {
-  const isToday = date === todayUTCStr()
+// Prompt 458: `timezone` decides what "today" means — the caller's own
+// saved timezone, not UTC.
+export function DayPaginator({ date, onChange, timezone }) {
+  const tz = timezone || DEFAULT_TIMEZONE
+  const isToday = date === zonedDateStr(Date.now(), tz)
   return (
     <div className="flex items-center gap-1 rounded-full border border-line bg-elevated p-1">
       <button

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { zonedDateStr } from '../lib/dates'
 
 // Prompt 443: 26 badges across 4 categories (5 counting Commission),
 // all computed from the `calls` table (Prompt 447) now that it exists —
@@ -44,22 +45,22 @@ export function useMyAllCalls(setterId) {
   })
 }
 
-// Same UTC-calendar-day convention already used everywhere else in this
-// app for "today" (Overview's TodayStrip, My Goals' daily target) —
-// staying consistent rather than introducing local-time grouping just
-// for badges, which would make a "perfect day" disagree with "Booked
-// Today" on where the day boundary actually falls.
-export function dayKey(iso) {
-  return new Date(iso).toISOString().split('T')[0]
+// Prompt 458: groups by the OWNING setter's own saved timezone (passed in
+// by the caller) instead of a fixed UTC calendar day — same "today"
+// convention as the rest of the app now, so "Perfect Day"/"Hat Trick"
+// agree with what Overview's Today Strip and My Goals' daily target show
+// for the same setter. Falls back to UTC if no timezone is known yet.
+export function dayKey(iso, timezone) {
+  return zonedDateStr(new Date(iso).getTime(), timezone || 'UTC')
 }
 
 // Exported (Prompt 450) so Stats' weekly line chart and 21-day heatmap
 // can group the same all-time `calls` history by day without duplicating
 // this loop — both need "dials + bookings per day," same shape badges use.
-export function groupCallsByDay(calls) {
+export function groupCallsByDay(calls, timezone) {
   const byDay = new Map()
   for (const c of calls) {
-    const key = dayKey(c.created_at)
+    const key = dayKey(c.created_at, timezone)
     if (!byDay.has(key)) byDay.set(key, { dials: 0, bookings: 0 })
     const d = byDay.get(key)
     d.dials += 1
@@ -68,10 +69,10 @@ export function groupCallsByDay(calls) {
   return byDay
 }
 
-export function computeBadgeProgress(calls) {
+export function computeBadgeProgress(calls, timezone) {
   const dials = calls.length
   const bookings = calls.filter((c) => c.outcome === 'appointment_booked').length
-  const byDay = groupCallsByDay(calls)
+  const byDay = groupCallsByDay(calls, timezone)
 
   let perfectDays = 0
   let hatTrick = false
