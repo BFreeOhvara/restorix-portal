@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Award, Lock, ArrowRight } from 'lucide-react'
+import { ArrowRight, PhoneCall, CalendarCheck, Sun, DollarSign, Flame, Trophy } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useAllLeadsForStats, statsForUser } from '../hooks/useStats'
@@ -60,11 +60,35 @@ function ProgressTile({ label, value, target }) {
   )
 }
 
-function BadgeCategory({ title, sub, value, thresholds, format = (n) => n.toLocaleString() }) {
+// Prompt 452: consolidated from 4 separate cards + 2 floating description
+// cards into one box with labeled rows, achievement-panel styling — the
+// badge itself (real icon, not a generic Award glyph) carries the
+// unlocked/locked state via color/glow vs. grayscale, rather than a
+// separate lock icon doing all the work. Locked pills keep the same real
+// icon desaturated (how console achievement panels show a locked trophy —
+// a silhouette of the real thing, not a padlock standing in for it).
+function BadgePill({ icon: Icon, label, unlocked, title }) {
+  return (
+    <span
+      title={title}
+      className={clsx(
+        'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-sans text-xs font-semibold transition-all',
+        unlocked
+          ? 'bg-gradient-to-br from-[#26b37a] to-[#1f8a5f] text-white shadow-[0_0_0_1px_rgba(31,138,95,0.35),0_3px_10px_rgba(31,138,95,0.45)]'
+          : 'bg-surface text-fg-faint grayscale'
+      )}
+    >
+      <Icon size={13} />
+      {label}
+    </span>
+  )
+}
+
+function BadgeSection({ icon: Icon, title, sub, value, thresholds, format = (n) => n.toLocaleString(), first }) {
   const { next } = tieredProgress(value, thresholds)
   return (
-    <div className="rounded-card border border-line bg-elevated p-5">
-      <div className="flex items-baseline justify-between">
+    <div className={clsx('py-5', !first && 'border-t border-line')}>
+      <div className="flex items-baseline justify-between gap-3">
         <p className="eyebrow">{title}</p>
         <p className="font-sans text-xs text-fg-faint">
           {format(value)} all-time{next != null ? ` · ${format(next - value)} to next` : ' · all tiers earned'}
@@ -72,40 +96,32 @@ function BadgeCategory({ title, sub, value, thresholds, format = (n) => n.toLoca
       </div>
       {sub && <p className="mt-1 font-sans text-xs text-fg-faint">{sub}</p>}
       <div className="mt-3 flex flex-wrap gap-2">
-        {thresholds.map((t) => {
-          const isEarned = value >= t
-          return (
-            <span
-              key={t}
-              className={clsx(
-                'eyebrow inline-flex items-center gap-1.5 rounded-full px-3 py-1.5',
-                isEarned ? 'bg-[#dcf3e6] !text-success' : 'bg-surface !text-fg-faint'
-              )}
-            >
-              {isEarned ? <Award size={12} /> : <Lock size={11} />} {format(t)}
-            </span>
-          )
-        })}
+        {thresholds.map((t) => (
+          <BadgePill key={t} icon={Icon} label={format(t)} unlocked={value >= t} />
+        ))}
       </div>
     </div>
   )
 }
 
-function SpecialBadge({ label, sub, achieved }) {
+// Special: Back-to-Back + Hat Trick, previously two standalone
+// card-with-description blocks floating outside any box — now a row
+// inside the same box, same in-box pill treatment as every other
+// category. Each pill's own condition moves to a hover title instead of
+// a permanent description line, to actually match the other rows' density.
+function SpecialSection({ items }) {
+  const earnedCount = items.filter((i) => i.unlocked).length
   return (
-    <div className="flex items-center justify-between rounded-lg border border-line bg-surface px-4 py-3">
-      <div>
-        <p className="font-sans text-sm font-medium text-fg-primary">{label}</p>
-        <p className="font-sans text-xs text-fg-faint">{sub}</p>
+    <div className="border-t border-line py-5">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="eyebrow">Special</p>
+        <p className="font-sans text-xs text-fg-faint">{earnedCount}/{items.length} earned</p>
       </div>
-      <span
-        className={clsx(
-          'eyebrow inline-flex items-center gap-1.5 rounded-full px-3 py-1.5',
-          achieved ? 'bg-[#dcf3e6] !text-success' : 'bg-elevated !text-fg-faint'
-        )}
-      >
-        {achieved ? <Award size={12} /> : <Lock size={11} />} {achieved ? 'Earned' : 'Not yet'}
-      </span>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {items.map((item) => (
+          <BadgePill key={item.label} icon={item.icon} label={item.label} unlocked={item.unlocked} title={item.title} />
+        ))}
+      </div>
     </div>
   )
 }
@@ -172,34 +188,29 @@ export default function MyGoals() {
 
           <p className="mt-6 eyebrow">Badges — all-time, not affected by the toggle above</p>
 
-          <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <BadgeCategory title="Dials" value={badgeProgress.dials} thresholds={DIAL_TIERS} />
-            <BadgeCategory title="Bookings" value={badgeProgress.bookings} thresholds={BOOKING_TIERS} />
-            <BadgeCategory
+          <div className="mt-3 rounded-card border border-line bg-elevated px-5">
+            <BadgeSection icon={PhoneCall} title="Dials" value={badgeProgress.dials} thresholds={DIAL_TIERS} first />
+            <BadgeSection icon={CalendarCheck} title="Bookings" value={badgeProgress.bookings} thresholds={BOOKING_TIERS} />
+            <BadgeSection
+              icon={Sun}
               title="Perfect Days"
               sub="150 dials + 2 bookings in the same day"
               value={badgeProgress.perfectDays}
               thresholds={PERFECT_DAY_TIERS}
             />
-            <BadgeCategory
+            <BadgeSection
+              icon={DollarSign}
               title="Commission"
               sub="Not live yet — Restorix has no comp structure defined, so this always reads $0 honestly rather than a fabricated number"
               value={0}
               thresholds={COMMISSION_TIERS}
               format={(n) => `$${n.toLocaleString()}`}
             />
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <SpecialBadge
-              label="Back-to-Back"
-              sub="2 bookings in a row, no other outcome logged in between"
-              achieved={badgeProgress.backToBack}
-            />
-            <SpecialBadge
-              label="Hat Trick"
-              sub="3 bookings in the same day"
-              achieved={badgeProgress.hatTrick}
+            <SpecialSection
+              items={[
+                { icon: Flame, label: 'Back-to-Back', unlocked: badgeProgress.backToBack, title: '2 bookings in a row, no other outcome logged in between' },
+                { icon: Trophy, label: 'Hat Trick', unlocked: badgeProgress.hatTrick, title: '3 bookings in the same day' },
+              ]}
             />
           </div>
 
