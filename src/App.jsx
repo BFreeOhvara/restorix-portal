@@ -15,6 +15,8 @@ import Commissions from './pages/Commissions'
 import MyGoals from './pages/MyGoals'
 import Messages from './pages/Messages'
 import MyCalls from './pages/MyCalls'
+import Profile from './pages/Profile'
+import Settings from './pages/Settings'
 
 const queryClient = new QueryClient()
 
@@ -77,6 +79,8 @@ export default function App() {
                       <Route path="/training" element={<Training />} />
                       <Route path="/messages" element={<Messages />} />
                       <Route path="/my-calls" element={<MyCalls />} />
+                      <Route path="/profile" element={<Profile />} />
+                      <Route path="/settings" element={<Settings />} />
                       <Route path="/commissions" element={<Commissions />} />
                       <Route
                         path="/activity"

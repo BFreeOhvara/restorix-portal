@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
-import { Bell, LogOut, Phone, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall } from 'lucide-react'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Bell, LogOut, Phone, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
 // Prompt 448: grouped into labeled sections (matching ohvara-dashboard's
@@ -41,6 +41,10 @@ const NAV_GROUPS = [
     items: [
       { to: '/my-calls', label: 'My Calls', icon: PhoneCall, roles: ['setter', 'admin', 'closer'] },
       { to: '/messages', label: 'Messages', icon: MessageSquare, roles: ['setter', 'admin', 'closer'] },
+      // Prompt 453: Settings needs its own nav entry, separate from the
+      // Profile/Sign out popover. Placement/section weren't specified —
+      // WORK was Brayden's own suggested reasonable fit.
+      { to: '/settings', label: 'Settings', icon: SettingsIcon, roles: ['setter', 'admin', 'closer'] },
     ],
   },
   {
@@ -86,18 +90,51 @@ function NotificationBell() {
 // back in the sidebar (name, role, sign-out), AND a simple name-only label
 // in the header next to the bell. Both places show the name at once,
 // intentionally — not a duplication bug.
-function SidebarAccountFooter({ profile, onSignOut }) {
+// Prompt 453: the block itself is now the popover trigger (ohvara-dashboard's
+// AccountMenu pattern) — clicking it opens Profile/Sign out above it instead
+// of Sign out sitting as a bare icon next to the name. Same outside-click
+// pattern already used by NotificationBell above, just anchored upward
+// (bottom-full) since this sits at the bottom of the sidebar.
+function AccountPopover({ profile, onSignOut, onNavigate }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
   return (
-    <div className="border-t border-line p-3">
-      <div className="flex items-center justify-between rounded-lg px-2 py-2">
+    <div ref={ref} className="relative border-t border-line p-3">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left transition-colors hover:bg-surface"
+      >
         <div className="min-w-0">
           <p className="truncate font-sans text-sm font-medium text-fg-primary">{profile?.full_name}</p>
           <p className="eyebrow !text-fg-faint">{profile?.role}</p>
         </div>
-        <button onClick={onSignOut} className="flex-shrink-0 text-fg-faint hover:text-fg-primary" title="Sign out">
-          <LogOut size={17} />
-        </button>
-      </div>
+      </button>
+
+      {open && (
+        <div className="absolute inset-x-3 bottom-full z-50 mb-2 overflow-hidden rounded-lg border border-line bg-elevated py-1 shadow-lg">
+          <button
+            onClick={() => { setOpen(false); onNavigate('/profile') }}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left font-sans text-sm text-fg-primary hover:bg-surface"
+          >
+            <User size={15} className="text-fg-faint" /> Profile
+          </button>
+          <button
+            onClick={() => { setOpen(false); onSignOut() }}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left font-sans text-sm text-danger hover:bg-surface"
+          >
+            <LogOut size={15} /> Sign out
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -113,6 +150,7 @@ function HeaderName({ profile }) {
 
 export default function Layout() {
   const { profile, signOut } = useAuth()
+  const navigate = useNavigate()
 
   return (
     <div className="min-h-screen bg-base">
@@ -155,7 +193,7 @@ export default function Layout() {
           })}
         </nav>
 
-        <SidebarAccountFooter profile={profile} onSignOut={signOut} />
+        <AccountPopover profile={profile} onSignOut={signOut} onNavigate={navigate} />
       </aside>
 
       <div className="ml-60 flex min-h-screen flex-col">
