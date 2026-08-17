@@ -12,6 +12,7 @@ import Training from './pages/Training'
 import Activity from './pages/Activity'
 import SetterActivity from './pages/SetterActivity'
 import Commissions from './pages/Commissions'
+import MyGoals from './pages/MyGoals'
 
 const queryClient = new QueryClient()
 
@@ -86,6 +87,14 @@ export default function App() {
                         element={
                           <RoleRoute roles={['closer']}>
                             <SetterActivity />
+                          </RoleRoute>
+                        }
+                      />
+                      <Route
+                        path="/goals"
+                        element={
+                          <RoleRoute roles={['setter', 'admin']}>
+                            <MyGoals />
                           </RoleRoute>
                         }
                       />

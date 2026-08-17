@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Mic, MicOff, Phone, PhoneOff } from 'lucide-react'
+import clsx from 'clsx'
 import Modal from './ui/Modal'
 import { Field, inputClass } from './ui/Field'
 import { Button } from './ui/Button'
+import { STATUS_SOLID, STATUS_TINT } from './ui/StatusBadge'
 import { useLogCall } from '../hooks/useLeads'
 import { supabase } from '../lib/supabase'
 
@@ -166,7 +168,9 @@ function CallSection({ lead }) {
 
 export default function LogCallModal({ lead, onClose }) {
   const [outcome, setOutcome] = useState('')
-  const [notes, setNotes] = useState(lead.notes || '')
+  // Always starts blank (Prompt 442) — this is a note for *this* call, not
+  // an editor for whatever's already stored on the lead from a prior one.
+  const [notes, setNotes] = useState('')
   const [when, setWhen] = useState(toLocalInputValue(new Date()))
   const logCall = useLogCall()
 
@@ -194,11 +198,10 @@ export default function LogCallModal({ lead, onClose }) {
                 type="button"
                 key={o.value}
                 onClick={() => setOutcome(o.value)}
-                className={`rounded-lg border px-3 py-2 font-sans text-sm transition-colors ${
-                  outcome === o.value
-                    ? 'border-accent bg-accent text-white'
-                    : 'border-line bg-base text-fg-secondary hover:border-fg-primary/40'
-                }`}
+                className={clsx(
+                  'rounded-lg px-3 py-2 font-sans text-sm font-medium transition-colors',
+                  outcome === o.value ? STATUS_SOLID[o.value] : clsx(STATUS_TINT[o.value], 'hover:opacity-85')
+                )}
               >
                 {o.label}
               </button>

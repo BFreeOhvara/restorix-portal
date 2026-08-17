@@ -1,14 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { Bell, LogOut, Phone, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign } from 'lucide-react'
+import { Bell, LogOut, Phone, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
-// Nav order (Prompt 441): Overview first, admin-only Queue/Users kept
-// right after it (their primary daily tools), then Training, then the
-// setter/closer-specific activity view, then Stats, then Commissions —
-// resolves to Overview → Training → Activity → Stats → Commissions for
-// setter (the role Brayden actually reviewed), Overview → Training →
-// Setter Activity → Stats → Commissions for closer.
+// Nav order (Prompt 441, My Goals added Prompt 442): Overview first,
+// admin-only Queue/Users kept right after it (their primary daily tools),
+// then Training, then the setter/closer-specific activity view, then My
+// Goals (setter/admin only — a daily-target companion to Overview/Activity,
+// sits before the historical Stats view), then Stats, then Commissions.
 const NAV = [
   { to: '/overview', label: 'Overview', icon: BarChart2, roles: ['setter', 'admin', 'closer'] },
   { to: '/queue', label: 'Queue', icon: Phone, roles: ['admin'] },
@@ -16,6 +15,7 @@ const NAV = [
   { to: '/training', label: 'Training', icon: GraduationCap, roles: ['setter', 'admin', 'closer'] },
   { to: '/activity', label: 'Activity', icon: ActivityIcon, roles: ['setter'] },
   { to: '/setter-activity', label: 'Setter Activity', icon: Users2, roles: ['closer'] },
+  { to: '/goals', label: 'My Goals', icon: Target, roles: ['setter', 'admin'] },
   { to: '/stats', label: 'Stats', icon: TrendingUp, roles: ['setter', 'admin', 'closer'] },
   { to: '/commissions', label: 'Commissions', icon: DollarSign, roles: ['setter', 'admin', 'closer'] },
 ]
@@ -50,22 +50,31 @@ function NotificationBell() {
   )
 }
 
-// Account info + sign-out, moved from the sidebar footer into the header
-// (Prompt 441, reverses that part of Prompt 433 on purpose): bell → thin
-// divider → name/role, with sign-out kept alongside it rather than
-// dropped — Prompt 441 didn't say where sign-out should go, and losing
-// the ability to log out would be a real regression, not a simplification.
-function AccountInfo({ profile, onSignOut }) {
+// Prompt 442: partial revert of 441 — Brayden wants the full account block
+// back in the sidebar (name, role, sign-out), AND a simple name-only label
+// in the header next to the bell. Both places show the name at once,
+// intentionally — not a duplication bug.
+function SidebarAccountFooter({ profile, onSignOut }) {
+  return (
+    <div className="border-t border-line p-3">
+      <div className="flex items-center justify-between rounded-lg px-2 py-2">
+        <div className="min-w-0">
+          <p className="truncate font-sans text-sm font-medium text-fg-primary">{profile?.full_name}</p>
+          <p className="eyebrow !text-fg-faint">{profile?.role}</p>
+        </div>
+        <button onClick={onSignOut} className="flex-shrink-0 text-fg-faint hover:text-fg-primary" title="Sign out">
+          <LogOut size={17} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function HeaderName({ profile }) {
   return (
     <div className="flex items-center gap-3">
       <span aria-hidden="true" className="h-6 w-px bg-line" />
-      <div className="text-right leading-tight">
-        <p className="font-sans text-sm font-medium text-fg-primary">{profile?.full_name}</p>
-        <p className="eyebrow !text-fg-faint">{profile?.role}</p>
-      </div>
-      <button onClick={onSignOut} className="flex-shrink-0 text-fg-faint hover:text-fg-primary" title="Sign out">
-        <LogOut size={17} />
-      </button>
+      <p className="font-sans text-sm font-medium text-fg-primary">{profile?.full_name}</p>
     </div>
   )
 }
@@ -103,12 +112,14 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
+
+        <SidebarAccountFooter profile={profile} onSignOut={signOut} />
       </aside>
 
       <div className="ml-60 flex min-h-screen flex-col">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-end gap-3 border-b border-line bg-elevated px-6">
           <NotificationBell />
-          <AccountInfo profile={profile} onSignOut={signOut} />
+          <HeaderName profile={profile} />
         </header>
         <main className="flex-1 px-6 py-8">
           <div className="mx-auto max-w-7xl">

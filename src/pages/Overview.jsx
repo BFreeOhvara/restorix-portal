@@ -91,7 +91,7 @@ function SetterOverview({ profile }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search facility, contact, or phone…"
-            className="w-full rounded-lg border border-line bg-base py-2 pl-9 pr-3 font-sans text-sm text-fg-primary outline-none focus:border-accent"
+            className="w-full rounded-lg border-2 border-line bg-elevated py-2 pl-9 pr-3 font-sans text-sm text-fg-primary shadow-sm outline-none focus:border-accent"
           />
         </div>
       </div>
@@ -131,7 +131,6 @@ function SetterOverview({ profile }) {
                   <th className="px-5 py-3">Business</th>
                   <th className="px-5 py-3">Phone</th>
                   <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3">Next</th>
                   <th className="px-5 py-3"></th>
                 </tr>
               </thead>
@@ -147,18 +146,15 @@ function SetterOverview({ profile }) {
                     <td className="px-5 py-4">
                       <StatusBadge status={lead.status} />
                     </td>
-                    <td className="px-5 py-4 text-fg-secondary">
-                      {lead.status === 'follow_up' ? fmt(lead.follow_up_at) : '—'}
-                    </td>
-                    <td className="px-5 py-4 text-right">
+                    <td className="px-5 py-4">
                       <button
                         onClick={(e) => { e.stopPropagation(); setCallLead(lead) }}
                         className={clsx(
-                          'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-sans text-xs font-semibold transition-colors hover:opacity-90',
+                          'inline-flex items-center gap-2 rounded-full px-4 py-2 font-sans text-sm font-semibold transition-colors hover:opacity-90',
                           STATUS_SOLID[lead.status] || STATUS_SOLID.new
                         )}
                       >
-                        <Phone size={13} /> Call
+                        <Phone size={15} /> Call
                       </button>
                     </td>
                   </tr>

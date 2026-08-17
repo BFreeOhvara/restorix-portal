@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Award } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
-import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, badgesForCount, BADGE_TIERS } from '../hooks/useStats'
+import { useAllLeadsForStats, useReps, statsForUser, statsForCloser } from '../hooks/useStats'
 import { Field, inputClass } from '../components/ui/Field'
 
 function Tile({ label, value, sub }) {
@@ -10,33 +9,6 @@ function Tile({ label, value, sub }) {
       <p className="eyebrow">{label}</p>
       <p className="mt-2 font-display text-3xl font-medium text-fg-primary">{value}</p>
       {sub && <p className="mt-1 font-sans text-xs text-fg-faint">{sub}</p>}
-    </div>
-  )
-}
-
-function BadgeRow({ bookedCount }) {
-  const { earned, next } = badgesForCount(bookedCount)
-  return (
-    <div className="rounded-card border border-line bg-elevated p-5">
-      <p className="eyebrow">Badges</p>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {earned.length === 0 && !next && (
-          <p className="font-sans text-sm text-fg-secondary">No badges yet.</p>
-        )}
-        {earned.map((b) => (
-          <span
-            key={b.threshold}
-            className="eyebrow inline-flex items-center gap-1.5 rounded-full bg-[#dcf3e6] px-3 py-1.5 !text-success"
-          >
-            <Award size={12} /> {b.label}
-          </span>
-        ))}
-        {next && (
-          <span className="eyebrow inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 !text-fg-faint">
-            <Award size={12} /> {bookedCount}/{next.threshold} to {next.label}
-          </span>
-        )}
-      </div>
     </div>
   )
 }
@@ -80,11 +52,6 @@ export default function Stats() {
     return isCloser ? statsForCloser(leads, profile.id, start, end) : statsForUser(leads, profile.id, start, end)
   }, [leads, profile, start, end, isCloser])
 
-  const myAllTimeBooked = useMemo(() => {
-    if (!leads || isCloser) return 0
-    return statsForUser(leads, profile.id).booked
-  }, [leads, profile, isCloser])
-
   const rollup = useMemo(() => {
     if (!leads) return null
     const setters = (reps || []).filter((r) => r.role === 'setter')
@@ -121,12 +88,6 @@ export default function Stats() {
           </>
         )}
       </div>
-
-      {!isCloser && (
-        <div className="mt-4">
-          <BadgeRow bookedCount={myAllTimeBooked} />
-        </div>
-      )}
 
       {isAdmin && rollup && (
         <div className="mt-8 space-y-6">
@@ -194,12 +155,6 @@ export default function Stats() {
             </div>
           </div>
         </div>
-      )}
-
-      {!isCloser && (
-        <p className="mt-6 font-sans text-xs text-fg-faint">
-          Badges: {BADGE_TIERS.map((t) => t.label).join(' · ')}, based on all-time booked calls.
-        </p>
       )}
     </div>
   )
