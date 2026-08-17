@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Plus, Upload, Phone } from 'lucide-react'
 import { useLeads } from '../hooks/useLeads'
+import { useReps } from '../hooks/useStats'
 import { Button } from '../components/ui/Button'
 import StatusBadge from '../components/ui/StatusBadge'
 import AddLeadModal from '../components/AddLeadModal'
@@ -16,9 +17,16 @@ function fmt(dt) {
 
 export default function Queue() {
   const { data: leads, isLoading } = useLeads()
+  const { data: reps } = useReps()
   const [showAdd, setShowAdd] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [callLead, setCallLead] = useState(null)
+
+  const setterNames = useMemo(() => {
+    const map = new Map()
+    ;(reps || []).forEach((r) => map.set(r.id, r.full_name))
+    return map
+  }, [reps])
 
   return (
     <div>
@@ -54,6 +62,7 @@ export default function Queue() {
                 <th className="px-5 py-3">Contact</th>
                 <th className="px-5 py-3">Phone</th>
                 <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3">Assigned Setter</th>
                 <th className="px-5 py-3">Next</th>
                 <th className="px-5 py-3"></th>
               </tr>
@@ -68,10 +77,13 @@ export default function Queue() {
                     <StatusBadge status={lead.status} />
                   </td>
                   <td className="px-5 py-4 text-fg-secondary">
-                    {lead.status === 'booked'
+                    {lead.assigned_setter ? setterNames.get(lead.assigned_setter) || '—' : '—'}
+                  </td>
+                  <td className="px-5 py-4 text-fg-secondary">
+                    {lead.status === 'appointment_booked'
                       ? fmt(lead.strategy_call_at)
-                      : lead.status === 'callback'
-                      ? fmt(lead.callback_at)
+                      : lead.status === 'follow_up'
+                      ? fmt(lead.follow_up_at)
                       : '—'}
                   </td>
                   <td className="px-5 py-4 text-right">

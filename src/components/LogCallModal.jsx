@@ -3,13 +3,12 @@ import Modal from './ui/Modal'
 import { Field, inputClass } from './ui/Field'
 import { Button } from './ui/Button'
 import { useLogCall } from '../hooks/useLeads'
-import { useClosers } from '../hooks/useClosers'
 
 const OUTCOMES = [
   { value: 'no_answer', label: 'No Answer' },
   { value: 'not_interested', label: 'Not Interested' },
-  { value: 'callback', label: 'Callback Later' },
-  { value: 'booked', label: 'Booked' },
+  { value: 'follow_up', label: 'Follow-up' },
+  { value: 'appointment_booked', label: 'Appointment Booked' },
 ]
 
 function toLocalInputValue(d) {
@@ -21,20 +20,15 @@ export default function LogCallModal({ lead, onClose }) {
   const [outcome, setOutcome] = useState('')
   const [notes, setNotes] = useState(lead.notes || '')
   const [when, setWhen] = useState(toLocalInputValue(new Date()))
-  const [closerId, setCloserId] = useState('')
   const logCall = useLogCall()
-  const { data: closers } = useClosers()
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (!outcome) return
 
     const patch = { status: outcome, notes }
-    if (outcome === 'callback') patch.callback_at = new Date(when).toISOString()
-    if (outcome === 'booked') {
-      patch.strategy_call_at = new Date(when).toISOString()
-      if (closerId) patch.assigned_closer = closerId
-    }
+    if (outcome === 'follow_up') patch.follow_up_at = new Date(when).toISOString()
+    if (outcome === 'appointment_booked') patch.strategy_call_at = new Date(when).toISOString()
 
     await logCall.mutateAsync({ id: lead.id, ...patch })
     onClose()
@@ -62,8 +56,8 @@ export default function LogCallModal({ lead, onClose }) {
           </div>
         </Field>
 
-        {outcome === 'callback' && (
-          <Field label="Callback date & time">
+        {outcome === 'follow_up' && (
+          <Field label="Follow-up date & time">
             <input
               type="datetime-local"
               className={inputClass()}
@@ -74,28 +68,16 @@ export default function LogCallModal({ lead, onClose }) {
           </Field>
         )}
 
-        {outcome === 'booked' && (
-          <>
-            <Field label="Strategy call date & time">
-              <input
-                type="datetime-local"
-                className={inputClass()}
-                value={when}
-                onChange={(e) => setWhen(e.target.value)}
-                required
-              />
-            </Field>
-            <Field label="Hand off to closer (optional)">
-              <select className={inputClass()} value={closerId} onChange={(e) => setCloserId(e.target.value)}>
-                <option value="">Unassigned</option>
-                {closers?.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.full_name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </>
+        {outcome === 'appointment_booked' && (
+          <Field label="Strategy call date & time">
+            <input
+              type="datetime-local"
+              className={inputClass()}
+              value={when}
+              onChange={(e) => setWhen(e.target.value)}
+              required
+            />
+          </Field>
         )}
 
         <Field label="Notes">

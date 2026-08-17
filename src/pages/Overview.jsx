@@ -1,134 +1,157 @@
 import { useMemo, useState } from 'react'
-import { Award } from 'lucide-react'
+import { Phone } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
-import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, badgesForCount, BADGE_TIERS } from '../hooks/useStats'
-import { Field, inputClass } from '../components/ui/Field'
+import { useMyPool, useMyBooked, usePipelineHealth } from '../hooks/useLeads'
+import { useAllLeadsForStats, useReps, statsForUser, statsForCloser } from '../hooks/useStats'
+import { Button } from '../components/ui/Button'
+import StatusBadge from '../components/ui/StatusBadge'
+import LogCallModal from '../components/LogCallModal'
 
-function Tile({ label, value, sub }) {
+function fmt(dt) {
+  if (!dt) return '—'
+  return new Date(dt).toLocaleString(undefined, {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  })
+}
+
+function Tile({ label, value }) {
   return (
     <div className="rounded-card border border-line bg-elevated p-5">
       <p className="eyebrow">{label}</p>
       <p className="mt-2 font-display text-3xl font-medium text-fg-primary">{value}</p>
-      {sub && <p className="mt-1 font-sans text-xs text-fg-faint">{sub}</p>}
     </div>
   )
 }
 
-function BadgeRow({ bookedCount }) {
-  const { earned, next } = badgesForCount(bookedCount)
+function SetterOverview({ profile }) {
+  const { data: leads, isLoading } = useMyPool(profile.id)
+  const [callLead, setCallLead] = useState(null)
+
   return (
-    <div className="rounded-card border border-line bg-elevated p-5">
-      <p className="eyebrow">Badges</p>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {earned.length === 0 && !next && (
-          <p className="font-sans text-sm text-fg-secondary">No badges yet.</p>
+    <div>
+      <h1 className="font-display text-2xl font-medium text-fg-primary">Overview</h1>
+      <p className="mt-1 font-sans text-sm text-fg-secondary">
+        {leads?.length ?? 0} lead{leads?.length === 1 ? '' : 's'} in your pool
+      </p>
+
+      <div className="mt-6 overflow-hidden rounded-card border border-line bg-elevated">
+        {isLoading ? (
+          <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
+        ) : !leads?.length ? (
+          <p className="p-8 text-center font-sans text-sm text-fg-secondary">
+            Your pool is empty right now — new leads are assigned automatically.
+          </p>
+        ) : (
+          <table className="w-full text-left">
+            <thead className="eyebrow bg-surface">
+              <tr>
+                <th className="px-5 py-3">Facility</th>
+                <th className="px-5 py-3">Contact</th>
+                <th className="px-5 py-3">Phone</th>
+                <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3">Next</th>
+                <th className="px-5 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {leads.map((lead) => (
+                <tr key={lead.id} className="border-t border-line font-sans text-sm hover:bg-surface">
+                  <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
+                  <td className="px-5 py-4 text-fg-secondary">{lead.contact_name || '—'}</td>
+                  <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
+                  <td className="px-5 py-4">
+                    <StatusBadge status={lead.status} />
+                  </td>
+                  <td className="px-5 py-4 text-fg-secondary">
+                    {lead.status === 'follow_up' ? fmt(lead.follow_up_at) : '—'}
+                  </td>
+                  <td className="px-5 py-4 text-right">
+                    <Button variant="secondary" className="!px-3 !py-1.5" onClick={() => setCallLead(lead)}>
+                      <Phone size={13} /> Log call
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
-        {earned.map((b) => (
-          <span
-            key={b.threshold}
-            className="eyebrow inline-flex items-center gap-1.5 rounded-full bg-[#dcf3e6] px-3 py-1.5 !text-success"
-          >
-            <Award size={12} /> {b.label}
-          </span>
-        ))}
-        {next && (
-          <span className="eyebrow inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 !text-fg-faint">
-            <Award size={12} /> {bookedCount}/{next.threshold} to {next.label}
-          </span>
+      </div>
+
+      {callLead && <LogCallModal lead={callLead} onClose={() => setCallLead(null)} />}
+    </div>
+  )
+}
+
+function CloserOverview({ profile }) {
+  const { data: leads, isLoading } = useMyBooked(profile.id)
+
+  return (
+    <div>
+      <h1 className="font-display text-2xl font-medium text-fg-primary">Overview</h1>
+      <p className="mt-1 font-sans text-sm text-fg-secondary">{leads?.length ?? 0} upcoming</p>
+
+      <div className="mt-6 space-y-3">
+        {isLoading ? (
+          <p className="font-sans text-sm text-fg-secondary">Loading…</p>
+        ) : !leads?.length ? (
+          <div className="rounded-card border border-line bg-elevated p-8 text-center">
+            <p className="font-sans text-sm text-fg-secondary">No Strategy Calls assigned to you yet.</p>
+          </div>
+        ) : (
+          leads.map((lead) => (
+            <div key={lead.id} className="rounded-card border border-line bg-elevated p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h3 className="font-display text-lg font-medium text-fg-primary">{lead.facility_name}</h3>
+                  <p className="mt-1 font-sans text-sm text-fg-secondary">
+                    {lead.contact_name || 'No contact name'} · {lead.phone || 'No phone'}
+                  </p>
+                  {lead.notes && (
+                    <p className="mt-2 max-w-xl font-sans text-sm text-fg-secondary">{lead.notes}</p>
+                  )}
+                </div>
+                <span className="eyebrow rounded-full bg-[#dcf3e6] px-3 py-1.5 !text-success">
+                  {fmt(lead.strategy_call_at)}
+                </span>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>
   )
 }
 
-function DateRangeFilter({ start, end, setStart, setEnd }) {
-  return (
-    <div className="flex flex-wrap items-end gap-3">
-      <Field label="From">
-        <input type="date" className={inputClass()} value={start} onChange={(e) => setStart(e.target.value)} />
-      </Field>
-      <Field label="To">
-        <input type="date" className={inputClass()} value={end} onChange={(e) => setEnd(e.target.value)} />
-      </Field>
-      {(start || end) && (
-        <button
-          onClick={() => {
-            setStart('')
-            setEnd('')
-          }}
-          className="pb-2 font-sans text-sm text-fg-secondary underline-offset-2 hover:underline"
-        >
-          Clear
-        </button>
-      )}
-    </div>
-  )
-}
-
-export default function Overview() {
-  const { profile } = useAuth()
-  const { data: leads, isLoading } = useAllLeadsForStats()
+function AdminOverview() {
+  const { data: leads, isLoading: leadsLoading } = useAllLeadsForStats()
   const { data: reps } = useReps()
-  const [start, setStart] = useState('')
-  const [end, setEnd] = useState('')
-
-  const isAdmin = profile?.role === 'admin'
-  const isCloser = profile?.role === 'closer'
-
-  const myStats = useMemo(() => {
-    if (!leads) return null
-    return isCloser ? statsForCloser(leads, profile.id, start, end) : statsForUser(leads, profile.id, start, end)
-  }, [leads, profile, start, end, isCloser])
-
-  const myAllTimeBooked = useMemo(() => {
-    if (!leads || isCloser) return 0
-    return statsForUser(leads, profile.id).booked
-  }, [leads, profile, isCloser])
+  const { data: health, isLoading: healthLoading } = usePipelineHealth()
 
   const rollup = useMemo(() => {
     if (!leads) return null
     const setters = (reps || []).filter((r) => r.role === 'setter')
     const closers = (reps || []).filter((r) => r.role === 'closer')
     return {
-      setters: setters.map((s) => ({ ...s, ...statsForUser(leads, s.id, start, end) })),
-      closers: closers.map((c) => ({ ...c, ...statsForCloser(leads, c.id, start, end) })),
+      setters: setters.map((s) => ({ ...s, ...statsForUser(leads, s.id) })),
+      closers: closers.map((c) => ({ ...c, ...statsForCloser(leads, c.id) })),
     }
-  }, [leads, reps, start, end])
-
-  if (isLoading) {
-    return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
-  }
+  }, [leads, reps])
 
   return (
     <div>
       <h1 className="font-display text-2xl font-medium text-fg-primary">Overview</h1>
-      <p className="mt-1 font-sans text-sm text-fg-secondary">
-        {isAdmin ? 'Team performance' : 'Your performance'}
-      </p>
+      <p className="mt-1 font-sans text-sm text-fg-secondary">Team performance and pipeline health</p>
 
-      <div className="mt-6">
-        <DateRangeFilter start={start} end={end} setStart={setStart} setEnd={setEnd} />
+      <h2 className="mt-6 font-display text-lg font-medium text-fg-primary">Pipeline health</h2>
+      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Tile label="Unassigned Pool" value={healthLoading ? '—' : health.unassignedPool} />
+        <Tile label="No-Answer Cooldown" value={healthLoading ? '—' : health.noAnswerCooldown} />
+        <Tile label="Follow-ups Due Today" value={healthLoading ? '—' : health.followUpsDueToday} />
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {isCloser ? (
-          <Tile label="Strategy Calls Assigned" value={myStats.assigned} />
-        ) : (
-          <>
-            <Tile label="Calls Logged" value={myStats.logged} />
-            <Tile label="Calls Booked" value={myStats.booked} />
-            <Tile label="Booking Rate" value={`${myStats.bookingPct}%`} />
-          </>
-        )}
-      </div>
-
-      {!isCloser && (
-        <div className="mt-4">
-          <BadgeRow bookedCount={myAllTimeBooked} />
-        </div>
-      )}
-
-      {isAdmin && rollup && (
+      {leadsLoading || !rollup ? (
+        <p className="mt-8 font-sans text-sm text-fg-secondary">Loading…</p>
+      ) : (
         <div className="mt-8 space-y-6">
           <div>
             <h2 className="font-display text-lg font-medium text-fg-primary">Setters</h2>
@@ -195,12 +218,14 @@ export default function Overview() {
           </div>
         </div>
       )}
-
-      {!isCloser && (
-        <p className="mt-6 font-sans text-xs text-fg-faint">
-          Badges: {BADGE_TIERS.map((t) => t.label).join(' · ')}, based on all-time booked calls.
-        </p>
-      )}
     </div>
   )
+}
+
+export default function Overview() {
+  const { profile } = useAuth()
+
+  if (profile?.role === 'setter') return <SetterOverview profile={profile} />
+  if (profile?.role === 'closer') return <CloserOverview profile={profile} />
+  return <AdminOverview />
 }

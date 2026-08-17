@@ -5,10 +5,9 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Join from './pages/Join'
 import Overview from './pages/Overview'
+import Stats from './pages/Stats'
 import Queue from './pages/Queue'
-import Booked from './pages/Booked'
 import Users from './pages/Users'
-import Script from './pages/Script'
 import Training from './pages/Training'
 
 const queryClient = new QueryClient()
@@ -34,8 +33,7 @@ function RoleRoute({ roles, children }) {
 }
 
 function Home() {
-  const { profile } = useAuth()
-  return <Navigate to={profile.role === 'closer' ? '/booked' : '/queue'} replace />
+  return <Navigate to="/overview" replace />
 }
 
 export default function App() {
@@ -53,15 +51,15 @@ export default function App() {
                     <Route element={<Layout />}>
                       <Route path="/" element={<Home />} />
                       <Route path="/overview" element={<Overview />} />
+                      <Route path="/stats" element={<Stats />} />
                       <Route
                         path="/queue"
                         element={
-                          <RoleRoute roles={['setter', 'admin']}>
+                          <RoleRoute roles={['admin']}>
                             <Queue />
                           </RoleRoute>
                         }
                       />
-                      <Route path="/booked" element={<Booked />} />
                       <Route
                         path="/users"
                         element={
@@ -70,7 +68,6 @@ export default function App() {
                           </RoleRoute>
                         }
                       />
-                      <Route path="/script" element={<Script />} />
                       <Route path="/training" element={<Training />} />
                     </Route>
                   </Routes>
