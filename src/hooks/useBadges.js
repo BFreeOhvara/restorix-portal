@@ -10,6 +10,16 @@ export const BOOKING_TIERS = [5, 15, 25, 50, 100, 200]
 export const PERFECT_DAY_TIERS = [1, 5, 10, 25, 50]
 export const COMMISSION_TIERS = [100, 250, 500, 1000, 2500, 5000, 10000]
 
+// Prompt 450: the single Perfect Day definition — pulled out to a named
+// export (was an inline `>= 150 && >= 2` literal) so Stats' new 21-day
+// heatmap reuses the exact same logic/constants the badge system already
+// defines, per that prompt's explicit "don't redefine it" instruction.
+export const PERFECT_DAY_DIALS = 150
+export const PERFECT_DAY_BOOKINGS = 2
+export function isPerfectDay({ dials, bookings }) {
+  return dials >= PERFECT_DAY_DIALS && bookings >= PERFECT_DAY_BOOKINGS
+}
+
 export function tieredProgress(value, thresholds) {
   const earned = thresholds.filter((t) => value >= t)
   const next = thresholds.find((t) => value < t)
@@ -39,14 +49,14 @@ export function useMyAllCalls(setterId) {
 // staying consistent rather than introducing local-time grouping just
 // for badges, which would make a "perfect day" disagree with "Booked
 // Today" on where the day boundary actually falls.
-function dayKey(iso) {
+export function dayKey(iso) {
   return new Date(iso).toISOString().split('T')[0]
 }
 
-export function computeBadgeProgress(calls) {
-  const dials = calls.length
-  const bookings = calls.filter((c) => c.outcome === 'appointment_booked').length
-
+// Exported (Prompt 450) so Stats' weekly line chart and 21-day heatmap
+// can group the same all-time `calls` history by day without duplicating
+// this loop — both need "dials + bookings per day," same shape badges use.
+export function groupCallsByDay(calls) {
   const byDay = new Map()
   for (const c of calls) {
     const key = dayKey(c.created_at)
@@ -55,11 +65,18 @@ export function computeBadgeProgress(calls) {
     d.dials += 1
     if (c.outcome === 'appointment_booked') d.bookings += 1
   }
+  return byDay
+}
+
+export function computeBadgeProgress(calls) {
+  const dials = calls.length
+  const bookings = calls.filter((c) => c.outcome === 'appointment_booked').length
+  const byDay = groupCallsByDay(calls)
 
   let perfectDays = 0
   let hatTrick = false
   for (const d of byDay.values()) {
-    if (d.dials >= 150 && d.bookings >= 2) perfectDays += 1
+    if (isPerfectDay(d)) perfectDays += 1
     if (d.bookings >= 3) hatTrick = true
   }
 

@@ -21,3 +21,20 @@ export function shiftDay(dateStr, delta) {
 export function dayRange(dateStr) {
   return { start: `${dateStr}T00:00:00.000Z`, end: `${shiftDay(dateStr, 1)}T00:00:00.000Z` }
 }
+
+// Prompt 450 — generalized out of MyGoals.jsx's old page-local
+// `mondayOfThisWeek()` (which only ever computed "Monday of today") so
+// Stats' new week-navigable line chart can ask for the Monday of *any*
+// selected week, not just the current one. MyGoals now calls this too
+// with today's date, rather than keeping two copies of the same offset math.
+export function mondayOf(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00.000Z`)
+  const day = d.getUTCDay() // 0=Sun..6=Sat
+  const offset = day === 0 ? -6 : 1 - day
+  d.setUTCDate(d.getUTCDate() + offset)
+  return toDateStr(d)
+}
+
+export function shiftWeek(mondayStr, deltaWeeks) {
+  return shiftDay(mondayStr, deltaWeeks * 7)
+}

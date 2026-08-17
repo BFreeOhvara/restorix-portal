@@ -5,6 +5,7 @@ import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useAllLeadsForStats, statsForUser } from '../hooks/useStats'
 import { useMyAllCalls, computeBadgeProgress, tieredProgress, DIAL_TIERS, BOOKING_TIERS, PERFECT_DAY_TIERS, COMMISSION_TIERS } from '../hooks/useBadges'
+import { todayUTCStr, mondayOf } from '../lib/dates'
 
 // v1 daily target is hardcoded (150 dials / 2 booked = "perfect day"),
 // weekly/monthly are that same target scaled to a 5-day work week and a
@@ -17,19 +18,6 @@ const PERIODS = {
   monthly: { label: 'Monthly', noun: 'This Month', callsTarget: 3255, bookedTarget: 43 },
 }
 
-function todayUTC() {
-  return new Date().toISOString().split('T')[0]
-}
-
-function mondayOfThisWeek() {
-  const now = new Date()
-  const day = now.getUTCDay() // 0=Sun..6=Sat
-  const offset = day === 0 ? -6 : 1 - day
-  const monday = new Date(now)
-  monday.setUTCDate(now.getUTCDate() + offset)
-  return monday
-}
-
 function firstOfThisMonth() {
   const now = new Date()
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
@@ -40,9 +28,10 @@ function toDateStr(d) {
 }
 
 function rangeForPeriod(period) {
-  if (period === 'daily') return { start: todayUTC(), end: todayUTC() }
-  if (period === 'weekly') return { start: toDateStr(mondayOfThisWeek()), end: todayUTC() }
-  return { start: toDateStr(firstOfThisMonth()), end: todayUTC() }
+  const today = todayUTCStr()
+  if (period === 'daily') return { start: today, end: today }
+  if (period === 'weekly') return { start: mondayOf(today), end: today }
+  return { start: toDateStr(firstOfThisMonth()), end: today }
 }
 
 function ProgressTile({ label, value, target }) {
