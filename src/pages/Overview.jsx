@@ -26,17 +26,16 @@ function Tile({ label, value }) {
   )
 }
 
-// Prompt 460: date label + LiveClock, right-aligned above the rightmost
-// stat card ("Follow-ups Due Today" in both usages below) — was left-aligned
-// above the whole row (Prompt 458), moved per Brayden's direct feedback.
-// Clock itself is now the visually dominant element (LiveClock.jsx), date
-// stays a secondary label above it.
+// Prompt 462: date sits to the left of the time, one row, aligned with the
+// page title's own header row (was stacked date-above-time, floating below
+// the title with a visible gap — Prompt 460). Parent components now place
+// this directly beside the "Overview" h1 instead of above the stat grid.
 function DateClockRow({ timezone }) {
   const dateLabel = new Date().toLocaleDateString('en-US', {
     timeZone: timezone, weekday: 'long', month: 'short', day: 'numeric',
   })
   return (
-    <div className="mt-4 flex flex-col items-end gap-1.5">
+    <div className="flex items-center gap-3">
       <span className="font-mono text-sm text-fg-faint [font-variant-numeric:tabular-nums]">{dateLabel}</span>
       <LiveClock timezone={timezone} />
     </div>
@@ -61,15 +60,12 @@ function TodayStrip({ profile }) {
   }, [leads, profile.id, start, end])
 
   return (
-    <>
-      <DateClockRow timezone={tz} />
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Tile label="Calls Made Today" value={isLoading ? '—' : today.logged} />
-        <Tile label="Booked Today" value={isLoading ? '—' : today.booked} />
-        <Tile label="Today's Booking Rate" value={isLoading ? '—' : `${today.bookingPct}%`} />
-        <Tile label="Follow-ups Due Today" value={isLoading ? '—' : today.followUpsDue} />
-      </div>
-    </>
+    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <Tile label="Calls Made Today" value={isLoading ? '—' : today.logged} />
+      <Tile label="Booked Today" value={isLoading ? '—' : today.booked} />
+      <Tile label="Today's Booking Rate" value={isLoading ? '—' : `${today.bookingPct}%`} />
+      <Tile label="Follow-ups Due Today" value={isLoading ? '—' : today.followUpsDue} />
+    </div>
   )
 }
 
@@ -80,6 +76,7 @@ function SetterOverview({ profile }) {
   const [callLead, setCallLead] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('new')
+  const tz = profile.timezone || DEFAULT_TIMEZONE
 
   const filtered = useMemo(() => {
     if (!leads) return []
@@ -104,10 +101,15 @@ function SetterOverview({ profile }) {
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-medium text-fg-primary">Overview</h1>
-      <p className="mt-1 font-sans text-sm text-fg-secondary">
-        {leads?.length ?? 0} lead{leads?.length === 1 ? '' : 's'} in your pool
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-medium text-fg-primary">Overview</h1>
+          <p className="mt-1 font-sans text-sm text-fg-secondary">
+            {leads?.length ?? 0} lead{leads?.length === 1 ? '' : 's'} in your pool
+          </p>
+        </div>
+        <DateClockRow timezone={tz} />
+      </div>
 
       <TodayStrip profile={profile} />
 
@@ -256,11 +258,15 @@ function AdminOverview({ profile }) {
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-medium text-fg-primary">Overview</h1>
-      <p className="mt-1 font-sans text-sm text-fg-secondary">Team performance and pipeline health</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-medium text-fg-primary">Overview</h1>
+          <p className="mt-1 font-sans text-sm text-fg-secondary">Team performance and pipeline health</p>
+        </div>
+        <DateClockRow timezone={tz} />
+      </div>
 
       <h2 className="mt-6 font-display text-lg font-medium text-fg-primary">Pipeline health</h2>
-      <DateClockRow timezone={tz} />
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Tile label="Unassigned Pool" value={healthLoading ? '—' : health.unassignedPool} />
         <Tile label="No-Answer Cooldown" value={healthLoading ? '—' : health.noAnswerCooldown} />
