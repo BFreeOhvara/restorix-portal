@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 // model) — safe to ship in client code, same as any Vite VITE_ env var would
 // end up baked into the bundle anyway. Hardcoded rather than env-var-based
 // so this deploys without needing Vercel project env config.
-const SUPABASE_URL = 'https://avgvmzshujwphneykuvu.supabase.co'
+export const SUPABASE_URL = 'https://avgvmzshujwphneykuvu.supabase.co'
 const SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF2Z3ZtenNodWp3cGhuZXlrdXZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4MjUyMTksImV4cCI6MjEwMjQwMTIxOX0.VvOmZwo_rkAnueE2t8vMtxpR4MHf3Xz7ei-TWtWtAbg'
 

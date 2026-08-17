@@ -1,15 +1,16 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { Bell, LogOut, Phone, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare } from 'lucide-react'
+import { Bell, LogOut, Phone, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
-// Nav order (Prompt 441, My Goals added Prompt 442, Messages added Prompt
-// 445): Overview first, admin-only Queue/Users kept right after it (their
-// primary daily tools), then Training, then Messages (a utility page like
-// Training, not a performance metric — kept out of the
-// Activity/Goals/Stats/Commissions KPI grouping), then the setter/closer-
-// specific activity view, then My Goals (setter/admin only), then Stats,
-// then Commissions.
+// Nav order (Prompt 441, My Goals added Prompt 442, Messages + My Calls
+// added Prompt 445/447): Overview first, admin-only Queue/Users kept
+// right after it (their primary daily tools), then Training, then
+// Messages (a utility page like Training, not a performance metric —
+// kept out of the Activity/Goals/Stats/Commissions KPI grouping), then
+// the setter/closer-specific activity view, then My Calls (a record of
+// what happened, same grouping as Activity), then My Goals (setter/admin
+// only), then Stats, then Commissions.
 const NAV = [
   { to: '/overview', label: 'Overview', icon: BarChart2, roles: ['setter', 'admin', 'closer'] },
   { to: '/queue', label: 'Queue', icon: Phone, roles: ['admin'] },
@@ -18,6 +19,7 @@ const NAV = [
   { to: '/messages', label: 'Messages', icon: MessageSquare, roles: ['setter', 'admin', 'closer'] },
   { to: '/activity', label: 'Activity', icon: ActivityIcon, roles: ['setter'] },
   { to: '/setter-activity', label: 'Setter Activity', icon: Users2, roles: ['closer'] },
+  { to: '/my-calls', label: 'My Calls', icon: PhoneCall, roles: ['setter', 'admin', 'closer'] },
   { to: '/goals', label: 'My Goals', icon: Target, roles: ['setter', 'admin'] },
   { to: '/stats', label: 'Stats', icon: TrendingUp, roles: ['setter', 'admin', 'closer'] },
   { to: '/commissions', label: 'Commissions', icon: DollarSign, roles: ['setter', 'admin', 'closer'] },

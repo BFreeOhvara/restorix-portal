@@ -6,6 +6,8 @@ import { Field, inputClass } from './ui/Field'
 import { Button } from './ui/Button'
 import { STATUS_SOLID, STATUS_TINT } from './ui/StatusBadge'
 import { useLogCall } from '../hooks/useLeads'
+import { useCreateCall, useUpdateCall } from '../hooks/useCalls'
+import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 
 const OUTCOMES = [
@@ -34,8 +36,10 @@ function fmtCallTime(total) {
 // `onAttempt` (Prompt 446) fires the moment a real dial actually goes out —
 // either path counts, since the point is proving a call was placed through
 // the system, not requiring it to connect (No Answer is a valid outcome
-// after a real attempt).
-function CallSection({ lead, onAttempt }) {
+// after a real attempt). `onCallSid` (Prompt 447) reports the Twilio
+// CallSid once a real (non-tel:) call connects, so the calls row created
+// on attempt can be correlated to its recording later.
+function CallSection({ lead, onAttempt, onCallSid }) {
   const [deviceReady, setDeviceReady] = useState(false)
   const [callState, setCallState] = useState('idle')
   const [muted, setMuted] = useState(false)
@@ -88,7 +92,10 @@ function CallSection({ lead, onAttempt }) {
     try {
       const call = await device.connect({ params: { To: lead.phone } })
       callRef.current = call
-      call.on('accept', () => setCallState('in-call'))
+      call.on('accept', () => {
+        setCallState('in-call')
+        onCallSid?.(call.parameters?.CallSid || null)
+      })
       call.on('disconnect', () => { callRef.current = null; setMuted(false); setCallState('idle') })
       call.on('cancel', () => { callRef.current = null; setCallState('idle') })
       call.on('error', (e) => { console.error('[Twilio call] error:', e?.message || e); callRef.current = null; setCallState('error') })
@@ -173,6 +180,7 @@ function CallSection({ lead, onAttempt }) {
 }
 
 export default function LogCallModal({ lead, onClose }) {
+  const { profile } = useAuth()
   const [outcome, setOutcome] = useState('')
   // Always starts blank (Prompt 442) — this is a note for *this* call, not
   // an editor for whatever's already stored on the lead from a prior one.
@@ -185,6 +193,28 @@ export default function LogCallModal({ lead, onClose }) {
   // didn't cause.
   const [hasAttempted, setHasAttempted] = useState(!lead.phone)
   const logCall = useLogCall()
+  const createCall = useCreateCall()
+  const updateCall = useUpdateCall()
+  // Prompt 447: My Calls' one row per real dial attempt, created the
+  // moment the attempt fires (same signal 446 gates outcomes on) rather
+  // than at Save time, since Save might happen much later or the setter
+  // might close the modal without ever picking an outcome.
+  const [callRowId, setCallRowId] = useState(null)
+  const attemptedAtRef = useRef(null)
+
+  function handleAttempt() {
+    if (hasAttempted) return
+    setHasAttempted(true)
+    attemptedAtRef.current = Date.now()
+    createCall.mutate(
+      { leadId: lead.id, setterId: profile.id },
+      { onSuccess: (row) => setCallRowId(row.id) }
+    )
+  }
+
+  function handleCallSid(sid) {
+    if (callRowId && sid) updateCall.mutate({ id: callRowId, patch: { twilio_call_sid: sid } })
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -195,13 +225,21 @@ export default function LogCallModal({ lead, onClose }) {
     if (outcome === 'appointment_booked') patch.strategy_call_at = new Date(when).toISOString()
 
     await logCall.mutateAsync({ id: lead.id, ...patch })
+
+    if (callRowId) {
+      const duration_seconds = attemptedAtRef.current
+        ? Math.round((Date.now() - attemptedAtRef.current) / 1000)
+        : null
+      updateCall.mutate({ id: callRowId, patch: { outcome, duration_seconds } })
+    }
+
     onClose()
   }
 
   return (
     <Modal title={`Log call — ${lead.facility_name}`} onClose={onClose} width="max-w-xl">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <CallSection lead={lead} onAttempt={() => setHasAttempted(true)} />
+        <CallSection lead={lead} onAttempt={handleAttempt} onCallSid={handleCallSid} />
 
         <Field label="Outcome">
           {!hasAttempted && (
