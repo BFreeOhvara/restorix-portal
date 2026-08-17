@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { supabase, SUPABASE_URL } from '../lib/supabase'
+import { dayRange } from '../lib/dates'
 
 // Created at the same "call attempted" moment Prompt 446 gates outcomes
 // on — one row per real dial, updated in place as more becomes known
@@ -29,15 +30,20 @@ export function useUpdateCall() {
 
 // RLS already scopes this to "my own calls, or everyone's if I'm admin" —
 // the query itself doesn't need a role branch.
-export function useMyCalls() {
+// Prompt 451: day-scoped instead of a flat "last 100" recency cap, same
+// day-by-day pattern as Activity — replaced rather than kept alongside,
+// per the prompt's own "replaces the current flat list" instruction.
+export function useMyCallsForDay(date) {
   return useQuery({
-    queryKey: ['calls'],
+    queryKey: ['calls', date],
     queryFn: async () => {
+      const { start, end } = dayRange(date)
       const { data, error } = await supabase
         .from('calls')
         .select('id, outcome, duration_seconds, recording_url, created_at, leads(facility_name), profiles(full_name)')
+        .gte('created_at', start)
+        .lt('created_at', end)
         .order('created_at', { ascending: false })
-        .limit(100)
       if (error) throw error
       return data
     },
