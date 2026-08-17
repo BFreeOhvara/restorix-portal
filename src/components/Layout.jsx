@@ -10,6 +10,9 @@ import { useAuth } from '../hooks/useAuth'
 // admin-only ADMIN group now that groups do the visual separation work
 // flat order used to (previously admin's daily tools sat right after
 // Overview specifically to read as "primary" in a flat list).
+// Prompt 449: group ORDER changed to TODAY -> RESOURCES -> PERFORMANCE ->
+// WORK per Brayden's review (was TODAY -> WORK -> PERFORMANCE -> RESOURCES).
+// Group contents unchanged. ADMIN's position wasn't specified — left last.
 const NAV_GROUPS = [
   {
     label: 'TODAY',
@@ -18,10 +21,9 @@ const NAV_GROUPS = [
     ],
   },
   {
-    label: 'WORK',
+    label: 'RESOURCES',
     items: [
-      { to: '/my-calls', label: 'My Calls', icon: PhoneCall, roles: ['setter', 'admin', 'closer'] },
-      { to: '/messages', label: 'Messages', icon: MessageSquare, roles: ['setter', 'admin', 'closer'] },
+      { to: '/training', label: 'Training', icon: GraduationCap, roles: ['setter', 'admin', 'closer'] },
     ],
   },
   {
@@ -35,9 +37,10 @@ const NAV_GROUPS = [
     ],
   },
   {
-    label: 'RESOURCES',
+    label: 'WORK',
     items: [
-      { to: '/training', label: 'Training', icon: GraduationCap, roles: ['setter', 'admin', 'closer'] },
+      { to: '/my-calls', label: 'My Calls', icon: PhoneCall, roles: ['setter', 'admin', 'closer'] },
+      { to: '/messages', label: 'Messages', icon: MessageSquare, roles: ['setter', 'admin', 'closer'] },
     ],
   },
   {
