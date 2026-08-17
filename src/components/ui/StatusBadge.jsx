@@ -44,9 +44,21 @@ export const STATUS_SOLID = {
 // map deliberately keeps "new" a neutral gray for the *unselected filter
 // chip* case, but that read as "badges aren't colored at all" once it was
 // the only color a New lead's Status badge ever showed.
+//
+// Prompt 442 follow-up: New is the one deliberate exception to "badge
+// matches SOLID" — bg-accent is also the app's default/nav-highlight blue
+// AND the same row's Call button color, so a solid-accent New badge sat
+// right next to a solid-accent Call button and read as one blob rather
+// than a distinct status. A lighter blue (dark text on a pale blue tint,
+// not the muted gray TINT.new either) gives it its own identity.
+const STATUS_BADGE = {
+  ...STATUS_SOLID,
+  new: 'bg-[#e3e9ff] !text-accent-deep',
+}
+
 export default function StatusBadge({ status }) {
   return (
-    <span className={clsx('eyebrow inline-flex rounded-full px-2.5 py-1', STATUS_SOLID[status] || STATUS_SOLID.new)}>
+    <span className={clsx('eyebrow inline-flex rounded-full px-2.5 py-1', STATUS_BADGE[status] || STATUS_BADGE.new)}>
       {STATUS_LABELS[status] || status}
     </span>
   )
