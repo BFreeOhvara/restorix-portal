@@ -21,6 +21,7 @@ export default {
         line: 'var(--border)',
         danger: 'var(--danger)',
         success: 'var(--success)',
+        warning: 'var(--warning)',
       },
       fontFamily: {
         display: ['"Space Grotesk"', 'system-ui', 'sans-serif'],

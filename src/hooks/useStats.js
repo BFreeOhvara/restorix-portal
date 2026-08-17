@@ -26,7 +26,7 @@ export function useAllLeadsForStats() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('leads')
-        .select('id, last_action_by, last_action_status, last_action_at, assigned_closer, status, strategy_call_at')
+        .select('id, last_action_by, last_action_status, last_action_at, assigned_closer, status, strategy_call_at, follow_up_at')
       if (error) throw error
       return data
     },
@@ -65,6 +65,17 @@ export function statsForUser(leads, userId, start, end) {
     booked: booked.length,
     bookingPct: logged.length ? Math.round((booked.length / logged.length) * 100) : 0,
   }
+}
+
+// Follow-ups due today for a setter — keys off the same frozen
+// last_action_* stamps as statsForUser rather than the live status/
+// assigned_setter columns, since those get reset by process_follow_up_returns
+// well before the due date if a different lead cycles through in the
+// meantime; last_action_by/status/follow_up_at aren't touched again once set.
+export function followUpsDueToday(leads, userId, todayStr) {
+  return leads.filter(
+    (l) => l.last_action_by === userId && l.last_action_status === 'follow_up' && inRange(l.follow_up_at, todayStr, todayStr)
+  ).length
 }
 
 export function statsForCloser(leads, closerId, start, end) {

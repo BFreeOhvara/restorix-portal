@@ -26,6 +26,7 @@
   --border-strong: rgba(14, 26, 24, 0.22);
   --danger: #c8452a;
   --success: #1f8a5f;
+  --warning: #b6791f;
 }
 
 * {

@@ -3,9 +3,8 @@ import { Phone, Search } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useMyPool, useMyBooked, usePipelineHealth } from '../hooks/useLeads'
-import { useAllLeadsForStats, useReps, statsForUser, statsForCloser } from '../hooks/useStats'
-import { Button } from '../components/ui/Button'
-import StatusBadge from '../components/ui/StatusBadge'
+import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, followUpsDueToday } from '../hooks/useStats'
+import StatusBadge, { STATUS_LABELS, STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
 import LogCallModal from '../components/LogCallModal'
 
 function fmt(dt) {
@@ -29,26 +28,24 @@ function TodayStrip({ profile }) {
   const { data: leads, isLoading } = useAllLeadsForStats()
   const todayStr = new Date().toISOString().split('T')[0]
   const today = useMemo(() => {
-    if (!leads) return { logged: 0, booked: 0, bookingPct: 0 }
-    return statsForUser(leads, profile.id, todayStr, todayStr)
+    if (!leads) return { logged: 0, booked: 0, bookingPct: 0, followUpsDue: 0 }
+    return {
+      ...statsForUser(leads, profile.id, todayStr, todayStr),
+      followUpsDue: followUpsDueToday(leads, profile.id, todayStr),
+    }
   }, [leads, profile.id, todayStr])
 
   return (
-    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <Tile label="Calls Made Today" value={isLoading ? '—' : today.logged} />
       <Tile label="Booked Today" value={isLoading ? '—' : today.booked} />
       <Tile label="Today's Booking Rate" value={isLoading ? '—' : `${today.bookingPct}%`} />
+      <Tile label="Follow-ups Due Today" value={isLoading ? '—' : today.followUpsDue} />
     </div>
   )
 }
 
-const STATUS_TABS = [
-  { value: 'new', label: 'New' },
-  { value: 'no_answer', label: 'No Answer' },
-  { value: 'follow_up', label: 'Follow-up' },
-  { value: 'not_interested', label: 'Not Interested' },
-  { value: 'appointment_booked', label: 'Appointment Booked' },
-]
+const STATUS_TABS = ['new', 'no_answer', 'follow_up', 'not_interested', 'appointment_booked']
 
 function SetterOverview({ profile }) {
   const { data: leads, isLoading } = useMyPool(profile.id)
@@ -72,7 +69,7 @@ function SetterOverview({ profile }) {
 
   const counts = useMemo(() => {
     const c = {}
-    for (const tab of STATUS_TABS) c[tab.value] = 0
+    for (const status of STATUS_TABS) c[status] = 0
     for (const lead of leads || []) c[lead.status] = (c[lead.status] || 0) + 1
     return c
   }, [leads])
@@ -100,22 +97,23 @@ function SetterOverview({ profile }) {
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {STATUS_TABS.map((tab) => (
+        {STATUS_TABS.map((status) => (
           <button
-            key={tab.value}
-            onClick={() => setStatusFilter(tab.value)}
+            key={status}
+            onClick={() => setStatusFilter(status)}
             className={clsx(
-              'eyebrow rounded-full px-3.5 py-2 transition-colors',
-              statusFilter === tab.value
-                ? 'bg-accent !text-white'
-                : 'border border-line bg-elevated !text-fg-secondary hover:border-fg-primary/40'
+              'eyebrow rounded-full px-3.5 py-2 transition-colors hover:opacity-85',
+              statusFilter === status ? STATUS_SOLID[status] : STATUS_TINT[status]
             )}
           >
-            {tab.label} ({counts[tab.value] || 0})
+            {STATUS_LABELS[status]} ({counts[status] || 0})
           </button>
         ))}
       </div>
 
+      {/* Own scroll region for the row list, bounded height so the strip/
+          search/filters above stay pinned while scrolling a 150-lead pool
+          (Prompt 440) — sticky thead so column headers travel with it. */}
       <div className="mt-6 overflow-hidden rounded-card border border-line bg-elevated">
         {isLoading ? (
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
@@ -126,38 +124,48 @@ function SetterOverview({ profile }) {
               : 'Your pool is empty right now — new leads are assigned automatically.'}
           </p>
         ) : (
-          <table className="w-full text-left">
-            <thead className="eyebrow bg-surface">
-              <tr>
-                <th className="px-5 py-3">Facility</th>
-                <th className="px-5 py-3">Contact</th>
-                <th className="px-5 py-3">Phone</th>
-                <th className="px-5 py-3">Status</th>
-                <th className="px-5 py-3">Next</th>
-                <th className="px-5 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((lead) => (
-                <tr key={lead.id} className="border-t border-line font-sans text-sm hover:bg-surface">
-                  <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
-                  <td className="px-5 py-4 text-fg-secondary">{lead.contact_name || '—'}</td>
-                  <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
-                  <td className="px-5 py-4">
-                    <StatusBadge status={lead.status} />
-                  </td>
-                  <td className="px-5 py-4 text-fg-secondary">
-                    {lead.status === 'follow_up' ? fmt(lead.follow_up_at) : '—'}
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <Button variant="secondary" className="!px-3 !py-1.5" onClick={() => setCallLead(lead)}>
-                      <Phone size={13} /> Log call
-                    </Button>
-                  </td>
+          <div className="max-h-[65vh] overflow-y-auto">
+            <table className="w-full text-left">
+              <thead className="eyebrow sticky top-0 z-10 bg-surface">
+                <tr>
+                  <th className="px-5 py-3">Business</th>
+                  <th className="px-5 py-3">Phone</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">Next</th>
+                  <th className="px-5 py-3"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map((lead) => (
+                  <tr
+                    key={lead.id}
+                    onClick={() => setCallLead(lead)}
+                    className="cursor-pointer border-t border-line font-sans text-sm hover:bg-surface"
+                  >
+                    <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
+                    <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
+                    <td className="px-5 py-4">
+                      <StatusBadge status={lead.status} />
+                    </td>
+                    <td className="px-5 py-4 text-fg-secondary">
+                      {lead.status === 'follow_up' ? fmt(lead.follow_up_at) : '—'}
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setCallLead(lead) }}
+                        className={clsx(
+                          'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-sans text-xs font-semibold transition-colors hover:opacity-90',
+                          STATUS_SOLID[lead.status] || STATUS_SOLID.new
+                        )}
+                      >
+                        <Phone size={13} /> Call
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
