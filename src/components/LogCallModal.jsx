@@ -31,7 +31,11 @@ function fmtCallTime(total) {
 // functions), trimmed to just dial/mute/hang-up since Restorix has no
 // call-grading or recording pipeline to feed. Falls back to a tel: link
 // if the Twilio Device never registers (not configured, or offline).
-function CallSection({ lead }) {
+// `onAttempt` (Prompt 446) fires the moment a real dial actually goes out —
+// either path counts, since the point is proving a call was placed through
+// the system, not requiring it to connect (No Answer is a valid outcome
+// after a real attempt).
+function CallSection({ lead, onAttempt }) {
   const [deviceReady, setDeviceReady] = useState(false)
   const [callState, setCallState] = useState('idle')
   const [muted, setMuted] = useState(false)
@@ -77,6 +81,7 @@ function CallSection({ lead }) {
   async function startCall() {
     const device = deviceRef.current
     if (!device || !lead.phone) return
+    onAttempt()
     setMuted(false)
     setCallSeconds(0)
     setCallState('connecting')
@@ -159,6 +164,7 @@ function CallSection({ lead }) {
   return (
     <a
       href={telHref}
+      onClick={onAttempt}
       className="flex h-11 items-center justify-center gap-2 rounded-full bg-accent font-sans text-sm font-semibold text-white"
     >
       <Phone size={14} /> Call {lead.phone}
@@ -172,6 +178,12 @@ export default function LogCallModal({ lead, onClose }) {
   // an editor for whatever's already stored on the lead from a prior one.
   const [notes, setNotes] = useState('')
   const [when, setWhen] = useState(toLocalInputValue(new Date()))
+  // Prompt 446: outcomes are gated behind an actual dial attempt, so nobody
+  // can log "No Answer" without ever having called. Starts already unlocked
+  // when there's no phone number at all — there's nothing to attempt, so
+  // gating would just brick the modal for a data-quality problem the setter
+  // didn't cause.
+  const [hasAttempted, setHasAttempted] = useState(!lead.phone)
   const logCall = useLogCall()
 
   async function handleSubmit(e) {
@@ -187,20 +199,24 @@ export default function LogCallModal({ lead, onClose }) {
   }
 
   return (
-    <Modal title={`Log call — ${lead.facility_name}`} onClose={onClose}>
+    <Modal title={`Log call — ${lead.facility_name}`} onClose={onClose} width="max-w-xl">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <CallSection lead={lead} />
+        <CallSection lead={lead} onAttempt={() => setHasAttempted(true)} />
 
         <Field label="Outcome">
+          {!hasAttempted && (
+            <p className="mb-2 font-sans text-xs text-fg-faint">Call the lead to unlock outcomes.</p>
+          )}
           <div className="grid grid-cols-2 gap-2">
             {OUTCOMES.map((o) => (
               <button
                 type="button"
                 key={o.value}
+                disabled={!hasAttempted}
                 onClick={() => setOutcome(o.value)}
                 className={clsx(
-                  'rounded-lg px-3 py-2 font-sans text-sm font-medium transition-colors',
-                  outcome === o.value ? STATUS_SOLID[o.value] : clsx(STATUS_TINT[o.value], 'hover:opacity-85')
+                  'rounded-lg px-3 py-2 font-sans text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+                  outcome === o.value ? STATUS_SOLID[o.value] : clsx(STATUS_TINT[o.value], hasAttempted && 'hover:opacity-85')
                 )}
               >
                 {o.label}
