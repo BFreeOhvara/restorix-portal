@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Bell, LogOut, Phone, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
@@ -51,20 +51,29 @@ const NAV_GROUPS = [
       { to: '/users', label: 'Users', icon: UsersIcon, roles: ['admin'] },
     ],
   },
-]
-
-// Prompt 454: Messages and Settings don't get their own labeled group —
-// Brayden specifically didn't want a section header that just repeats
-// the single item's own name (a "SETTINGS" label over a "Settings" link
-// reads redundant). Rendered ungrouped at the bottom of the sidebar
-// instead, below every labeled section including ADMIN — his instruction
-// named the four always-visible groups (TODAY/RESOURCES/PERFORMANCE/WORK)
-// since ADMIN only exists for the one admin role, but "bottom of the
-// sidebar" reads most literally as last overall, not squeezed above the
-// admin-only group.
-const NAV_STANDALONE = [
-  { to: '/messages', label: 'Messages', icon: MessageSquare, roles: ['setter', 'admin', 'closer'] },
-  { to: '/settings', label: 'Settings', icon: SettingsIcon, roles: ['setter', 'admin', 'closer'] },
+  // Prompt 456: reverses Prompt 454's headerless standalone block —
+  // Brayden looked at it and wanted real section headers after all, just
+  // not ones that literally repeat the single item's own name ("SETTINGS"
+  // over "Settings" reads redundant). Two separate one-item groups, not
+  // one shared group holding both, per his explicit "should be two
+  // separate section headers" instruction. Labels are his own suggested
+  // wording from the prompt itself (COMMUNICATION / ACCOUNT, the latter
+  // matching how ohvara-dashboard's own Sidebar.jsx names this kind of
+  // group), not a guess needing separate sign-off. Kept in the same
+  // bottom-of-sidebar position Prompt 454 already put them in — this
+  // prompt only asked for headers to be added back, not a reposition.
+  {
+    label: 'COMMUNICATION',
+    items: [
+      { to: '/messages', label: 'Messages', icon: MessageSquare, roles: ['setter', 'admin', 'closer'] },
+    ],
+  },
+  {
+    label: 'ACCOUNT',
+    items: [
+      { to: '/settings', label: 'Settings', icon: SettingsIcon, roles: ['setter', 'admin', 'closer'] },
+    ],
+  },
 ]
 
 function NotificationBell() {
@@ -180,6 +189,14 @@ function HeaderName({ profile }) {
 export default function Layout() {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  // Prompt 456: Messages is the one page that fills the full content area
+  // edge-to-edge instead of sitting in the standard padded/max-width
+  // container every other page uses — Brayden's explicit call, not a
+  // guess. Layout has to know about this itself since Messages.jsx can't
+  // undo a parent's real padding/max-width from inside without a hacky
+  // negative-margin trick.
+  const isFullBleed = location.pathname === '/messages'
 
   return (
     <div className="min-h-screen bg-base">
@@ -205,13 +222,6 @@ export default function Layout() {
               </div>
             )
           })}
-
-          {/* Prompt 454: ungrouped, no header — see NAV_STANDALONE comment. */}
-          <div className="space-y-1">
-            {NAV_STANDALONE.filter((l) => l.roles.includes(profile?.role)).map((item) => (
-              <NavItemLink key={item.to} {...item} />
-            ))}
-          </div>
         </nav>
 
         <AccountPopover profile={profile} onSignOut={signOut} onNavigate={navigate} />
@@ -222,11 +232,23 @@ export default function Layout() {
           <NotificationBell />
           <HeaderName profile={profile} />
         </header>
-        <main className="flex-1 px-6 py-8">
-          <div className="mx-auto max-w-7xl">
+        {isFullBleed ? (
+          // Prompt 456: flex container, not just a sizing wrapper — a
+          // block-level <main> here would give its child a `height:100%`
+          // that fails to resolve against a flex-grown ancestor (confirmed
+          // live: it silently collapsed to content height instead of
+          // filling the viewport). Messages.jsx's own root uses `flex-1`
+          // for the same reason, not `h-full`.
+          <main className="flex flex-1 flex-col overflow-hidden">
             <Outlet />
-          </div>
-        </main>
+          </main>
+        ) : (
+          <main className="flex-1 px-6 py-8">
+            <div className="mx-auto max-w-7xl">
+              <Outlet />
+            </div>
+          </main>
+        )}
       </div>
     </div>
   )

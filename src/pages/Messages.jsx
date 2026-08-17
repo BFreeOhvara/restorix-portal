@@ -123,123 +123,116 @@ export default function Messages() {
   }
 
   return (
-    <div>
-      <h1 className="font-display text-2xl font-medium text-fg-primary">Messages</h1>
-      <p className="mt-1 font-sans text-sm text-fg-secondary">
-        {profile?.role === 'admin' ? 'Setters and closers' : 'Admin and closers'} you can reach directly
-      </p>
-
-      <div className="relative mt-6 grid h-[600px] grid-cols-[280px_1fr] overflow-hidden rounded-card border border-line bg-elevated">
-        <div className="flex flex-col border-r border-line">
-          <div className="flex items-center justify-between border-b border-line p-3">
-            <p className="eyebrow">Conversations</p>
-            <button
-              onClick={() => setPickerOpen((v) => !v)}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-fg-secondary hover:bg-surface hover:text-fg-primary"
-              title="New message"
-            >
-              <Plus size={16} />
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {isLoading ? (
-              <p className="p-4 font-sans text-sm text-fg-secondary">Loading…</p>
-            ) : !conversations.length ? (
-              <p className="p-4 font-sans text-sm text-fg-secondary">No conversations yet.</p>
-            ) : (
-              conversations.map((c) => {
-                const contact = contactsById.get(c.otherId)
-                return (
-                  <button
-                    key={c.otherId}
-                    onClick={() => openConversation(c.otherId)}
-                    className={clsx(
-                      'flex w-full items-start gap-2.5 border-b border-line px-3 py-3 text-left hover:bg-surface',
-                      selectedId === c.otherId && 'bg-surface'
-                    )}
-                  >
-                    <Avatar name={contact?.full_name} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="truncate font-sans text-sm font-medium text-fg-primary">
-                          {contact?.full_name || 'Unknown'}
-                        </p>
-                        {c.unread > 0 && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-accent" />}
-                      </div>
-                      <p className="truncate font-sans text-xs text-fg-secondary">{c.last.body}</p>
-                    </div>
-                  </button>
-                )
-              })
-            )}
-          </div>
+    <div className="relative grid min-h-0 flex-1 grid-cols-[280px_1fr] overflow-hidden bg-elevated">
+      <div className="flex flex-col border-r border-line">
+        <div className="flex items-center justify-between border-b border-line p-3">
+          <p className="eyebrow">Conversations</p>
+          <button
+            onClick={() => setPickerOpen((v) => !v)}
+            className="flex h-7 w-7 items-center justify-center rounded-full text-fg-secondary hover:bg-surface hover:text-fg-primary"
+            title="New message"
+          >
+            <Plus size={16} />
+          </button>
         </div>
-
-        {pickerOpen && (
-          <NewConversationPicker
-            contacts={(contacts || []).filter((c) => !conversations.some((conv) => conv.otherId === c.id))}
-            onPick={(c) => openConversation(c.id)}
-            onClose={() => setPickerOpen(false)}
-          />
-        )}
-
-        <div className="flex flex-col">
-          {!active && !activeContact ? (
-            <div className="flex flex-1 items-center justify-center">
-              <p className="font-sans text-sm text-fg-secondary">Select a conversation, or start a new one.</p>
-            </div>
+        <div className="flex-1 overflow-y-auto">
+          {isLoading ? (
+            <p className="p-4 font-sans text-sm text-fg-secondary">Loading…</p>
+          ) : !conversations.length ? (
+            <p className="p-4 font-sans text-sm text-fg-secondary">No conversations yet.</p>
           ) : (
-            <>
-              <div className="flex items-center gap-2.5 border-b border-line p-3">
-                <Avatar name={activeContact?.full_name} size={30} />
-                <div>
-                  <p className="font-sans text-sm font-medium text-fg-primary">{activeContact?.full_name}</p>
-                  <p className="eyebrow !text-fg-faint">{activeContact?.role}</p>
-                </div>
-              </div>
-
-              <div className="flex-1 space-y-2 overflow-y-auto p-4">
-                {(active?.messages || []).map((m) => {
-                  const mine = m.sender_id === profile.id
-                  return (
-                    <div key={m.id} className={clsx('flex', mine ? 'justify-end' : 'justify-start')}>
-                      <div
-                        className={clsx(
-                          'max-w-[75%] rounded-2xl px-3.5 py-2 font-sans text-sm',
-                          mine ? 'bg-accent text-white' : 'bg-surface text-fg-primary'
-                        )}
-                      >
-                        <p className="whitespace-pre-wrap">{m.body}</p>
-                        <p className={clsx('mt-1 text-[10px]', mine ? 'text-white/70' : 'text-fg-faint')}>
-                          {fmtTime(m.created_at)}
-                        </p>
-                      </div>
+            conversations.map((c) => {
+              const contact = contactsById.get(c.otherId)
+              return (
+                <button
+                  key={c.otherId}
+                  onClick={() => openConversation(c.otherId)}
+                  className={clsx(
+                    'flex w-full items-start gap-2.5 border-b border-line px-3 py-3 text-left hover:bg-surface',
+                    selectedId === c.otherId && 'bg-surface'
+                  )}
+                >
+                  <Avatar name={contact?.full_name} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate font-sans text-sm font-medium text-fg-primary">
+                        {contact?.full_name || 'Unknown'}
+                      </p>
+                      {c.unread > 0 && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-accent" />}
                     </div>
-                  )
-                })}
-              </div>
-
-              <form onSubmit={handleSend} className="flex items-end gap-2 border-t border-line p-3">
-                <textarea
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      handleSend(e)
-                    }
-                  }}
-                  rows={1}
-                  placeholder="Write a message…"
-                  className="max-h-24 flex-1 resize-none rounded-lg border-2 border-line bg-base px-3 py-2 font-sans text-sm text-fg-primary outline-none focus:border-accent"
-                />
-                <Button type="submit" disabled={!draft.trim() || sendMessage.isPending} className="!px-3">
-                  <Send size={16} />
-                </Button>
-              </form>
-            </>
+                    <p className="truncate font-sans text-xs text-fg-secondary">{c.last.body}</p>
+                  </div>
+                </button>
+              )
+            })
           )}
         </div>
+      </div>
+
+      {pickerOpen && (
+        <NewConversationPicker
+          contacts={(contacts || []).filter((c) => !conversations.some((conv) => conv.otherId === c.id))}
+          onPick={(c) => openConversation(c.id)}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+
+      <div className="flex flex-col">
+        {!active && !activeContact ? (
+          <div className="flex flex-1 items-center justify-center">
+            <p className="font-sans text-sm text-fg-secondary">Select a conversation, or start a new one.</p>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2.5 border-b border-line p-3">
+              <Avatar name={activeContact?.full_name} size={30} />
+              <div>
+                <p className="font-sans text-sm font-medium text-fg-primary">{activeContact?.full_name}</p>
+                <p className="eyebrow !text-fg-faint">{activeContact?.role}</p>
+              </div>
+            </div>
+
+            <div className="flex-1 space-y-2 overflow-y-auto p-4">
+              {(active?.messages || []).map((m) => {
+                const mine = m.sender_id === profile.id
+                return (
+                  <div key={m.id} className={clsx('flex', mine ? 'justify-end' : 'justify-start')}>
+                    <div
+                      className={clsx(
+                        'max-w-[75%] rounded-2xl px-3.5 py-2 font-sans text-sm',
+                        mine ? 'bg-accent text-white' : 'bg-surface text-fg-primary'
+                      )}
+                    >
+                      <p className="whitespace-pre-wrap">{m.body}</p>
+                      <p className={clsx('mt-1 text-[10px]', mine ? 'text-white/70' : 'text-fg-faint')}>
+                        {fmtTime(m.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <form onSubmit={handleSend} className="flex items-end gap-2 border-t border-line p-3">
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    handleSend(e)
+                  }
+                }}
+                rows={1}
+                placeholder="Write a message…"
+                className="max-h-24 flex-1 resize-none rounded-lg border-2 border-line bg-base px-3 py-2 font-sans text-sm text-fg-primary outline-none focus:border-accent"
+              />
+              <Button type="submit" disabled={!draft.trim() || sendMessage.isPending} className="!px-3">
+                <Send size={16} />
+              </Button>
+            </form>
+          </>
+        )}
       </div>
     </div>
   )
