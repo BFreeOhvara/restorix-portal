@@ -1,18 +1,21 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { Bell, LogOut, Phone, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target } from 'lucide-react'
+import { Bell, LogOut, Phone, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
-// Nav order (Prompt 441, My Goals added Prompt 442): Overview first,
-// admin-only Queue/Users kept right after it (their primary daily tools),
-// then Training, then the setter/closer-specific activity view, then My
-// Goals (setter/admin only — a daily-target companion to Overview/Activity,
-// sits before the historical Stats view), then Stats, then Commissions.
+// Nav order (Prompt 441, My Goals added Prompt 442, Messages added Prompt
+// 445): Overview first, admin-only Queue/Users kept right after it (their
+// primary daily tools), then Training, then Messages (a utility page like
+// Training, not a performance metric — kept out of the
+// Activity/Goals/Stats/Commissions KPI grouping), then the setter/closer-
+// specific activity view, then My Goals (setter/admin only), then Stats,
+// then Commissions.
 const NAV = [
   { to: '/overview', label: 'Overview', icon: BarChart2, roles: ['setter', 'admin', 'closer'] },
   { to: '/queue', label: 'Queue', icon: Phone, roles: ['admin'] },
   { to: '/users', label: 'Users', icon: UsersIcon, roles: ['admin'] },
   { to: '/training', label: 'Training', icon: GraduationCap, roles: ['setter', 'admin', 'closer'] },
+  { to: '/messages', label: 'Messages', icon: MessageSquare, roles: ['setter', 'admin', 'closer'] },
   { to: '/activity', label: 'Activity', icon: ActivityIcon, roles: ['setter'] },
   { to: '/setter-activity', label: 'Setter Activity', icon: Users2, roles: ['closer'] },
   { to: '/goals', label: 'My Goals', icon: Target, roles: ['setter', 'admin'] },
