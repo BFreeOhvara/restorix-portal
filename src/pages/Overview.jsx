@@ -26,16 +26,18 @@ function Tile({ label, value }) {
   )
 }
 
-// Prompt 458: date label + LiveClock, positioned above the stat-card row —
-// same "date text + clock pill" pattern as ohvara-dashboard's MyLeads
-// (components/ui/LiveClock.jsx usage), read directly for the treatment.
+// Prompt 460: date label + LiveClock, right-aligned above the rightmost
+// stat card ("Follow-ups Due Today" in both usages below) — was left-aligned
+// above the whole row (Prompt 458), moved per Brayden's direct feedback.
+// Clock itself is now the visually dominant element (LiveClock.jsx), date
+// stays a secondary label above it.
 function DateClockRow({ timezone }) {
   const dateLabel = new Date().toLocaleDateString('en-US', {
     timeZone: timezone, weekday: 'long', month: 'short', day: 'numeric',
   })
   return (
-    <div className="mt-4 flex items-center gap-3">
-      <span className="font-mono text-xs text-fg-faint [font-variant-numeric:tabular-nums]">{dateLabel}</span>
+    <div className="mt-4 flex flex-col items-end gap-1.5">
+      <span className="font-mono text-sm text-fg-faint [font-variant-numeric:tabular-nums]">{dateLabel}</span>
       <LiveClock timezone={timezone} />
     </div>
   )

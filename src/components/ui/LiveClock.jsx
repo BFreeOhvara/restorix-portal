@@ -19,7 +19,7 @@ export function LiveClock({ timezone }) {
   })
 
   return (
-    <span className="inline-block rounded-md bg-accent px-2.5 py-1 font-mono text-xs text-white [font-variant-numeric:tabular-nums]">
+    <span className="inline-block rounded-lg bg-accent px-4 py-2 font-mono text-3xl font-semibold text-white [font-variant-numeric:tabular-nums]">
       {time}
     </span>
   )
