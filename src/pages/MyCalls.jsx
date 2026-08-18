@@ -68,12 +68,15 @@ export default function MyCalls() {
   const [date, setDate] = useState(() => zonedDateStr(Date.now(), tz))
   const { data: calls, isLoading } = useMyCallsForDay(date, tz)
   const isAdmin = profile?.role === 'admin'
+  // Prompt 474: setter-only label swap, page heading side — closer/admin
+  // keep "My Calls" exactly as-is, same route/data either way.
+  const heading = profile?.role === 'setter' ? 'My Recordings' : 'My Calls'
 
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-medium text-fg-primary">My Calls</h1>
+          <h1 className="font-display text-2xl font-medium text-fg-primary">{heading}</h1>
           <p className="mt-1 font-sans text-sm text-fg-secondary">
             {isAdmin ? 'Every call placed through the dashboard, this day' : 'Calls you\'ve placed through the dashboard, this day'}
           </p>

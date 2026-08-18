@@ -41,7 +41,10 @@ const NAV_GROUPS = [
     // My Calls again now.
     label: 'WORK',
     items: [
-      { to: '/my-calls', label: 'My Calls', icon: PhoneCall, roles: ['setter', 'admin', 'closer'] },
+      // Prompt 474: setter-only label swap — "My Recordings" reads better
+      // for a setter's own dial history, closer/admin keep "My Calls"
+      // exactly as-is (same route, same data, label only).
+      { to: '/my-calls', label: 'My Calls', labelByRole: { setter: 'My Recordings' }, icon: PhoneCall, roles: ['setter', 'admin', 'closer'] },
       // Prompt 469 — live-call talk-track tool, closer's own working
       // tool same as My Calls is the setter's, so it lives in WORK too.
       { to: '/survey', label: 'Closer Survey', icon: ListChecks, roles: ['closer', 'admin'] },
@@ -234,7 +237,9 @@ export default function Layout() {
               <div key={groupLabel}>
                 <p className="eyebrow !text-fg-faint px-3 pb-1.5">{groupLabel}</p>
                 <div className="space-y-1">
-                  {visible.map((item) => <NavItemLink key={item.to} {...item} />)}
+                  {visible.map((item) => (
+                    <NavItemLink key={item.to} {...item} label={item.labelByRole?.[profile?.role] || item.label} />
+                  ))}
                 </div>
               </div>
             )
