@@ -1,9 +1,58 @@
 import { useMemo, useState } from 'react'
 import clsx from 'clsx'
-import { RotateCcw } from 'lucide-react'
+import { RotateCcw, ChevronDown } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Field, inputClass } from '../components/ui/Field'
-import { initialSurveyState, visibleSteps, canAdvance, computeSurveyResults } from '../lib/survey'
+import { initialSurveyState, visibleSteps, canAdvance, computeSurveyResults, RESULTS_CONTENT } from '../lib/survey'
+
+// Prompt 470 — click-to-expand in place, no popup, no separate "Show
+// more" button: the whole box is the trigger, exactly as Brayden
+// described it. `content` is optional (a sub-agent/front-runner with no
+// matching RESULTS_CONTENT entry just never shows an expand affordance).
+function ExpandableCard({ expanded, onToggle, content, className, children }) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={content ? onToggle : undefined}
+      onKeyDown={(e) => {
+        if (!content) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onToggle()
+        }
+      }}
+      className={clsx(
+        'relative rounded-lg border border-line bg-surface transition-colors',
+        content && 'cursor-pointer hover:border-accent/40',
+        className
+      )}
+    >
+      {children}
+      {content && (
+        <ChevronDown
+          size={16}
+          className={clsx(
+            'pointer-events-none absolute right-4 top-4 text-fg-faint transition-transform duration-200',
+            expanded && 'rotate-180'
+          )}
+        />
+      )}
+      {content && expanded && (
+        <div className="mt-4 space-y-3 border-t border-line pt-4">
+          <div>
+            <p className="eyebrow !text-fg-faint">What it is</p>
+            <p className="mt-1 font-sans text-sm leading-relaxed text-fg-secondary">{content.whatItIs}</p>
+          </div>
+          <div>
+            <p className="eyebrow !text-fg-faint">What it does for their business</p>
+            <p className="mt-1 font-sans text-sm leading-relaxed text-fg-secondary">{content.whatItDoes}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function ChoiceButtons({ options, value, onChange }) {
   return (
@@ -58,6 +107,7 @@ function TextField({ label, value, onChange, placeholder, type = 'text' }) {
 export default function Survey() {
   const [state, setState] = useState(initialSurveyState())
   const [stepKey, setStepKey] = useState('q0')
+  const [expandedCards, setExpandedCards] = useState(() => new Set())
 
   const steps = useMemo(() => visibleSteps(state), [state])
   const currentIndex = steps.findIndex((s) => s.key === stepKey)
@@ -78,6 +128,15 @@ export default function Survey() {
   function restart() {
     setState(initialSurveyState())
     setStepKey('q0')
+    setExpandedCards(new Set())
+  }
+  function toggleCard(key) {
+    setExpandedCards((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
   }
 
   const isSummary = step.key === 'summary'
@@ -332,19 +391,26 @@ export default function Survey() {
           <div className="space-y-8">
             <div>
               <p className="eyebrow">Front-runner</p>
-              <p className="mt-2 font-display text-2xl font-medium text-fg-primary">
-                {results.frontRunner || '—'}
-              </p>
-              {results.crisisRoutingIncluded && (
-                <p className="mt-1 font-sans text-sm text-fg-secondary">
-                  After-hours crisis-language routing included automatically — not a separate line item.
+              <ExpandableCard
+                className="mt-2 px-6 py-5"
+                content={results.frontRunnerKey ? RESULTS_CONTENT[results.frontRunnerKey] : null}
+                expanded={expandedCards.has('front_runner')}
+                onToggle={() => toggleCard('front_runner')}
+              >
+                <p className="pr-8 font-display text-2xl font-medium text-fg-primary">
+                  {results.frontRunner || '—'}
                 </p>
-              )}
-              {results.missedCallStrongSignal && (
-                <p className="mt-1 font-sans text-sm text-success">
-                  Strong signal for Missed-Call Recovery — missed calls often go a day or more without a callback.
-                </p>
-              )}
+                {results.crisisRoutingIncluded && (
+                  <p className="mt-1 font-sans text-sm text-fg-secondary">
+                    After-hours crisis-language routing included automatically — not a separate line item.
+                  </p>
+                )}
+                {results.missedCallStrongSignal && (
+                  <p className="mt-1 font-sans text-sm text-success">
+                    Strong signal for Missed-Call Recovery — missed calls often go a day or more without a callback.
+                  </p>
+                )}
+              </ExpandableCard>
             </div>
 
             <div>
@@ -354,19 +420,24 @@ export default function Survey() {
                   No sub-agents scored a strong signal — this deal may be front-runner-only.
                 </p>
               ) : (
-                <ul className="mt-2 space-y-2">
+                <div className="mt-2 space-y-2">
                   {results.subAgents.map((a) => (
-                    <li
+                    <ExpandableCard
                       key={a.key}
-                      className="flex items-center justify-between rounded-lg border border-line bg-surface px-4 py-3 font-sans text-sm"
+                      className="px-4 py-3"
+                      content={RESULTS_CONTENT[a.key]}
+                      expanded={expandedCards.has(a.key)}
+                      onToggle={() => toggleCard(a.key)}
                     >
-                      <span className="text-fg-primary">{a.label}</span>
-                      {a.lowerPriority && (
-                        <span className="eyebrow !text-fg-faint">Nice-to-have</span>
-                      )}
-                    </li>
+                      <div className="flex items-center justify-between gap-3 pr-6 font-sans text-sm">
+                        <span className="text-fg-primary">{a.label}</span>
+                        {a.lowerPriority && (
+                          <span className="eyebrow !text-fg-faint">Nice-to-have</span>
+                        )}
+                      </div>
+                    </ExpandableCard>
                   ))}
-                </ul>
+                </div>
               )}
             </div>
 

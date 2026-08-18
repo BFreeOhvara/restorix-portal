@@ -13,6 +13,56 @@ export const FRONT_RUNNERS = {
   missed_call_recovery: 'Missed-Call Recovery',
 }
 
+// Prompt 470 — results-screen copy, pulled verbatim from the "Restorix
+// Closer Survey" vault note's own "Content for the results screen"
+// section rather than summarized/rewritten here. Keyed to match
+// `state.q0` (front-runners) and each sub-agent's own `key` in
+// computeSurveyResults below, so the UI can look this up directly.
+export const RESULTS_CONTENT = {
+  intake_triage: {
+    whatItIs:
+      "An AI agent that answers every call, form, and text the moment it comes in — 24/7, no wait, no voicemail. It talks to the caller like a real intake coordinator would: asks what's going on, does a quick level-of-care read and insurance pre-screen, and either books the consult directly or routes them to a live person. After-hours crisis-language detection is built in automatically — if the conversation shows real risk language, it immediately hands off to a live human or on-call clinician instead of continuing on autopilot.",
+    whatItDoes:
+      'Most admission inquiries come in by phone, and centers that respond within 5 minutes convert 9 to 21 times more often than ones that take 30+ minutes to call back — most facilities are losing beds they already paid to fill just because someone couldn\'t pick up in time. This closes that gap completely: nothing goes to voicemail, nothing waits until morning, and the facility stops needing to staff around the clock just to catch every inquiry.',
+  },
+  missed_call_recovery: {
+    whatItIs:
+      "A lighter safety net for a facility that wants to keep its own staff answering calls live, but doesn't want anything missed to just disappear. The moment a call goes unanswered — after hours, line's busy, a slow morning — it automatically fires off a text and a callback within minutes, no human has to remember to do it.",
+    whatItDoes:
+      'Their staff stays the primary point of contact, nothing changes about how they operate day to day — but every call that used to just vanish into a missed-call log now gets a real shot at coming back. Given how much faster response speed drives conversion, this alone recovers admissions that were previously lost the moment the phone rang out.',
+  },
+  insurance: {
+    whatItIs:
+      'A real-time eligibility and benefits check with the actual payer, not just asking "what insurance do you have" — coverage gets confirmed while the person\'s still engaged, instead of someone having to call back later.',
+    whatItDoes:
+      "Payer-status uncertainty is one of the most common points an inquiry goes cold — someone calls, gets told \"we'll check and call you back,\" and by the time anyone does, they've already called somewhere else. Verifying it live keeps the conversation moving instead of creating a gap for them to lose interest.",
+  },
+  follow_up: {
+    whatItIs:
+      "An automated sequence that keeps reaching out to anyone who called in but didn't book the same day — texts, emails, calls, spaced out over the following days.",
+    whatItDoes:
+      "Decisions to enter treatment often aren't made on the first call, especially when it's a worried family member calling instead of the patient. Without a real process, those inquiries just fall through the cracks. This keeps every one of them warm until they actually book, without relying on staff remembering to circle back.",
+  },
+  bed_sync: {
+    whatItIs:
+      "Keeps the AI's view of open beds and program slots in sync with what's actually available, so intake isn't promising something that isn't there or making someone wait while staff manually checks with clinical/ops.",
+    whatItDoes:
+      "A delay here is a common reason an inquiry gets lost — by the time someone gets back to the caller with an answer, they've already called another facility. Instant, accurate availability keeps the booking moving in the same conversation instead of creating a hold-and-lose moment.",
+  },
+  reminders: {
+    whatItIs:
+      "Automated reminders in the lead-up to a booked intake appointment, with re-engagement if the person doesn't confirm they're still coming.",
+    whatItDoes:
+      "A booked appointment is only worth what actually walks through the door — no-shows are a well-known leak point in this industry, and most facilities don't have a real reminder process in place. This closes that gap without adding staff workload.",
+  },
+  referral_reporting: {
+    whatItIs:
+      'Tracking that shows which marketing channels or referral sources are actually turning into real admissions, not just inquiries.',
+    whatItDoes:
+      "Most facilities are guessing which channels are worth the spend. This gives ownership/BD a clear, accurate picture of what's actually working, so marketing dollars go toward what's proven instead of what feels like it's working.",
+  },
+}
+
 export function initialSurveyState() {
   return {
     q0: null,
@@ -149,6 +199,7 @@ export function computeSurveyResults(state) {
 
   return {
     frontRunner,
+    frontRunnerKey: state.q0,
     crisisRoutingIncluded: state.q0 === 'intake_triage',
     missedCallStrongSignal,
     subAgents,
