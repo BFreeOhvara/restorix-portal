@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Bell, LogOut, Phone, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon } from 'lucide-react'
+import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
 // Prompt 448: grouped into labeled sections (matching ohvara-dashboard's
@@ -47,7 +47,7 @@ const NAV_GROUPS = [
   {
     label: 'ADMIN',
     items: [
-      { to: '/queue', label: 'Queue', icon: Phone, roles: ['admin'] },
+      { to: '/pipeline', label: 'Pipeline', icon: Workflow, roles: ['admin'] },
       { to: '/users', label: 'Users', icon: UsersIcon, roles: ['admin'] },
     ],
   },

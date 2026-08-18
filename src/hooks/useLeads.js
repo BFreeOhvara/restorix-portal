@@ -17,6 +17,61 @@ export function useLeads(statusFilter) {
   })
 }
 
+// Prompt 464: admin Pipeline's Setter tab — a real server-side filter
+// excluding Appointment Booked (verified via direct query, not a client-side
+// .filter() on the full set), matching Brayden's explicit call that a
+// booked lead is no longer a setter concern once it's handed to a closer.
+export function usePipelineSetterLeads() {
+  return useQuery({
+    queryKey: ['pipeline-setter-leads'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .neq('status', 'appointment_booked')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data
+    },
+    refetchInterval: 15000,
+  })
+}
+
+// Admin Pipeline's Closer tab — read-only rollup across every closer's
+// booked leads, regardless of which closer they're assigned to.
+export function usePipelineCloserLeads() {
+  return useQuery({
+    queryKey: ['pipeline-closer-leads'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('status', 'appointment_booked')
+        .order('strategy_call_at', { ascending: true })
+      if (error) throw error
+      return data
+    },
+    refetchInterval: 15000,
+  })
+}
+
+// A closer logging a deal outcome on their own booked lead — closer_notes
+// is a separate column from the setter's own pre-booking `notes` (Prompt
+// 464), so this never touches that field.
+export function useLogCloserOutcome() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, closer_outcome, closer_notes }) => {
+      const { error } = await supabase.from('leads').update({ closer_outcome, closer_notes }).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-booked'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-closer-leads'] })
+    },
+  })
+}
+
 export function useAddLead() {
   const queryClient = useQueryClient()
   return useMutation({

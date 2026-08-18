@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react'
-import { Phone, Search } from 'lucide-react'
+import { Phone, Search, ClipboardEdit } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useMyPool, useMyBooked, usePipelineHealth } from '../hooks/useLeads'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, followUpsDueToday } from '../hooks/useStats'
 import StatusBadge, { STATUS_LABELS, STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
+import OutcomeBadge from '../components/ui/OutcomeBadge'
 import { LiveClock } from '../components/ui/LiveClock'
+import { Button } from '../components/ui/Button'
 import LogCallModal from '../components/LogCallModal'
+import LogOutcomeModal from '../components/LogOutcomeModal'
 import { zonedDateStr, zonedDayRange } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 
@@ -202,6 +205,7 @@ function SetterOverview({ profile }) {
 
 function CloserOverview({ profile }) {
   const { data: leads, isLoading } = useMyBooked(profile.id)
+  const [outcomeLead, setOutcomeLead] = useState(null)
 
   return (
     <div>
@@ -227,6 +231,12 @@ function CloserOverview({ profile }) {
                   {lead.notes && (
                     <p className="mt-2 max-w-xl font-sans text-sm text-fg-secondary">{lead.notes}</p>
                   )}
+                  <div className="mt-3 flex items-center gap-2">
+                    <OutcomeBadge outcome={lead.closer_outcome} />
+                    <Button variant="secondary" className="!px-3 !py-1.5" onClick={() => setOutcomeLead(lead)}>
+                      <ClipboardEdit size={13} /> Log outcome
+                    </Button>
+                  </div>
                 </div>
                 <span className="eyebrow rounded-full bg-[#dcf3e6] px-3 py-1.5 !text-success">
                   {fmt(lead.strategy_call_at)}
@@ -236,6 +246,8 @@ function CloserOverview({ profile }) {
           ))
         )}
       </div>
+
+      {outcomeLead && <LogOutcomeModal lead={outcomeLead} onClose={() => setOutcomeLead(null)} />}
     </div>
   )
 }

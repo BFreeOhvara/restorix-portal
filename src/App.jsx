@@ -6,7 +6,7 @@ import Login from './pages/Login'
 import Join from './pages/Join'
 import Overview from './pages/Overview'
 import Stats from './pages/Stats'
-import Queue from './pages/Queue'
+import Pipeline from './pages/Pipeline'
 import Users from './pages/Users'
 import Training from './pages/Training'
 import Activity from './pages/Activity'
@@ -61,10 +61,10 @@ export default function App() {
                       <Route path="/overview" element={<Overview />} />
                       <Route path="/stats" element={<Stats />} />
                       <Route
-                        path="/queue"
+                        path="/pipeline"
                         element={
                           <RoleRoute roles={['admin']}>
-                            <Queue />
+                            <Pipeline />
                           </RoleRoute>
                         }
                       />
