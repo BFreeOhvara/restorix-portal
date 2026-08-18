@@ -118,6 +118,20 @@ function NotificationBell() {
 // of Sign out sitting as a bare icon next to the name. Same outside-click
 // pattern already used by NotificationBell above, just anchored upward
 // (bottom-full) since this sits at the bottom of the sidebar.
+// Prompt 477: ohvara-dashboard's own AccountMenu row carries a permanent
+// `--bg-elevated` card background to read as clickable against its
+// (darker) sidebar — copying that literal token here would do nothing,
+// since Restorix's sidebar itself IS `bg-elevated` (white). Used a light
+// accent tint instead — the same `#e3e9ff` light-blue reused verbatim
+// from StatusBadge.jsx's "new" tint (this project's own established
+// light-blue token, not a new color). Tried `bg-accent/10` first; this
+// Tailwind config defines `accent` as a plain `var(--accent)` string
+// rather than the `rgb(var(--x) / <alpha-value>)` form opacity modifiers
+// need, so `/N` suffixes on it silently generate no CSS at all (confirmed
+// via the built stylesheet — worth remembering, since `border-accent/NN`
+// is already used elsewhere in this codebase and is likely equally
+// inert). Hover uses `brightness` instead of a second invented tint, so
+// there's still a real, visible change without a new color.
 function AccountPopover({ profile, onSignOut, onNavigate }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -134,7 +148,7 @@ function AccountPopover({ profile, onSignOut, onNavigate }) {
     <div ref={ref} className="relative border-t border-line p-3">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left transition-colors hover:bg-surface"
+        className="flex w-full items-center justify-between rounded-lg bg-[#e3e9ff] px-2 py-2 text-left transition-all hover:brightness-95"
       >
         <div className="min-w-0">
           <p className="truncate font-sans text-sm font-medium text-fg-primary">{profile?.full_name}</p>
