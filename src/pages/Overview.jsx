@@ -5,11 +5,10 @@ import { useAuth } from '../hooks/useAuth'
 import { useMyPool, useMyBooked, usePipelineHealth } from '../hooks/useLeads'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, followUpsDueToday } from '../hooks/useStats'
 import StatusBadge, { STATUS_LABELS, STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
-import OutcomeBadge from '../components/ui/OutcomeBadge'
+import OutcomeBadge, { OUTCOME_LABELS } from '../components/ui/OutcomeBadge'
 import { LiveClock } from '../components/ui/LiveClock'
-import { Button } from '../components/ui/Button'
 import LogCallModal from '../components/LogCallModal'
-import LogOutcomeModal from '../components/LogOutcomeModal'
+import CloserLeadModal from '../components/CloserLeadModal'
 import { zonedDateStr, zonedDayRange } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 
@@ -203,51 +202,97 @@ function SetterOverview({ profile }) {
   )
 }
 
+const CLOSER_OUTCOME_TILES = ['pending', 'needs_reschedule', 'lost', 'closed']
+
+// Prompt 487 — restructured to match Setter Overview's own established
+// pattern (stat tiles, then a bordered box holding the lead list with a
+// real empty state, rows clickable to open a modal) instead of a flat
+// stack of individually-actioned cards. Tiles are scoped to this
+// closer's own leads only (`useMyBooked` already filters on
+// `assigned_closer = auth.uid()`) — the all-closers rollup is the admin
+// Pipeline Closer tab's job, not this page's. `useMyBooked` returns
+// every lead ever booked to this closer regardless of `closer_outcome`
+// (that field never gates the query — see Prompt 468's own note that
+// logging an outcome doesn't touch `status`), so counting by
+// `closer_outcome` (defaulting missing/null to 'pending', matching
+// LogOutcomeForm's own default) covers the closer's full working set,
+// not just unresolved ones.
 function CloserOverview({ profile }) {
   const { data: leads, isLoading } = useMyBooked(profile.id)
-  const [outcomeLead, setOutcomeLead] = useState(null)
+  const [activeLead, setActiveLead] = useState(null)
+
+  const counts = useMemo(() => {
+    const c = {}
+    for (const key of CLOSER_OUTCOME_TILES) c[key] = 0
+    for (const lead of leads || []) {
+      const outcome = lead.closer_outcome || 'pending'
+      c[outcome] = (c[outcome] || 0) + 1
+    }
+    return c
+  }, [leads])
 
   return (
     <div>
       <h1 className="font-display text-2xl font-medium text-fg-primary">Overview</h1>
-      <p className="mt-1 font-sans text-sm text-fg-secondary">{leads?.length ?? 0} upcoming</p>
+      <p className="mt-1 font-sans text-sm text-fg-secondary">{leads?.length ?? 0} booked leads</p>
 
-      <div className="mt-6 space-y-3">
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {CLOSER_OUTCOME_TILES.map((key) => (
+          <Tile key={key} label={OUTCOME_LABELS[key]} value={isLoading ? '—' : counts[key]} />
+        ))}
+      </div>
+
+      <div className="mt-6 overflow-hidden rounded-card border border-line bg-elevated">
         {isLoading ? (
-          <p className="font-sans text-sm text-fg-secondary">Loading…</p>
+          <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
         ) : !leads?.length ? (
-          <div className="rounded-card border border-line bg-elevated p-8 text-center">
-            <p className="font-sans text-sm text-fg-secondary">No Strategy Calls assigned to you yet.</p>
-          </div>
+          <p className="p-8 text-center font-sans text-sm text-fg-secondary">
+            No booked leads yet — Strategy Calls are assigned to you automatically.
+          </p>
         ) : (
-          leads.map((lead) => (
-            <div key={lead.id} className="rounded-card border border-line bg-elevated p-5">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <h3 className="font-display text-lg font-medium text-fg-primary">{lead.facility_name}</h3>
-                  <p className="mt-1 font-sans text-sm text-fg-secondary">
-                    {lead.contact_name || 'No contact name'} · {lead.phone || 'No phone'}
-                  </p>
-                  {lead.notes && (
-                    <p className="mt-2 max-w-xl font-sans text-sm text-fg-secondary">{lead.notes}</p>
-                  )}
-                  <div className="mt-3 flex items-center gap-2">
-                    <OutcomeBadge outcome={lead.closer_outcome} />
-                    <Button variant="secondary" className="!px-3 !py-1.5" onClick={() => setOutcomeLead(lead)}>
-                      <ClipboardEdit size={13} /> Log outcome
-                    </Button>
-                  </div>
-                </div>
-                <span className="eyebrow rounded-full bg-[#dcf3e6] px-3 py-1.5 !text-success">
-                  {fmt(lead.strategy_call_at)}
-                </span>
-              </div>
-            </div>
-          ))
+          <div className="max-h-[65vh] overflow-y-auto">
+            <table className="w-full text-left">
+              <thead className="eyebrow sticky top-0 z-10 bg-surface">
+                <tr>
+                  <th className="px-5 py-3">Business</th>
+                  <th className="px-5 py-3">Contact</th>
+                  <th className="px-5 py-3">Strategy Call</th>
+                  <th className="px-5 py-3">Outcome</th>
+                  <th className="px-5 py-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {leads.map((lead) => (
+                  <tr
+                    key={lead.id}
+                    onClick={() => setActiveLead(lead)}
+                    className="cursor-pointer border-t border-line font-sans text-sm hover:bg-surface"
+                  >
+                    <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
+                    <td className="px-5 py-4 text-fg-secondary">
+                      {lead.contact_name || 'No contact name'} · {lead.phone || 'No phone'}
+                    </td>
+                    <td className="px-5 py-4 text-fg-secondary">{fmt(lead.strategy_call_at)}</td>
+                    <td className="px-5 py-4">
+                      <OutcomeBadge outcome={lead.closer_outcome} />
+                    </td>
+                    <td className="px-5 py-4">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setActiveLead(lead) }}
+                        className="inline-flex items-center gap-2 rounded-full border border-line px-4 py-2 font-sans text-sm font-semibold text-fg-primary transition-colors hover:border-fg-primary/40"
+                      >
+                        <ClipboardEdit size={15} /> Open
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      {outcomeLead && <LogOutcomeModal lead={outcomeLead} onClose={() => setOutcomeLead(null)} />}
+      {activeLead && <CloserLeadModal lead={activeLead} onClose={() => setActiveLead(null)} />}
     </div>
   )
 }

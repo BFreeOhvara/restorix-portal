@@ -18,7 +18,15 @@ const OUTCOMES = ['pending', 'needs_reschedule', 'lost', 'closed']
 // gets captured — required, not optional, since commission math is
 // meaningless without them (also enforced DB-side via a CHECK constraint,
 // this is just the friendlier client-side version of the same rule).
-export default function LogOutcomeModal({ lead, onClose }) {
+//
+// Prompt 487 — split into a bare form (`LogOutcomeForm`, no `<Modal>`
+// wrapper of its own) plus this thin wrapper, so the new combined
+// Closer Overview lead modal can embed the exact same form logic
+// alongside the Closer Survey inside one shared `<Modal>` instead of
+// duplicating the outcome-picker/deal-value logic. `LogOutcomeModal`
+// itself is unchanged for its existing standalone callers (Pipeline.jsx,
+// the admin Closer tab) — same props, same behavior.
+export function LogOutcomeForm({ lead, onClose }) {
   const [outcome, setOutcome] = useState(lead.closer_outcome || 'pending')
   const [notes, setNotes] = useState(lead.closer_notes || '')
   const [setupFee, setSetupFee] = useState(lead.deal_setup_fee ?? '')
@@ -44,72 +52,78 @@ export default function LogOutcomeModal({ lead, onClose }) {
   }
 
   return (
-    <Modal title={`Log outcome — ${lead.facility_name}`} onClose={onClose} width="max-w-xl">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Outcome">
-          <div className="grid grid-cols-2 gap-2">
-            {OUTCOMES.map((o) => (
-              <button
-                type="button"
-                key={o}
-                onClick={() => setOutcome(o)}
-                className={clsx(
-                  'rounded-lg px-3 py-2 font-sans text-sm font-medium transition-colors hover:opacity-85',
-                  outcome === o ? OUTCOME_SOLID[o] : OUTCOME_TINT[o]
-                )}
-              >
-                {OUTCOME_LABELS[o]}
-              </button>
-            ))}
-          </div>
-        </Field>
-
-        {isClosed && (
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Setup fee ($)">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className={inputClass()}
-                value={setupFee}
-                onChange={(e) => setSetupFee(e.target.value)}
-                required
-              />
-            </Field>
-            <Field label="First month fee ($)">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className={inputClass()}
-                value={firstMonthFee}
-                onChange={(e) => setFirstMonthFee(e.target.value)}
-                required
-              />
-            </Field>
-          </div>
-        )}
-
-        <Field label="Notes">
-          <textarea
-            className={inputClass()}
-            rows={3}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="What's the status of this deal…"
-          />
-        </Field>
-
-        <div className="flex justify-end gap-3 pt-2">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={!canSubmit || logOutcome.isPending}>
-            {logOutcome.isPending ? 'Saving…' : 'Save'}
-          </Button>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <Field label="Outcome">
+        <div className="grid grid-cols-2 gap-2">
+          {OUTCOMES.map((o) => (
+            <button
+              type="button"
+              key={o}
+              onClick={() => setOutcome(o)}
+              className={clsx(
+                'rounded-lg px-3 py-2 font-sans text-sm font-medium transition-colors hover:opacity-85',
+                outcome === o ? OUTCOME_SOLID[o] : OUTCOME_TINT[o]
+              )}
+            >
+              {OUTCOME_LABELS[o]}
+            </button>
+          ))}
         </div>
-      </form>
+      </Field>
+
+      {isClosed && (
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Setup fee ($)">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              className={inputClass()}
+              value={setupFee}
+              onChange={(e) => setSetupFee(e.target.value)}
+              required
+            />
+          </Field>
+          <Field label="First month fee ($)">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              className={inputClass()}
+              value={firstMonthFee}
+              onChange={(e) => setFirstMonthFee(e.target.value)}
+              required
+            />
+          </Field>
+        </div>
+      )}
+
+      <Field label="Notes">
+        <textarea
+          className={inputClass()}
+          rows={3}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="What's the status of this deal…"
+        />
+      </Field>
+
+      <div className="flex justify-end gap-3 pt-2">
+        <Button type="button" variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={!canSubmit || logOutcome.isPending}>
+          {logOutcome.isPending ? 'Saving…' : 'Save'}
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+export default function LogOutcomeModal({ lead, onClose }) {
+  return (
+    <Modal title={`Log outcome — ${lead.facility_name}`} onClose={onClose} width="max-w-xl">
+      <LogOutcomeForm lead={lead} onClose={onClose} />
     </Modal>
   )
 }

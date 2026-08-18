@@ -104,7 +104,15 @@ function TextField({ label, value, onChange, placeholder, type = 'text' }) {
 // opens fresh every time. The tool's job is qualification/talk-track
 // support only, not pricing — actual setup fee/first month still get
 // entered manually at close time in LogOutcomeModal (Prompt 468).
-export default function Survey() {
+//
+// Prompt 487 — the wizard itself is extracted into `SurveyBody` (no
+// props, fully self-contained state, still stateless/fresh-every-mount
+// per its original design) so the new combined Closer Overview lead
+// modal can run the exact same survey for one specific lead without
+// duplicating the question tree/branching logic. `Survey` (this file's
+// default export, the standalone `/survey` nav page) is now a thin
+// wrapper — unchanged behavior for that existing route.
+export function SurveyBody() {
   const [state, setState] = useState(initialSurveyState())
   const [stepKey, setStepKey] = useState('q0')
   const [expandedCards, setExpandedCards] = useState(() => new Set())
@@ -485,4 +493,8 @@ export default function Survey() {
       )}
     </div>
   )
+}
+
+export default function Survey() {
+  return <SurveyBody />
 }
