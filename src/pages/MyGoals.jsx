@@ -4,7 +4,9 @@ import { ArrowRight, PhoneCall, CalendarCheck, Sun, DollarSign, Flame, Trophy } 
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useAllLeadsForStats, statsForUser } from '../hooks/useStats'
+import { useCommissionLeads } from '../hooks/useLeads'
 import { useMyAllCalls, computeBadgeProgress, tieredProgress, DIAL_TIERS, BOOKING_TIERS, PERFECT_DAY_TIERS, COMMISSION_TIERS } from '../hooks/useBadges'
+import { totalCommission } from '../lib/commissions'
 import { zonedDateStr, zonedDayRange, mondayOf } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 
@@ -122,6 +124,7 @@ export default function MyGoals() {
   const { profile } = useAuth()
   const { data: leads, isLoading: leadsLoading } = useAllLeadsForStats()
   const { data: calls, isLoading: callsLoading } = useMyAllCalls(profile?.id)
+  const { data: commissionLeads } = useCommissionLeads()
   const [period, setPeriod] = useState('daily')
 
   const isLoading = leadsLoading || callsLoading
@@ -137,6 +140,13 @@ export default function MyGoals() {
     if (!calls) return { dials: 0, bookings: 0, perfectDays: 0, backToBack: false, hatTrick: false }
     return computeBadgeProgress(calls, tz)
   }, [calls, tz])
+
+  // Prompt 468: real commission total now that a comp structure exists —
+  // was hardcoded to 0 with an "honest placeholder" note before this.
+  const myCommission = useMemo(() => {
+    if (!commissionLeads || !profile?.id) return 0
+    return totalCommission(commissionLeads.filter((l) => l.last_action_by === profile.id))
+  }, [commissionLeads, profile?.id])
 
   const target = PERIODS[period]
   const isPerfectDay = period === 'daily' && periodStats.logged >= target.callsTarget && periodStats.booked >= target.bookedTarget
@@ -194,10 +204,10 @@ export default function MyGoals() {
             <BadgeSection
               icon={DollarSign}
               title="Commission"
-              sub="Not live yet — Restorix has no comp structure defined, so this always reads $0 honestly rather than a fabricated number"
-              value={0}
+              sub="15% of setup fee + first month, paid once a deal you booked reaches Closed"
+              value={myCommission}
               thresholds={COMMISSION_TIERS}
-              format={(n) => `$${n.toLocaleString()}`}
+              format={(n) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
             />
             <SpecialSection
               items={[

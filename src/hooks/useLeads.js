@@ -121,17 +121,47 @@ export function usePipelineCloserLeads() {
 // A closer logging a deal outcome on their own booked lead — closer_notes
 // is a separate column from the setter's own pre-booking `notes` (Prompt
 // 464), so this never touches that field.
+// Prompt 468: deal_setup_fee/deal_first_month_fee are optional params —
+// only Closed carries them (LogOutcomeModal only passes them for that
+// outcome), and the DB's own CHECK constraint (leads_closed_requires_deal_value)
+// is the actual backstop if a caller ever tries to save Closed without them.
 export function useLogCloserOutcome() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, closer_outcome, closer_notes }) => {
-      const { error } = await supabase.from('leads').update({ closer_outcome, closer_notes }).eq('id', id)
+    mutationFn: async ({ id, closer_outcome, closer_notes, deal_setup_fee, deal_first_month_fee }) => {
+      const patch = { closer_outcome, closer_notes }
+      if (closer_outcome === 'closed') {
+        patch.deal_setup_fee = deal_setup_fee
+        patch.deal_first_month_fee = deal_first_month_fee
+      }
+      const { error } = await supabase.from('leads').update(patch).eq('id', id)
       if (error) throw error
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['my-booked'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-closer-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['commission-leads'] })
     },
+  })
+}
+
+// Prompt 468: every closed deal, for both My Commissions (setter, filtered
+// client-side to their own `last_action_by`) and the admin rollup (every
+// setter at once) — same one-fetch-many-views shape Stats.jsx already
+// uses for useAllLeadsForStats rather than a separate query per view.
+export function useCommissionLeads() {
+  return useQuery({
+    queryKey: ['commission-leads'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('id, facility_name, last_action_by, deal_setup_fee, deal_first_month_fee, updated_at')
+        .eq('closer_outcome', 'closed')
+        .order('updated_at', { ascending: false })
+      if (error) throw error
+      return data
+    },
+    refetchInterval: 15000,
   })
 }
 
