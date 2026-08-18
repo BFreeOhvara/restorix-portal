@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon } from 'lucide-react'
+import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, ListChecks } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
 // Prompt 448: grouped into labeled sections (matching ohvara-dashboard's
@@ -42,6 +42,9 @@ const NAV_GROUPS = [
     label: 'WORK',
     items: [
       { to: '/my-calls', label: 'My Calls', icon: PhoneCall, roles: ['setter', 'admin', 'closer'] },
+      // Prompt 469 — live-call talk-track tool, closer's own working
+      // tool same as My Calls is the setter's, so it lives in WORK too.
+      { to: '/survey', label: 'Closer Survey', icon: ListChecks, roles: ['closer', 'admin'] },
     ],
   },
   {
