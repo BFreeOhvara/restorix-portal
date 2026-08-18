@@ -19,9 +19,14 @@ export const STATUS_LABELS = {
 // confirmed directly — his note said "keep it yellow" right after saying
 // Follow-up should be yellow too, which reads as a slip; asked, he meant
 // leave Not Interested as-is), Appointment Booked=green (unchanged).
+// Prompt 476: New and No Answer's UNSELECTED colors swapped — New now
+// reuses the exact `#e3e9ff`/accent-deep pairing STATUS_BADGE.new already
+// uses for the per-row Status column badge (one color, not a new one), No
+// Answer takes over the plain `bg-muted` gray New used to have. SOLID
+// (selected-chip/badge) states are untouched — this is TINT only.
 export const STATUS_TINT = {
-  new: 'bg-muted !text-fg-secondary',
-  no_answer: 'bg-gray-100 !text-gray-600',
+  new: 'bg-[#e3e9ff] !text-accent-deep',
+  no_answer: 'bg-muted !text-fg-secondary',
   not_interested: 'bg-[#fbe2de] !text-danger',
   follow_up: 'bg-yellow-100 !text-yellow-800',
   appointment_booked: 'bg-[#dcf3e6] !text-success',
