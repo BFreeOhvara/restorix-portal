@@ -18,6 +18,11 @@ import { DEFAULT_TIMEZONE } from '../lib/timezones'
 // Prompt 458: day boundaries now come from the setter's own timezone
 // (zonedDayRange) — these are always the setter's own calls, so their own
 // "today" applies.
+// Prompt 466: excludes `outcome IS NULL` — same reasoning as My Calls'
+// `useMyCallsForDay` (see useCalls.js), display-only, doesn't touch the
+// row badges' dial count relies on. Activity intentionally still includes
+// `no_answer` here, unlike My Calls (Prompt 455) — that distinction is
+// unrelated to this fix and stays as-is.
 function useMyActivityForDay(setterId, date, timezone) {
   return useQuery({
     queryKey: ['my-activity', setterId, date, timezone],
@@ -29,6 +34,7 @@ function useMyActivityForDay(setterId, date, timezone) {
         .eq('setter_id', setterId)
         .gte('created_at', start)
         .lt('created_at', end)
+        .not('outcome', 'is', null)
         .order('created_at', { ascending: false })
       if (error) throw error
       return data
@@ -77,7 +83,7 @@ export default function Activity() {
                     <p className="truncate font-sans text-xs text-fg-secondary">{r.leads?.contact_name || 'No contact name'}</p>
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-3">
-                    {r.outcome ? <StatusBadge status={r.outcome} /> : <span className="font-sans text-xs text-fg-faint">In progress</span>}
+                    <StatusBadge status={r.outcome} />
                     <span className="font-sans text-xs text-fg-faint">{fmtTime(r.created_at)}</span>
                   </div>
                 </li>

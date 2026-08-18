@@ -112,7 +112,7 @@ export default function MyCalls() {
                     <td className="px-5 py-4 text-fg-secondary">{fmt(c.created_at)}</td>
                     <td className="px-5 py-4 text-fg-secondary">{fmtDuration(c.duration_seconds)}</td>
                     <td className="px-5 py-4">
-                      {c.outcome ? <StatusBadge status={c.outcome} /> : <span className="text-fg-faint">In progress</span>}
+                      <StatusBadge status={c.outcome} />
                     </td>
                     <td className="px-5 py-4">
                       {c.recording_url ? (

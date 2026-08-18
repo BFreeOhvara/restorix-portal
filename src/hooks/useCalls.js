@@ -34,14 +34,19 @@ export function useUpdateCall() {
 // day-by-day pattern as Activity — replaced rather than kept alongside,
 // per the prompt's own "replaces the current flat list" instruction.
 // Prompt 455: excludes `no_answer` — nobody picked up, so there was never
-// a connected conversation to have logged. `outcome.is.null` stays
-// included alongside the `neq` (a plain `.neq('outcome', 'no_answer')`
-// would silently drop in-progress calls too, since SQL's `!=` against
-// NULL is NULL, not true — those still-open rows are a separate existing
-// UI state, not something this prompt asked to touch).
+// a connected conversation to have logged.
 // Prompt 458: `timezone` decides which UTC instants "this day" actually
 // spans — the viewing user's own saved timezone (setter viewing their own
 // calls, or admin viewing everyone's for the day as they define it).
+// Prompt 466: also excludes `outcome IS NULL` — a call attempt that never
+// got an outcome logged (started, abandoned, or the modal closed before
+// Save) shouldn't show as a dead-looking "In progress" row forever. This
+// is display-only: the row itself is never deleted, since `useMyAllCalls`
+// (badges' dial count) and `computeBadgeProgress` count every row via
+// `calls.length` regardless of outcome — deleting it would undercount
+// Dials. `.not('outcome', 'is', null)` is a separate predicate from the
+// `no_answer` exclusion rather than folded into one `.or()`, since both
+// need to hold simultaneously (AND), not either/or.
 export function useMyCallsForDay(date, timezone) {
   return useQuery({
     queryKey: ['calls', date, timezone],
@@ -52,7 +57,8 @@ export function useMyCallsForDay(date, timezone) {
         .select('id, outcome, duration_seconds, recording_url, created_at, leads(facility_name), profiles(full_name)')
         .gte('created_at', start)
         .lt('created_at', end)
-        .or('outcome.neq.no_answer,outcome.is.null')
+        .not('outcome', 'is', null)
+        .neq('outcome', 'no_answer')
         .order('created_at', { ascending: false })
       if (error) throw error
       return data
