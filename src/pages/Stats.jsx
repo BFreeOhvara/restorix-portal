@@ -92,13 +92,17 @@ function WeeklyLineChart({ days }) {
   )
 }
 
-// White (0 dials) to dark gray (PERFECT_DAY_DIALS, clamped) — Perfect
-// Days override this entirely with solid green, per spec, regardless of
-// where their dial count would otherwise land in the gradient.
-function dialGrayColor(dials) {
+// White (0 dials) to the portal's own blue accent (PERFECT_DAY_DIALS,
+// clamped) — Prompt 475: was gray-to-dark-gray, recolored to match the
+// rest of the UI's color language (same accent used on Call buttons,
+// selected filter chips, etc. — `--accent: #3a63d6` = rgb(58,99,214)).
+// Same intensity math as before, just a different end color. Perfect Days
+// override this entirely with solid green, per spec, regardless of where
+// their dial count would otherwise land in the gradient.
+function dialColor(dials) {
   const pct = Math.min(1, dials / PERFECT_DAY_DIALS)
   const start = [255, 255, 255]
-  const end = [55, 65, 81]
+  const end = [58, 99, 214]
   const rgb = start.map((s, i) => Math.round(s + (end[i] - s) * pct))
   return `rgb(${rgb.join(',')})`
 }
@@ -114,7 +118,7 @@ function ActivityHeatmap({ days }) {
               key={d.date}
               title={`${d.date} — ${d.dials} dials, ${d.bookings} bookings${perfect ? ' · Perfect Day' : ''}`}
               className="aspect-square rounded-md border border-line"
-              style={{ background: perfect ? 'var(--success)' : dialGrayColor(d.dials) }}
+              style={{ background: perfect ? 'var(--success)' : dialColor(d.dials) }}
             />
           )
         })}
@@ -124,7 +128,7 @@ function ActivityHeatmap({ days }) {
           <span className="h-3 w-3 rounded-sm bg-success" /> Perfect Day (150 dials + 2 bookings)
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-sm border border-line" style={{ background: dialGrayColor(75) }} /> Dial volume
+          <span className="h-3 w-3 rounded-sm border border-line" style={{ background: dialColor(75) }} /> Dial volume
         </span>
       </div>
     </div>
