@@ -17,21 +17,84 @@ export function useLeads(statusFilter) {
   })
 }
 
-// Prompt 464: admin Pipeline's Setter tab — a real server-side filter
-// excluding Appointment Booked (verified via direct query, not a client-side
-// .filter() on the full set), matching Brayden's explicit call that a
-// booked lead is no longer a setter concern once it's handed to a closer.
-export function usePipelineSetterLeads() {
+// Prompt 465: leads still sitting in the raw backlog, not yet distributed
+// into a setter's working queue by assign_setter_batches()'s 15-min cron.
+// Partitions the New-and-not-yet-booked population against
+// usePipelineSetterLeads below — assigned_setter IS NULL here, IS NOT NULL
+// there — so the two tabs never overlap.
+export function usePipelineUnassignedLeads() {
   return useQuery({
-    queryKey: ['pipeline-setter-leads'],
+    queryKey: ['pipeline-unassigned-leads'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('leads')
         .select('*')
+        .is('assigned_setter', null)
         .neq('status', 'appointment_booked')
         .order('created_at', { ascending: false })
       if (error) throw error
       return data
+    },
+    refetchInterval: 15000,
+  })
+}
+
+const SETTER_LEAD_STATUSES = ['new', 'no_answer', 'follow_up', 'not_interested']
+
+// Prompt 464: admin Pipeline's Setter tab — a real server-side filter
+// excluding Appointment Booked (verified via direct query, not a client-side
+// .filter() on the full set), matching Brayden's explicit call that a
+// booked lead is no longer a setter concern once it's handed to a closer.
+// Prompt 465: narrowed to assigned_setter IS NOT NULL (see
+// usePipelineUnassignedLeads above) and takes an optional statusFilter so
+// the new filter-chip row issues a real WHERE clause per click rather than
+// hiding rows client-side.
+export function usePipelineSetterLeads(statusFilter = 'all') {
+  return useQuery({
+    queryKey: ['pipeline-setter-leads', statusFilter],
+    queryFn: async () => {
+      let query = supabase
+        .from('leads')
+        .select('*')
+        .not('assigned_setter', 'is', null)
+        .neq('status', 'appointment_booked')
+        .order('created_at', { ascending: false })
+      if (statusFilter !== 'all') query = query.eq('status', statusFilter)
+      const { data, error } = await query
+      if (error) throw error
+      return data
+    },
+    refetchInterval: 15000,
+  })
+}
+
+// Live per-status counts for the Setter tab's filter chips — queried
+// independently of the currently selected filter (real counts, not derived
+// from whatever subset the filtered query above happens to have fetched).
+export function usePipelineSetterStatusCounts() {
+  return useQuery({
+    queryKey: ['pipeline-setter-status-counts'],
+    queryFn: async () => {
+      const countQuery = (status) => {
+        let q = supabase
+          .from('leads')
+          .select('id', { count: 'exact', head: true })
+          .not('assigned_setter', 'is', null)
+          .neq('status', 'appointment_booked')
+        if (status) q = q.eq('status', status)
+        return q
+      }
+      const [all, ...byStatus] = await Promise.all([
+        countQuery(),
+        ...SETTER_LEAD_STATUSES.map((status) => countQuery(status)),
+      ])
+      if (all.error) throw all.error
+      const counts = { all: all.count ?? 0 }
+      SETTER_LEAD_STATUSES.forEach((status, i) => {
+        if (byStatus[i].error) throw byStatus[i].error
+        counts[status] = byStatus[i].count ?? 0
+      })
+      return counts
     },
     refetchInterval: 15000,
   })
@@ -83,7 +146,12 @@ export function useAddLead() {
       })
       if (error) throw error
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leads'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-setter-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-setter-status-counts'] })
+    },
   })
 }
 
@@ -96,7 +164,12 @@ export function useAddLeads() {
       const { error } = await supabase.from('leads').insert(rows)
       if (error) throw error
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leads'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-setter-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-setter-status-counts'] })
+    },
   })
 }
 
@@ -122,6 +195,9 @@ export function useLogCall() {
       queryClient.invalidateQueries({ queryKey: ['my-pool'] })
       queryClient.invalidateQueries({ queryKey: ['my-booked'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-setter-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-setter-status-counts'] })
     },
   })
 }

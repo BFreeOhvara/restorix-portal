@@ -1,10 +1,15 @@
 import { useMemo, useState } from 'react'
 import { Plus, Upload, Phone, ClipboardEdit } from 'lucide-react'
 import clsx from 'clsx'
-import { usePipelineSetterLeads, usePipelineCloserLeads } from '../hooks/useLeads'
+import {
+  usePipelineUnassignedLeads,
+  usePipelineSetterLeads,
+  usePipelineSetterStatusCounts,
+  usePipelineCloserLeads,
+} from '../hooks/useLeads'
 import { useReps } from '../hooks/useStats'
 import { Button } from '../components/ui/Button'
-import StatusBadge from '../components/ui/StatusBadge'
+import StatusBadge, { STATUS_LABELS, STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
 import OutcomeBadge, { OUTCOME_LABELS, OUTCOME_SOLID, OUTCOME_TINT } from '../components/ui/OutcomeBadge'
 import AddLeadModal from '../components/AddLeadModal'
 import CsvImportModal from '../components/CsvImportModal'
@@ -19,30 +24,24 @@ function fmt(dt) {
 }
 
 const OUTCOME_FILTERS = ['all', 'pending', 'needs_reschedule', 'lost', 'closed']
+// Prompt 465 — Brayden's explicit ordering for the new Setter-tab chips.
+const SETTER_STATUS_FILTERS = ['all', 'new', 'no_answer', 'follow_up', 'not_interested']
 
-// Prompt 464 — Queue renamed to Pipeline, split into a Setter tab (the old
-// Queue table, minus Appointment Booked — Brayden's explicit call that a
-// booked lead is no longer a setter concern) and a new Closer tab (a
-// read-only rollup of every closer's booked leads, grouped/filterable by
-// the new closer_outcome states).
-function SetterTab() {
-  const { data: leads, isLoading } = usePipelineSetterLeads()
-  const { data: reps } = useReps()
+// Prompt 465 — the raw backlog still sitting in the pool before
+// assign_setter_batches()'s 15-min cron distributes it into an actual
+// setter's working queue (assigned_setter IS NULL). Add Lead/Import CSV
+// live here now, not on the Setter tab — that's where newly created leads
+// actually land until the cron picks them up.
+function UnassignedTab() {
+  const { data: leads, isLoading } = usePipelineUnassignedLeads()
   const [showAdd, setShowAdd] = useState(false)
   const [showImport, setShowImport] = useState(false)
-  const [callLead, setCallLead] = useState(null)
-
-  const setterNames = useMemo(() => {
-    const map = new Map()
-    ;(reps || []).forEach((r) => map.set(r.id, r.full_name))
-    return map
-  }, [reps])
 
   return (
     <div>
       <div className="flex items-center justify-between">
         <p className="font-sans text-sm text-fg-secondary">
-          {leads?.length ?? 0} lead{leads?.length === 1 ? '' : 's'}
+          {leads?.length ?? 0} unassigned lead{leads?.length === 1 ? '' : 's'}
         </p>
         <div className="flex gap-3">
           <Button variant="secondary" onClick={() => setShowImport(true)}>
@@ -59,7 +58,95 @@ function SetterTab() {
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
         ) : !leads?.length ? (
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">
-            No leads yet — add one or import a CSV to get started.
+            No unassigned leads — the pool is empty or everything has been distributed.
+          </p>
+        ) : (
+          <table className="w-full text-left">
+            <thead className="eyebrow bg-surface">
+              <tr>
+                <th className="px-5 py-3">Facility</th>
+                <th className="px-5 py-3">Contact</th>
+                <th className="px-5 py-3">Phone</th>
+                <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3">Added</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leads.map((lead) => (
+                <tr key={lead.id} className="border-t border-line font-sans text-sm hover:bg-surface">
+                  <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
+                  <td className="px-5 py-4 text-fg-secondary">{lead.contact_name || '—'}</td>
+                  <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
+                  <td className="px-5 py-4">
+                    <StatusBadge status={lead.status} />
+                  </td>
+                  <td className="px-5 py-4 text-fg-secondary">{fmt(lead.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {showAdd && <AddLeadModal onClose={() => setShowAdd(false)} />}
+      {showImport && <CsvImportModal onClose={() => setShowImport(false)} />}
+    </div>
+  )
+}
+
+// Prompt 464 — Queue renamed to Pipeline, split into a Setter tab (the old
+// Queue table, minus Appointment Booked — Brayden's explicit call that a
+// booked lead is no longer a setter concern) and a new Closer tab (a
+// read-only rollup of every closer's booked leads, grouped/filterable by
+// the new closer_outcome states).
+// Prompt 465 — narrowed to assigned_setter IS NOT NULL (see UnassignedTab
+// above) and gained its own status filter-chip row, matching the Closer
+// tab's pattern but issuing a real server-side WHERE clause per click
+// (usePipelineSetterLeads(statusFilter)) rather than hiding rows
+// client-side — chip counts come from a separate, filter-independent
+// count query so they stay accurate regardless of which chip is selected.
+function SetterTab() {
+  const [statusFilter, setStatusFilter] = useState('all')
+  const { data: leads, isLoading } = usePipelineSetterLeads(statusFilter)
+  const { data: counts } = usePipelineSetterStatusCounts()
+  const { data: reps } = useReps()
+  const [callLead, setCallLead] = useState(null)
+
+  const setterNames = useMemo(() => {
+    const map = new Map()
+    ;(reps || []).forEach((r) => map.set(r.id, r.full_name))
+    return map
+  }, [reps])
+
+  return (
+    <div>
+      <p className="font-sans text-sm text-fg-secondary">
+        {counts?.all ?? 0} lead{counts?.all === 1 ? '' : 's'} assigned to setters
+      </p>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {SETTER_STATUS_FILTERS.map((key) => (
+          <button
+            key={key}
+            onClick={() => setStatusFilter(key)}
+            className={clsx(
+              'eyebrow rounded-full px-3.5 py-2 transition-colors hover:opacity-85',
+              statusFilter === key
+                ? key === 'all' ? 'bg-accent !text-white' : STATUS_SOLID[key]
+                : key === 'all' ? 'bg-muted !text-fg-secondary' : STATUS_TINT[key]
+            )}
+          >
+            {key === 'all' ? 'All' : STATUS_LABELS[key]} ({counts?.[key] || 0})
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 overflow-hidden rounded-card border border-line bg-elevated">
+        {isLoading ? (
+          <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
+        ) : !leads?.length ? (
+          <p className="p-8 text-center font-sans text-sm text-fg-secondary">
+            {counts?.all ? 'No leads match this filter.' : 'No leads assigned to setters yet.'}
           </p>
         ) : (
           <table className="w-full text-left">
@@ -101,8 +188,6 @@ function SetterTab() {
         )}
       </div>
 
-      {showAdd && <AddLeadModal onClose={() => setShowAdd(false)} />}
-      {showImport && <CsvImportModal onClose={() => setShowImport(false)} />}
       {callLead && <LogCallModal lead={callLead} onClose={() => setCallLead(null)} />}
     </div>
   )
@@ -210,6 +295,16 @@ function CloserTab() {
   )
 }
 
+// Prompt 465 — Unassigned/Setter/Closer, Brayden's explicit ordering. The
+// three tabs partition the full lead pool: Unassigned + Setter together
+// cover every New-and-not-yet-booked lead (split on assigned_setter),
+// Closer covers everything Appointment Booked.
+const TABS = [
+  { key: 'unassigned', label: 'Unassigned' },
+  { key: 'setter', label: 'Setter' },
+  { key: 'closer', label: 'Closer' },
+]
+
 export default function Pipeline() {
   const [tab, setTab] = useState('setter')
 
@@ -218,28 +313,22 @@ export default function Pipeline() {
       <h1 className="font-display text-2xl font-medium text-fg-primary">Pipeline</h1>
 
       <div className="mt-4 flex gap-2">
-        <button
-          onClick={() => setTab('setter')}
-          className={clsx(
-            'eyebrow rounded-full px-4 py-2 transition-colors',
-            tab === 'setter' ? 'bg-accent !text-white' : 'bg-muted !text-fg-secondary hover:opacity-85'
-          )}
-        >
-          Setter
-        </button>
-        <button
-          onClick={() => setTab('closer')}
-          className={clsx(
-            'eyebrow rounded-full px-4 py-2 transition-colors',
-            tab === 'closer' ? 'bg-accent !text-white' : 'bg-muted !text-fg-secondary hover:opacity-85'
-          )}
-        >
-          Closer
-        </button>
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={clsx(
+              'eyebrow rounded-full px-4 py-2 transition-colors',
+              tab === t.key ? 'bg-accent !text-white' : 'bg-muted !text-fg-secondary hover:opacity-85'
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
       <div className="mt-6">
-        {tab === 'setter' ? <SetterTab /> : <CloserTab />}
+        {tab === 'unassigned' ? <UnassignedTab /> : tab === 'setter' ? <SetterTab /> : <CloserTab />}
       </div>
     </div>
   )
