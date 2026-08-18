@@ -20,12 +20,17 @@
   --text-secondary: rgba(15, 31, 27, 0.68);
   --text-faint: rgba(15, 31, 27, 0.45);
   --accent: #3a63d6;
+  --accent-rgb: 58 99 214;
   --accent-bright: #7c9eff;
+  --accent-bright-rgb: 124 158 255;
   --accent-deep: #24469e;
+  --accent-deep-rgb: 36 70 158;
   --border: rgba(14, 26, 24, 0.14);
   --border-strong: rgba(14, 26, 24, 0.22);
   --danger: #c8452a;
+  --danger-rgb: 200 69 42;
   --success: #1f8a5f;
+  --success-rgb: 31 138 95;
 }
 
 * {

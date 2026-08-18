@@ -14,13 +14,13 @@ export default {
           faint: 'var(--text-faint)',
         },
         accent: {
-          DEFAULT: 'var(--accent)',
-          bright: 'var(--accent-bright)',
-          deep: 'var(--accent-deep)',
+          DEFAULT: 'rgb(var(--accent-rgb) / <alpha-value>)',
+          bright: 'rgb(var(--accent-bright-rgb) / <alpha-value>)',
+          deep: 'rgb(var(--accent-deep-rgb) / <alpha-value>)',
         },
         line: 'var(--border)',
-        danger: 'var(--danger)',
-        success: 'var(--success)',
+        danger: 'rgb(var(--danger-rgb) / <alpha-value>)',
+        success: 'rgb(var(--success-rgb) / <alpha-value>)',
       },
       fontFamily: {
         display: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
