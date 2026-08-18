@@ -1,9 +1,11 @@
 import { createClient } from 'npm:@supabase/supabase-js'
 
-// Prompt 463 — nationwide SAMHSA facility scraper. Not user-facing: invoked
-// only by pg_cron (weekly, see migration samhsa_scraper_infra) via a shared
-// secret in app_secrets, checked below. verify_jwt is off for this function
-// since the caller is pg_cron/net.http_post, not a logged-in user.
+// Prompt 463 — nationwide SAMHSA facility scraper. Not user-facing: a weekly
+// pg_cron job kicks off a run (newRun:true), and a separate frequent tick
+// job drives it forward batch by batch until anchors_done reaches the grid
+// size (see migrations samhsa_scraper_infra, samhsa_scraper_tick_cron).
+// Both authenticate via a shared secret in app_secrets, checked below.
+// verify_jwt is off since the caller is pg_cron/net.http_post, not a user.
 
 const FINDTREATMENT_BASE = 'https://findtreatment.gov/locator/exportsAsJson/v2'
 const RADIUS_MILES = 100
@@ -156,7 +158,14 @@ Deno.serve(async (req) => {
     })
   }
 
-  const { offset = 0, batchSize = 15, newRun = false, debugLat, debugLon } = await req.json().catch(() => ({}))
+  const {
+    offset: explicitOffset,
+    batchSize = 8,
+    newRun = false,
+    debugLat,
+    debugLon,
+    listAnchorsFrom,
+  } = await req.json().catch(() => ({}))
 
   if (debugLat !== undefined && debugLon !== undefined) {
     const debug: { lastStatus?: number; lastBody?: string } = {}
@@ -164,6 +173,28 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ debug, facilitiesFound: facilities.length, sample: facilities.slice(0, 2) }), {
       headers: { 'Content-Type': 'application/json' },
     })
+  }
+
+  if (listAnchorsFrom !== undefined) {
+    return new Response(JSON.stringify({ anchors: ANCHORS.slice(listAnchorsFrom, listAnchorsFrom + 6), total: ANCHORS.length }), {
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  // No self-chaining fire-and-forget fetch (unreliable — the background
+  // fetch didn't reliably survive past the response in this runtime, and
+  // the run silently stalled mid-grid). Instead a frequent pg_cron tick
+  // (samhsa-scraper-tick, see migration) drives the loop: each tick calls
+  // with no offset, and this reads scraper_state.anchors_done as the
+  // resume point, so the run self-resumes across independent, reliable
+  // cron-triggered invocations rather than one function chaining itself.
+  let offset = explicitOffset
+  if (offset === undefined) {
+    const { data: state } = await adminClient.from('scraper_state').select('anchors_done, run_started_at, run_completed_at').eq('id', true).single()
+    if (!state?.run_started_at || state.run_completed_at) {
+      return new Response(JSON.stringify({ skipped: 'no active run' }), { headers: { 'Content-Type': 'application/json' } })
+    }
+    offset = state.anchors_done
   }
 
   const batch = ANCHORS.slice(offset, offset + batchSize)
@@ -185,7 +216,13 @@ Deno.serve(async (req) => {
   let seen = 0, inserted = 0, updated = 0, skippedClosed = 0
   let batchError: string | null = null
 
+  // Collect every anchor's facilities first, then do ONE bulk upsert for the
+  // whole batch — the original per-facility RPC loop (one round-trip per
+  // facility) hit WORKER_RESOURCE_LIMIT on dense metro anchors with
+  // thousands of facilities each; a single set-based SQL statement handles
+  // the same volume in one call instead of thousands of sequential ones.
   try {
+    const allFacilities: { externalId: string; name: string; phone: string | null }[] = []
     for (const anchor of batch) {
       const facilities = await fetchAnchorFacilities(anchor.lat, anchor.lon)
       for (const f of facilities) {
@@ -195,16 +232,17 @@ Deno.serve(async (req) => {
           skippedClosed += 1
           continue
         }
-        const phone = freshness?.phone || f.phone
-        const { data: result, error } = await adminClient.rpc('upsert_samhsa_lead', {
-          p_external_id: f.externalId,
-          p_facility_name: f.name,
-          p_phone: phone,
-        })
-        if (error) continue
-        if (result === 'inserted') inserted += 1
-        else if (result === 'updated') updated += 1
+        allFacilities.push({ externalId: f.externalId, name: f.name, phone: freshness?.phone || f.phone })
       }
+    }
+    if (allFacilities.length > 0) {
+      const { data: result, error } = await adminClient.rpc('bulk_upsert_samhsa_leads', {
+        p_facilities: allFacilities,
+      })
+      if (error) throw error
+      const row = Array.isArray(result) ? result[0] : result
+      inserted = row?.inserted_count || 0
+      updated = row?.updated_count || 0
     }
   } catch (err) {
     batchError = err instanceof Error ? err.message : String(err)
@@ -223,18 +261,6 @@ Deno.serve(async (req) => {
     run_completed_at: isLastBatch ? new Date().toISOString() : null,
     last_error: batchError,
   }).eq('id', true)
-
-  if (!isLastBatch && batch.length > 0) {
-    const selfUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/samhsa-scraper`
-    const chain = fetch(selfUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-cron-secret': secretRow.value },
-      body: JSON.stringify({ offset: nextOffset, batchSize, newRun: false }),
-    }).catch(() => {})
-    // @ts-ignore — EdgeRuntime is available in the Supabase Deno runtime
-    if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(chain)
-    else await chain
-  }
 
   return new Response(
     JSON.stringify({ offset, batchSize, anchorsProcessed: batch.length, seen, inserted, updated, skippedClosed, isLastBatch, totalAnchors: ANCHORS.length }),
