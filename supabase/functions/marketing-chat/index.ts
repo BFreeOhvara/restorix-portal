@@ -2,12 +2,37 @@
 // visual-only placeholder from Prompt 467. Public, unauthenticated
 // endpoint (marketing site has no login) — rate-limited per IP via
 // check_marketing_chat_rate_limit (see migration marketing_chat_rate_limit).
+//
+// Prompt 489 — hardened against abuse/cost attacks on the public,
+// unauthenticated endpoint hitting a real paid Anthropic key. CORS
+// went from a wildcard `*` to a real per-request origin allowlist
+// (restorix.co plus local dev ports, since ChatWidget.jsx calls this
+// function's absolute production URL directly even from local dev) —
+// `*` meant any website on the internet could call this function
+// directly and burn the API key on Restorix's dime. `history` is now
+// rejected outright (not silently truncated) when it exceeds the caps,
+// per Brayden's own explicit instruction not to silently truncate.
 import { createClient } from 'npm:@supabase/supabase-js'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+const ALLOWED_ORIGINS = new Set([
+  'https://restorix.co',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+])
+
+function corsHeadersFor(req: Request): Record<string, string> {
+  const origin = req.headers.get('origin') || ''
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Vary': 'Origin',
+  }
+  if (ALLOWED_ORIGINS.has(origin)) headers['Access-Control-Allow-Origin'] = origin
+  return headers
 }
+
+const MAX_MESSAGE_LENGTH = 2000
+const MAX_HISTORY_TURNS = 10
 
 // Content pulled verbatim from the "Restorix Closer Survey" vault note's
 // own "Content for the results screen" section (same source LogOutcomeModal
@@ -60,7 +85,24 @@ async function checkRateLimit(ip: string): Promise<boolean> {
 }
 
 Deno.serve(async (req: Request) => {
+  const corsHeaders = corsHeadersFor(req)
+
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+
+  // Origin check beyond plain CORS: CORS headers alone only stop a
+  // *browser* from handing the response to another site's JS — they
+  // don't stop a non-browser client (curl, a server-side script) from
+  // hitting this URL directly with a spoofed Origin header, but they do
+  // stop the much more common "someone points a browser-based app at
+  // this endpoint" abuse case outright, before it ever reaches the
+  // Anthropic call.
+  const origin = req.headers.get('origin')
+  if (origin && !ALLOWED_ORIGINS.has(origin)) {
+    return new Response(JSON.stringify({ error: 'Origin not allowed' }), {
+      status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -84,15 +126,39 @@ Deno.serve(async (req: Request) => {
   }
 
   const message = (body.message || '').trim()
-  if (!message || message.length > 2000) {
-    return new Response(JSON.stringify({ error: 'Message required (max 2000 chars)' }), {
+  if (!message || message.length > MAX_MESSAGE_LENGTH) {
+    return new Response(JSON.stringify({ error: `Message required (max ${MAX_MESSAGE_LENGTH} chars)` }), {
       status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
-  // Short history only — last 10 turns, trusts the client for now (no
-  // per-session persistence in v1, matches the widget's own stateless
-  // per-page-load design).
-  const history = Array.isArray(body.history) ? body.history.slice(-10) : []
+
+  // Prompt 489 — reject an oversized history outright rather than
+  // silently slicing it, per Brayden's own explicit instruction (a
+  // silent truncation still lets a client pad the request as large as
+  // it wants before the server bothers to trim it, and hides the real
+  // shape of what got sent from whoever's debugging later).
+  const rawHistory = body.history
+  if (rawHistory !== undefined && !Array.isArray(rawHistory)) {
+    return new Response(JSON.stringify({ error: 'history must be an array' }), {
+      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+  const history = rawHistory ?? []
+  if (history.length > MAX_HISTORY_TURNS) {
+    return new Response(JSON.stringify({ error: `history exceeds max ${MAX_HISTORY_TURNS} turns` }), {
+      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+  for (const turn of history) {
+    if (
+      !turn || (turn.role !== 'user' && turn.role !== 'assistant') ||
+      typeof turn.content !== 'string' || turn.content.length > MAX_MESSAGE_LENGTH
+    ) {
+      return new Response(JSON.stringify({ error: 'history contains an invalid or oversized turn' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+  }
 
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
     || req.headers.get('x-real-ip')
@@ -105,9 +171,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const messages = [
-    ...history
-      .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-      .map((m) => ({ role: m.role, content: m.content })),
+    ...history.map((m: { role: string; content: string }) => ({ role: m.role, content: m.content })),
     { role: 'user', content: message },
   ]
 
