@@ -1,8 +1,19 @@
-import { useState } from 'react'
+import { lazy, Suspense, useRef, useState } from 'react'
+import { Camera, Loader2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { Field, inputClass } from '../components/ui/Field'
 import { Button } from '../components/ui/Button'
+import { Avatar } from '../components/ui/Avatar'
+import { AvatarColorPicker } from '../components/ui/AvatarColorPicker'
+import { useUploadAvatar, useRemoveAvatar, useUpdateAvatarColor } from '../hooks/useAvatar'
+
+// Prompt 491 — lazy, not a top-level import: react-easy-crop is only
+// needed the moment someone actually opens the crop modal, same
+// reasoning ohvara-dashboard's Prompt 422 already established.
+const AvatarCropModal = lazy(() =>
+  import('../components/ui/AvatarCropModal').then((m) => ({ default: m.AvatarCropModal }))
+)
 
 const ROLE_LABEL = { setter: 'Setter', closer: 'Closer', admin: 'Admin' }
 
@@ -15,6 +26,10 @@ const ROLE_LABEL = { setter: 'Setter', closer: 'Closer', admin: 'Admin' }
 // UPDATE policy (the pattern ohvara-dashboard's own profiles table uses)
 // has no column-level restriction, so a user could rewrite their own
 // `role` through it. The RPC's signature is the whitelist instead.
+// Prompt 491 — avatar photo upload (ported from ohvara-dashboard's Prompt
+// 422) + pastel color picker for the initials fallback (new for Restorix)
+// now live in the same first card, same whitelisted-RPC pattern as the
+// name/timezone self-updates above.
 export default function Profile() {
   const { profile } = useAuth()
   if (!profile) return null
@@ -24,11 +39,16 @@ export default function Profile() {
       <h1 className="font-display text-2xl font-medium text-fg-primary">Profile</h1>
 
       <div className="mt-6 rounded-card border border-line bg-elevated p-6">
-        <p className="eyebrow !text-fg-faint">Role</p>
-        <p className="mt-1 font-sans text-sm text-fg-primary">{ROLE_LABEL[profile.role] || profile.role}</p>
+        <div className="flex items-start gap-4">
+          <AvatarUpload profile={profile} />
+          <div>
+            <p className="eyebrow !text-fg-faint">Role</p>
+            <p className="mt-1 font-sans text-sm text-fg-primary">{ROLE_LABEL[profile.role] || profile.role}</p>
 
-        <p className="eyebrow !text-fg-faint mt-4">Username</p>
-        <p className="mt-1 font-mono text-sm text-fg-secondary">{profile.username}</p>
+            <p className="eyebrow !text-fg-faint mt-4">Username</p>
+            <p className="mt-1 font-mono text-sm text-fg-secondary">{profile.username}</p>
+          </div>
+        </div>
       </div>
 
       <div className="mt-6 rounded-card border border-line bg-elevated p-6">
@@ -38,6 +58,122 @@ export default function Profile() {
       <div className="mt-6 rounded-card border border-line bg-elevated p-6">
         <PasswordForm />
       </div>
+    </div>
+  )
+}
+
+// Click the avatar circle to pick a new photo; a crop/zoom modal opens
+// before upload, then the same shared Avatar renders it everywhere it's
+// used. When no photo is set, a pastel color picker controls the initials
+// fallback instead — removing a photo later reverts to that same chosen
+// color, not a default, since useRemoveAvatar only ever touches
+// `avatar_url`, never `avatar_color`.
+function AvatarUpload({ profile }) {
+  const upload = useUploadAvatar()
+  const remove = useRemoveAvatar()
+  const updateColor = useUpdateAvatarColor()
+  const { refreshProfile } = useAuth()
+  const inputRef = useRef(null)
+  const [error, setError] = useState('')
+  const [pendingImage, setPendingImage] = useState(null) // object URL awaiting crop confirm
+
+  const busy = upload.isPending || remove.isPending
+
+  function onFile(e) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file next time
+    if (!file) return
+    setError('')
+    setPendingImage(URL.createObjectURL(file))
+  }
+
+  function closeCropModal() {
+    if (pendingImage) URL.revokeObjectURL(pendingImage)
+    setPendingImage(null)
+  }
+
+  async function onCropConfirm(blob) {
+    setError('')
+    try {
+      const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' })
+      await upload.mutateAsync({ profileId: profile.id, file })
+      await refreshProfile()
+      closeCropModal()
+    } catch (err) {
+      setError(err.message || 'Could not upload your photo')
+    }
+  }
+
+  async function onRemove() {
+    setError('')
+    try {
+      await remove.mutateAsync({ profileId: profile.id })
+      await refreshProfile()
+    } catch (err) {
+      setError(err.message || 'Could not remove your photo')
+    }
+  }
+
+  async function onColorChange(avatarColor) {
+    setError('')
+    try {
+      await updateColor.mutateAsync({ avatarColor })
+      await refreshProfile()
+    } catch (err) {
+      setError(err.message || 'Could not save your color')
+    }
+  }
+
+  return (
+    <div className="shrink-0">
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={busy}
+          title="Change profile photo"
+          className="group relative block rounded-full disabled:cursor-default"
+        >
+          <Avatar profile={profile} size={56} className="border border-line" />
+          <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
+            {busy ? <Loader2 size={16} className="animate-spin text-white" /> : <Camera size={16} className="text-white" />}
+          </div>
+          {!busy && (
+            <div className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-elevated bg-accent">
+              <Camera size={11} className="text-white" />
+            </div>
+          )}
+        </button>
+        <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
+      </div>
+
+      {profile.avatar_url ? (
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={busy}
+          className="mt-2 block font-sans text-[11px] text-fg-faint hover:text-fg-secondary disabled:cursor-default"
+        >
+          Remove photo
+        </button>
+      ) : (
+        <div className="mt-2">
+          <AvatarColorPicker value={profile.avatar_color} onChange={onColorChange} disabled={updateColor.isPending} />
+        </div>
+      )}
+
+      {error && <p className="mt-1 max-w-[8rem] font-sans text-[11px] text-danger">{error}</p>}
+
+      {pendingImage && (
+        <Suspense fallback={null}>
+          <AvatarCropModal
+            imageSrc={pendingImage}
+            onCancel={closeCropModal}
+            onConfirm={onCropConfirm}
+            saving={upload.isPending}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }
