@@ -1,12 +1,13 @@
 import { lazy, Suspense, useRef, useState } from 'react'
-import { Camera, Loader2 } from 'lucide-react'
+import { Camera, Loader2, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { Field, inputClass } from '../components/ui/Field'
 import { Button } from '../components/ui/Button'
 import { Avatar } from '../components/ui/Avatar'
-import { AvatarColorPicker } from '../components/ui/AvatarColorPicker'
-import { useUploadAvatar, useRemoveAvatar, useUpdateAvatarColor } from '../hooks/useAvatar'
+import { useUploadAvatar, useRemoveAvatar } from '../hooks/useAvatar'
+
+const AVATAR_SIZE = 56
 
 // Prompt 491 — lazy, not a top-level import: react-easy-crop is only
 // needed the moment someone actually opens the crop modal, same
@@ -27,9 +28,24 @@ const ROLE_LABEL = { setter: 'Setter', closer: 'Closer', admin: 'Admin' }
 // has no column-level restriction, so a user could rewrite their own
 // `role` through it. The RPC's signature is the whitelist instead.
 // Prompt 491 — avatar photo upload (ported from ohvara-dashboard's Prompt
-// 422) + pastel color picker for the initials fallback (new for Restorix)
-// now live in the same first card, same whitelisted-RPC pattern as the
-// name/timezone self-updates above.
+// 422) now lives in the same first card, same whitelisted-RPC pattern as
+// the name/timezone self-updates above.
+// Prompt 495 — live review on 491's just-shipped avatar work, three
+// reversals/fixes: (1) the pastel color picker is gone — users no longer
+// choose their own initials-fallback color, it's assigned deterministically
+// at signup instead (see migration avatar_color_deterministic, which also
+// backfills every existing profile the same way, so the "avatar_color still
+// gives initials-avatars visual variety" goal from 491 is met immediately,
+// not just for future signups — recomputing to a real value isn't "wiping"
+// the column, only nulling/removing it would be). (2) the plain "Remove
+// photo" text link is replaced with a small X badge on the avatar itself,
+// same visual language as the camera badge. (3) the camera/X badges'
+// positioning bug fixed: the wrapping button had `display: block` with no
+// explicit size, so its own box didn't reliably match the 56px Avatar's
+// true circle — the badges' `-bottom-0.5 -right-0.5`/`-top-0.5 -right-0.5`
+// offsets were computed against that wrong box. Given the button an
+// explicit `width`/`height` matching `AVATAR_SIZE` instead of relying on
+// block-level shrink-to-fit sizing to happen to match.
 export default function Profile() {
   const { profile } = useAuth()
   if (!profile) return null
@@ -64,14 +80,14 @@ export default function Profile() {
 
 // Click the avatar circle to pick a new photo; a crop/zoom modal opens
 // before upload, then the same shared Avatar renders it everywhere it's
-// used. When no photo is set, a pastel color picker controls the initials
-// fallback instead — removing a photo later reverts to that same chosen
-// color, not a default, since useRemoveAvatar only ever touches
-// `avatar_url`, never `avatar_color`.
+// used. When no photo is set, the initials fallback uses avatar_color,
+// assigned deterministically at signup (see migration
+// avatar_color_deterministic) — no user-facing picker as of Prompt 495.
+// Removing a photo only ever touches avatar_url, never avatar_color, so
+// the deterministic color is still there underneath afterward.
 function AvatarUpload({ profile }) {
   const upload = useUploadAvatar()
   const remove = useRemoveAvatar()
-  const updateColor = useUpdateAvatarColor()
   const { refreshProfile } = useAuth()
   const inputRef = useRef(null)
   const [error, setError] = useState('')
@@ -104,7 +120,8 @@ function AvatarUpload({ profile }) {
     }
   }
 
-  async function onRemove() {
+  async function onRemove(e) {
+    e.stopPropagation()
     setError('')
     try {
       await remove.mutateAsync({ profileId: profile.id })
@@ -114,27 +131,18 @@ function AvatarUpload({ profile }) {
     }
   }
 
-  async function onColorChange(avatarColor) {
-    setError('')
-    try {
-      await updateColor.mutateAsync({ avatarColor })
-      await refreshProfile()
-    } catch (err) {
-      setError(err.message || 'Could not save your color')
-    }
-  }
-
   return (
     <div className="shrink-0">
-      <div className="relative">
+      <div className="relative" style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}>
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={busy}
           title="Change profile photo"
-          className="group relative block rounded-full disabled:cursor-default"
+          className="group relative rounded-full disabled:cursor-default"
+          style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}
         >
-          <Avatar profile={profile} size={56} className="border border-line" />
+          <Avatar profile={profile} size={AVATAR_SIZE} className="border border-line" />
           <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
             {busy ? <Loader2 size={16} className="animate-spin text-white" /> : <Camera size={16} className="text-white" />}
           </div>
@@ -144,23 +152,18 @@ function AvatarUpload({ profile }) {
             </div>
           )}
         </button>
+        {profile.avatar_url && !busy && (
+          <button
+            type="button"
+            onClick={onRemove}
+            title="Remove photo"
+            className="absolute -top-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-elevated bg-danger"
+          >
+            <X size={11} className="text-white" strokeWidth={2.5} />
+          </button>
+        )}
         <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
       </div>
-
-      {profile.avatar_url ? (
-        <button
-          type="button"
-          onClick={onRemove}
-          disabled={busy}
-          className="mt-2 block font-sans text-[11px] text-fg-faint hover:text-fg-secondary disabled:cursor-default"
-        >
-          Remove photo
-        </button>
-      ) : (
-        <div className="mt-2">
-          <AvatarColorPicker value={profile.avatar_color} onChange={onColorChange} disabled={updateColor.isPending} />
-        </div>
-      )}
 
       {error && <p className="mt-1 max-w-[8rem] font-sans text-[11px] text-danger">{error}</p>}
 

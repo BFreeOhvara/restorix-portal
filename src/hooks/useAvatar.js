@@ -56,16 +56,3 @@ export function useRemoveAvatar() {
     },
   })
 }
-
-// New for Restorix — the pastel picker's own mutation, independent of the
-// photo. Removing a photo only nulls avatar_url (see above); it never
-// touches avatar_color, so a previously-chosen color survives a photo
-// removal instead of reverting to a default.
-export function useUpdateAvatarColor() {
-  return useMutation({
-    mutationFn: async ({ avatarColor }) => {
-      const { error } = await supabase.rpc('update_own_avatar_color', { p_avatar_color: avatarColor })
-      if (error) throw error
-    },
-  })
-}
