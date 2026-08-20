@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, ListChecks } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import ParticleField from './ui/ParticleField'
 
 // Prompt 448: grouped into labeled sections (matching ohvara-dashboard's
 // Sidebar.jsx grouped-nav pattern) instead of one flat list. Bucket names
@@ -249,7 +250,25 @@ export default function Layout() {
         <AccountPopover profile={profile} onSignOut={signOut} onNavigate={navigate} />
       </aside>
 
-      <div className="ml-60 flex min-h-screen flex-col">
+      {/* Prompt 500 — dot-network background, mounted once here rather than
+          per-page, since Layout persists across route changes (<Outlet/>
+          swaps only the routed child) — one canvas for the whole session,
+          not 16. Fixed and sized to the viewport-visible content region
+          only (left-60 matches the sidebar's own width, not the page's
+          full scrollable height) so cost stays constant regardless of how
+          long any given page's content is — Pipeline/Messages can be very
+          tall, and re-sizing/compositing a canvas that tall on every frame
+          would be real, avoidable cost this shorter-lived marketing-hero
+          version never had to consider. z-0 against the content column's
+          z-10 (same explicit z-index pattern restorix-marketing's own
+          Hero.jsx already uses for its background/content split) rather
+          than a negative z-index against unpositioned in-flow content,
+          which paints in a different, easy-to-get-backwards order. */}
+      <div className="pointer-events-none fixed inset-y-0 left-60 right-0 z-0 overflow-hidden">
+        <ParticleField className="h-full w-full" />
+      </div>
+
+      <div className="relative z-10 ml-60 flex min-h-screen flex-col">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-end gap-3 border-b border-line bg-elevated px-6">
           <NotificationBell />
           <HeaderName profile={profile} />
