@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { useTheme } from '../hooks/useTheme'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser } from '../hooks/useStats'
 import { useMyAllCalls, groupCallsByDay, isPerfectDay, PERFECT_DAY_DIALS } from '../hooks/useBadges'
 import { Field, inputClass } from '../components/ui/Field'
@@ -99,15 +100,29 @@ function WeeklyLineChart({ days }) {
 // Same intensity math as before, just a different end color. Perfect Days
 // override this entirely with solid green, per spec, regardless of where
 // their dial count would otherwise land in the gradient.
-function dialColor(dials) {
+//
+// Prompt 502 — the "0 dials" anchor used to be hardcoded pure white,
+// which reads as "empty card" against light mode's own white
+// `--bg-elevated`, but the same white cell on a dark card would render as
+// a near-white outlier instead of "empty" — breaking the low-to-high
+// hierarchy the gradient exists to show. The fix is conceptual, not just
+// a color swap: the anchor should always equal whatever `--bg-elevated`
+// currently is, in either theme, so a 0-dial cell always reads as "same
+// as the card behind it." Passed in from Stats() via useTheme() rather
+// than read live from the DOM here, since this stays a plain function.
+const HEATMAP_LOW_RGB = {
+  light: [255, 255, 255], // matches light --bg-elevated (#ffffff) exactly
+  dark: [26, 36, 32], // matches dark --bg-elevated (#1a2420) exactly
+}
+
+function dialColor(dials, lowRgb) {
   const pct = Math.min(1, dials / PERFECT_DAY_DIALS)
-  const start = [255, 255, 255]
   const end = [58, 99, 214]
-  const rgb = start.map((s, i) => Math.round(s + (end[i] - s) * pct))
+  const rgb = lowRgb.map((s, i) => Math.round(s + (end[i] - s) * pct))
   return `rgb(${rgb.join(',')})`
 }
 
-function ActivityHeatmap({ days }) {
+function ActivityHeatmap({ days, lowRgb }) {
   return (
     <div>
       <div className="grid grid-cols-7 gap-1.5">
@@ -118,7 +133,7 @@ function ActivityHeatmap({ days }) {
               key={d.date}
               title={`${d.date} — ${d.dials} dials, ${d.bookings} bookings${perfect ? ' · Perfect Day' : ''}`}
               className="aspect-square rounded-md border border-line"
-              style={{ background: perfect ? 'var(--success)' : dialColor(d.dials) }}
+              style={{ background: perfect ? 'var(--success)' : dialColor(d.dials, lowRgb) }}
             />
           )
         })}
@@ -128,7 +143,7 @@ function ActivityHeatmap({ days }) {
           <span className="h-3 w-3 rounded-sm bg-success" /> Perfect Day (150 dials + 2 bookings)
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-sm border border-line" style={{ background: dialColor(75) }} /> Dial volume
+          <span className="h-3 w-3 rounded-sm border border-line" style={{ background: dialColor(75, lowRgb) }} /> Dial volume
         </span>
       </div>
     </div>
@@ -137,6 +152,8 @@ function ActivityHeatmap({ days }) {
 
 export default function Stats() {
   const { profile } = useAuth()
+  const { resolvedTheme } = useTheme()
+  const heatmapLowRgb = HEATMAP_LOW_RGB[resolvedTheme]
   const { data: leads, isLoading } = useAllLeadsForStats()
   const { data: reps } = useReps()
   const { data: allCalls } = useMyAllCalls(profile?.id)
@@ -247,7 +264,7 @@ export default function Stats() {
           <div>
             <h2 className="font-display text-lg font-medium text-fg-primary">Last 21 Days</h2>
             <div className="mt-3 rounded-card border border-line bg-elevated p-5">
-              <ActivityHeatmap days={heatmapDays} />
+              <ActivityHeatmap days={heatmapDays} lowRgb={heatmapLowRgb} />
             </div>
           </div>
         </div>

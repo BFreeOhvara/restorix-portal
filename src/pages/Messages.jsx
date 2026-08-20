@@ -17,7 +17,16 @@ function initials(name) {
 
 // Deterministic avatar tint by name, not random — same name always gets
 // the same color across a session and across reloads.
-const AVATAR_TINTS = ['bg-accent', 'bg-success', 'bg-warning', 'bg-danger', 'bg-accent-deep']
+//
+// Prompt 502: `bg-accent-deep` here relies on white text staying readable
+// against it — true in light mode (accent-deep is a dark navy), but
+// accent-deep intentionally flips to a LIGHT color in dark mode (see
+// index.css) since its dominant use elsewhere is text sitting on dark
+// cards, not a solid chip. White-on-light-lavender would be illegible, so
+// this one tint gets a `dark:` override pinned to the same dark navy the
+// light theme already uses — a fixed solid chip color independent of the
+// token's dark-mode text role, same fix pattern as Avatar.jsx's initials.
+const AVATAR_TINTS = ['bg-accent', 'bg-success', 'bg-warning', 'bg-danger', 'bg-accent-deep dark:!bg-[#24469e]']
 function avatarTint(name) {
   const sum = [...(name || '')].reduce((s, c) => s + c.charCodeAt(0), 0)
   return AVATAR_TINTS[sum % AVATAR_TINTS.length]

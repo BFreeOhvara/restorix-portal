@@ -24,12 +24,14 @@ export const STATUS_LABELS = {
 // uses for the per-row Status column badge (one color, not a new one), No
 // Answer takes over the plain `bg-muted` gray New used to have. SOLID
 // (selected-chip/badge) states are untouched — this is TINT only.
+// Prompt 502: same dark-appropriate-not-inverted treatment as
+// OutcomeBadge.jsx for every raw palette/hex string here.
 export const STATUS_TINT = {
-  new: 'bg-[#e3e9ff] !text-accent-deep',
+  new: 'bg-[#e3e9ff] !text-accent-deep dark:bg-[#1f2c4d]',
   no_answer: 'bg-muted !text-fg-secondary',
-  not_interested: 'bg-[#fbe2de] !text-danger',
-  follow_up: 'bg-yellow-100 !text-yellow-800',
-  appointment_booked: 'bg-[#dcf3e6] !text-success',
+  not_interested: 'bg-[#fbe2de] !text-danger dark:bg-[#3d211c]',
+  follow_up: 'bg-yellow-100 !text-yellow-800 dark:bg-yellow-900/50 dark:!text-yellow-300',
+  appointment_booked: 'bg-[#dcf3e6] !text-success dark:bg-[#173a28]',
 }
 
 // Solid (high-emphasis) per-status treatment — a selected filter chip, the
@@ -38,9 +40,9 @@ export const STATUS_TINT = {
 // every place a status shows up, so it's recognizable at a glance.
 export const STATUS_SOLID = {
   new: 'bg-accent !text-white',
-  no_answer: 'bg-gray-500 !text-white',
+  no_answer: 'bg-gray-500 !text-white dark:bg-gray-600',
   not_interested: 'bg-danger !text-white',
-  follow_up: 'bg-yellow-600 !text-white',
+  follow_up: 'bg-yellow-600 !text-white dark:bg-yellow-500 dark:!text-yellow-950',
   appointment_booked: 'bg-success !text-white',
 }
 
@@ -58,7 +60,7 @@ export const STATUS_SOLID = {
 // not the muted gray TINT.new either) gives it its own identity.
 const STATUS_BADGE = {
   ...STATUS_SOLID,
-  new: 'bg-[#e3e9ff] !text-accent-deep',
+  new: 'bg-[#e3e9ff] !text-accent-deep dark:bg-[#1f2c4d]',
 }
 
 export default function StatusBadge({ status }) {

@@ -33,6 +33,58 @@
   --success-rgb: 31 138 95;
 }
 
+/* Prompt 502 — dark values for the same 13 root tokens (+ their -rgb
+   pairs and --border-strong), following Prompt 501's scoping doc: no new
+   token names, everything token-driven auto-inherits from here. Class
+   strategy (`darkMode: 'class'`, see tailwind.config.js) rather than
+   `media` since a persisted per-user override (theme_preference) needs to
+   be able to force light/dark regardless of OS setting, not just follow
+   it.
+
+   --accent/--danger/--success each get a real WCAG-checked value, not an
+   inverted-lightness guess — every one of these three is used BOTH as
+   solid-bg-with-white-text (buttons, solid badges) AND as plain text/line
+   color against dark surfaces (nav active state, form errors, SVG chart
+   strokes), which pull toward opposite ends of the lightness range.
+   Verified with a real relative-luminance calculation (WCAG contrast
+   formula, not eyeballed) rather than assumed: --accent #4870d8 lands at
+   4.58:1 vs white (passes AA for the button-text case) and 3.5-3.8:1
+   against the dark surfaces (readable, if short of the stricter 4.5:1 a
+   small nav label would ideally hit) — a deliberate middle point since a
+   single token can't hit AA on both roles at once here. Same reasoning
+   for --danger and --success.
+
+   --accent-deep flips notably lighter here (not just inverted lightness)
+   because its DOMINANT use across the app is `.eyebrow` text and badge
+   text sitting on dark bg-surface/bg-elevated (table headers, Stats
+   tiles, StatusBadge "new") — a dark navy would be near-illegible there
+   (checked: 9.6:1 at #b7c8f7 vs dark bg-elevated). Button.jsx's
+   hover:bg-accent-deep (the one place that wants accent-deep to stay a
+   *darkening* shade) gets its own dark:hover:bg-accent-bright override
+   instead, since that role and the text-legibility role pull in opposite
+   directions — see Button.jsx. */
+.dark {
+  --bg-base: #0d1512;
+  --bg-surface: #131c19;
+  --bg-elevated: #1a2420;
+  --bg-muted: #26332d;
+  --text-primary: #eef4f1;
+  --text-secondary: rgba(238, 244, 241, 0.7);
+  --text-faint: rgba(238, 244, 241, 0.46);
+  --accent: #4870d8;
+  --accent-rgb: 72 112 216;
+  --accent-bright: #5c82e6;
+  --accent-bright-rgb: 92 130 230;
+  --accent-deep: #b7c8f7;
+  --accent-deep-rgb: 183 200 247;
+  --border: rgba(238, 244, 241, 0.14);
+  --border-strong: rgba(238, 244, 241, 0.22);
+  --danger: #cf4e33;
+  --danger-rgb: 207 78 51;
+  --success: #278f61;
+  --success-rgb: 39 143 97;
+}
+
 * {
   border-color: var(--border);
 }

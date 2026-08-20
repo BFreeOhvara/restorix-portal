@@ -152,7 +152,7 @@ function AccountPopover({ profile, onSignOut, onNavigate }) {
     <div ref={ref} className="relative border-t border-line p-3">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between rounded-lg bg-[#e3e9ff] px-2 py-2 text-left transition-all hover:brightness-95"
+        className="flex w-full items-center justify-between rounded-lg bg-[#e3e9ff] px-2 py-2 text-left transition-all hover:brightness-95 dark:bg-[#1f2c4d] dark:hover:brightness-125"
       >
         <div className="min-w-0">
           <p className="truncate font-sans text-sm font-medium text-fg-primary">{profile?.full_name}</p>

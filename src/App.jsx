@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './hooks/useAuth'
+import { ThemeProvider } from './hooks/useTheme'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Join from './pages/Join'
@@ -49,6 +50,7 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <ThemeProvider>
         <BrowserRouter>
           <Routes>
             <Route path="/join/:token" element={<Join />} />
@@ -122,6 +124,7 @@ export default function App() {
             />
           </Routes>
         </BrowserRouter>
+        </ThemeProvider>
       </AuthProvider>
     </QueryClientProvider>
   )

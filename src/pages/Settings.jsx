@@ -1,6 +1,9 @@
 import { useState } from 'react'
+import { Moon, Sun, SunMoon } from 'lucide-react'
+import clsx from 'clsx'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
+import { useTheme } from '../hooks/useTheme'
 import { Field, inputClass } from '../components/ui/Field'
 import { Button } from '../components/ui/Button'
 import { SELECTABLE_TIMEZONES, DEFAULT_TIMEZONE } from '../lib/timezones'
@@ -8,9 +11,9 @@ import { SELECTABLE_TIMEZONES, DEFAULT_TIMEZONE } from '../lib/timezones'
 // Prompt 453 — Settings got a real nav destination but had nothing genuine
 // to put in it yet. Prompt 458 gives it its first real setting: timezone,
 // now that "today" is computed per-user across the app instead of a
-// single UTC/server boundary. Theme/integrations still don't exist —
-// still nothing to show for those, so this page is no longer a pure
-// placeholder but isn't a full tabbed settings shell either.
+// single UTC/server boundary. Prompt 502 gives it its second: theme,
+// replacing the placeholder card that used to say Restorix doesn't have
+// one yet.
 export default function Settings() {
   const { profile } = useAuth()
   if (!profile) return null
@@ -26,11 +29,61 @@ export default function Settings() {
         <TimezoneForm profile={profile} />
       </div>
 
-      <div className="mt-6 rounded-card border border-line bg-elevated p-8 text-center">
-        <p className="font-sans text-sm text-fg-secondary">
-          Nothing else to configure yet — Restorix doesn't have a theme toggle or integrations
-          built yet. This section will grow as real settings arrive.
+      <div className="mt-6 rounded-card border border-line bg-elevated p-6">
+        <ThemeForm />
+      </div>
+    </div>
+  )
+}
+
+const THEME_OPTIONS = [
+  { value: 'system', label: 'System', icon: SunMoon },
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'dark', label: 'Dark', icon: Moon },
+]
+
+function ThemeForm() {
+  const { refreshProfile } = useAuth()
+  const { themePreference, setThemePreference } = useTheme()
+  const [saving, setSaving] = useState(null)
+
+  async function choose(value) {
+    if (value === themePreference || saving) return
+    setSaving(value)
+    await setThemePreference(value)
+    await refreshProfile()
+    setSaving(null)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="font-sans text-sm font-semibold text-fg-primary">Theme</p>
+        <p className="mt-1 font-sans text-xs text-fg-secondary">
+          System follows your device's light/dark setting automatically. Light and Dark override it.
         </p>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {THEME_OPTIONS.map(({ value, label, icon: Icon }) => {
+          const active = themePreference === value
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => choose(value)}
+              disabled={saving !== null}
+              className={clsx(
+                'flex flex-col items-center gap-1.5 rounded-lg border px-3 py-3 font-sans text-sm transition-colors disabled:cursor-not-allowed',
+                active
+                  ? 'border-accent bg-accent/10 font-semibold text-accent'
+                  : 'border-line text-fg-secondary hover:border-fg-primary/40 hover:text-fg-primary'
+              )}
+            >
+              <Icon size={18} />
+              {saving === value ? 'Saving…' : label}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
