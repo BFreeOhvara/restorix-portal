@@ -1,8 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
-import { useTheme } from '../hooks/useTheme'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser } from '../hooks/useStats'
-import { useMyAllCalls, groupCallsByDay, isPerfectDay, PERFECT_DAY_DIALS } from '../hooks/useBadges'
+import { useMyAllCalls, groupCallsByDay, isPerfectDay } from '../hooks/useBadges'
 import { Field, inputClass } from '../components/ui/Field'
 import { WeekPaginator } from '../components/ui/WeekPaginator'
 import { zonedDateStr, zonedDayRange, mondayOf, shiftDay, lastNBusinessDays } from '../lib/dates'
@@ -49,18 +48,35 @@ function weekdayLabel(dateStr) {
 // Prompt 506 — "0-10"/"0-2" in the caption text was the only scale
 // information this chart ever gave; there was no way to read an actual
 // data point's value off the chart itself. `niceTicks` picks round,
-// human-readable tick values (1/2/5 × a power of ten, the standard
+// human-readable tick values (1/2/2.5/5 × a power of ten, the standard
 // axis-tick heuristic) rather than dividing the raw max into N equal
 // slices, which would produce ugly ticks like "0, 3.67, 7.33, 11".
-function niceTicks(max, count = 4) {
+//
+// Prompt 519 — two real bugs Brayden caught live, fixed here:
+// (1) the old loop condition (`v <= max + step * 0.001`) stopped as soon
+// as it stepped PAST max, without guaranteeing the last tick actually
+// covered it — for max=155/step=100 that produced ticks [0, 100], an
+// axis that tops out below the real data max, silently clipping any bar
+// taller than 100 at the chart's top edge. Now walks forward while
+// v < max and always pushes one final tick >= max, so the axis can never
+// top out below the real data. (2) `count = 4` only ever produced 2-3
+// ticks total (one implicit interval), reading as "just the two
+// endpoints" — bumped the target to 6 intervals and added 2.5 as a nice-
+// multiplier candidate so a ~150 max lands on 0/25/50/75/100/125/150
+// instead of a single coarse 0/100/200 jump.
+function niceTicks(max, targetIntervals = 6) {
   if (max <= 0) return [0]
-  const rawStep = max / (count - 1)
+  const rawStep = max / targetIntervals
   const mag = Math.pow(10, Math.floor(Math.log10(rawStep)))
   const norm = rawStep / mag
-  const niceNorm = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10
+  const niceNorm = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10
   const step = niceNorm * mag
-  const ticks = []
-  for (let v = 0; v <= max + step * 0.001; v += step) ticks.push(Math.round(v))
+  const ticks = [0]
+  let v = 0
+  while (v < max) {
+    v += step
+    ticks.push(Math.round(v))
+  }
   return [...new Set(ticks)]
 }
 
@@ -120,42 +136,50 @@ function WeeklyBarChart({ days }) {
   )
 }
 
-// White (0 dials) to the portal's own blue accent (PERFECT_DAY_DIALS,
-// clamped) — Prompt 475: was gray-to-dark-gray, recolored to match the
-// rest of the UI's color language (same accent used on Call buttons,
-// selected filter chips, etc. — `--accent: #3a63d6` = rgb(58,99,214)).
-// Same intensity math as before, just a different end color. Perfect Days
-// override this entirely with solid green, per spec, regardless of where
-// their dial count would otherwise land in the gradient.
-//
-// Prompt 502 — the "0 dials" anchor used to be hardcoded pure white,
-// which reads as "empty card" against light mode's own white
-// `--bg-elevated`, but the same white cell on a dark card would render as
-// a near-white outlier instead of "empty" — breaking the low-to-high
-// hierarchy the gradient exists to show. The fix is conceptual, not just
-// a color swap: the anchor should always equal whatever `--bg-elevated`
-// currently is, in either theme, so a 0-dial cell always reads as "same
-// as the card behind it." Passed in from Stats() via useTheme() rather
-// than read live from the DOM here, since this stays a plain function.
-const HEATMAP_LOW_RGB = {
-  light: [255, 255, 255], // matches light --bg-elevated (#ffffff) exactly
-  dark: [26, 36, 32], // matches dark --bg-elevated (#1a2420) exactly
-}
-
-function dialColor(dials, lowRgb) {
-  const pct = Math.min(1, dials / PERFECT_DAY_DIALS)
-  const end = [58, 99, 214]
-  const rgb = lowRgb.map((s, i) => Math.round(s + (end[i] - s) * pct))
+// Prompt 519 — pale blue (low) to deep blue (high), fixed direction in
+// BOTH themes, and normalized to the real visible min-max rather than a
+// fixed /150 denominator. Two real bugs from the Prompt 475/502 version:
+// (1) that version anchored "0 dials" to whatever `--bg-elevated` current
+// is (white in light mode, near-black in dark mode) so a 0-dial cell
+// always blended into the card — but that inherently means "low" is the
+// theme's own darkest color in dark mode, i.e. darker-means-fewer,
+// lighter-means-more — backwards from the standard heatmap convention
+// (GitHub's contribution graph, etc.) and exactly what Brayden flagged
+// live. Fixed by dropping the per-theme/blend-into-card anchor entirely
+// in favor of a fixed light-to-dark blue scale, identical in both themes
+// — reuses two colors already established elsewhere in this app (the
+// pale blue is STATUS_TINT.new's `#e3e9ff`, the deep end is
+// `--accent-deep`'s light-mode value `#24469e`), not new arbitrary hexes.
+// (2) the old fixed `dials / PERFECT_DAY_DIALS` (150) denominator meant
+// a realistic day's range (say 70-159) only ever occupied the TOP half of
+// the color scale, compressing real variation into a narrow band and
+// making adjacent values look more similar than the data actually
+// warrants. Normalizing to the real min/max across the visible days
+// spreads whatever range is actually present across the FULL gradient,
+// so two genuinely different dial counts get genuinely distinguishable
+// colors regardless of where they sit in the absolute 0-150 scale.
+function dialColor(dials, minDials, maxDials) {
+  const span = maxDials - minDials
+  const pct = span > 0 ? Math.min(1, Math.max(0, (dials - minDials) / span)) : (dials > 0 ? 1 : 0)
+  const start = [227, 233, 255] // pale blue — STATUS_TINT.new's #e3e9ff
+  const end = [36, 70, 158] // deep blue — --accent-deep's light value #24469e
+  const rgb = start.map((s, i) => Math.round(s + (end[i] - s) * pct))
   return `rgb(${rgb.join(',')})`
 }
 
-function ActivityHeatmap({ days, lowRgb }) {
+function ActivityHeatmap({ days }) {
+  const { minDials, maxDials } = useMemo(() => {
+    const values = days.map((d) => d.dials)
+    if (!values.length) return { minDials: 0, maxDials: 0 }
+    return { minDials: Math.min(...values), maxDials: Math.max(...values) }
+  }, [days])
+
   return (
     <div>
-      {/* Prompt 516: 5 columns, not 7 — days are now business days only, so
-          each row is one Mon-Fri work week rather than a calendar week
-          with two guaranteed-empty weekend cells padding it out. */}
-      <div className="grid grid-cols-5 gap-1.5">
+      {/* Prompt 519: back to 7 columns per Brayden's explicit call — the
+          underlying date logic (21 real business days, weekends skipped,
+          Prompt 516) is unchanged, this is purely a grid layout choice. */}
+      <div className="grid grid-cols-7 gap-1.5">
         {days.map((d) => {
           const perfect = isPerfectDay(d)
           return (
@@ -163,7 +187,7 @@ function ActivityHeatmap({ days, lowRgb }) {
               key={d.date}
               title={`${d.date} — ${d.dials} dials, ${d.bookings} bookings${perfect ? ' · Perfect Day' : ''}`}
               className="aspect-square rounded-md border border-line"
-              style={{ background: perfect ? 'var(--success)' : dialColor(d.dials, lowRgb) }}
+              style={{ background: perfect ? 'var(--success)' : dialColor(d.dials, minDials, maxDials) }}
             />
           )
         })}
@@ -173,7 +197,7 @@ function ActivityHeatmap({ days, lowRgb }) {
           <span className="h-3 w-3 rounded-sm bg-success" /> Perfect Day (150 dials + 2 bookings)
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-sm border border-line" style={{ background: dialColor(75, lowRgb) }} /> Dial volume
+          <span className="h-3 w-3 rounded-sm border border-line" style={{ background: dialColor(maxDials, minDials, maxDials) }} /> Dial volume
         </span>
       </div>
     </div>
@@ -209,12 +233,15 @@ function seededRandom(seed) {
 }
 
 // Believable cold-calling volume per the existing badge system's own scale
-// (PERFECT_DAY_DIALS = 150 dials/day) — 70-159 dials, 0-3 bookings, never
+// (PERFECT_DAY_DIALS = 150 dials/day) — 70-150 dials, 0-3 bookings, never
 // flatlined at zero. UI-only: never written to the database, never touches
 // `calls`/`leads` — see Stats() below, gated to exactly one account.
+// Prompt 519 — was 70-159, letting mock days exceed the real 150-lead pool
+// cap (a setter physically cannot dial more leads than they have); capped
+// to 70-150 so no mock value is impossible under the real system.
 function mockDayStats(dateStr) {
   const rand = seededRandom(dateStr)
-  const dials = 70 + Math.floor(rand() * 90)
+  const dials = 70 + Math.floor(rand() * 81)
   const bookings = Math.min(dials, Math.floor(rand() * 4))
   return { dials, bookings }
 }
@@ -225,8 +252,6 @@ function mockDays(dateList) {
 
 export default function Stats() {
   const { profile } = useAuth()
-  const { resolvedTheme } = useTheme()
-  const heatmapLowRgb = HEATMAP_LOW_RGB[resolvedTheme]
   const { data: leads, isLoading } = useAllLeadsForStats()
   const { data: reps } = useReps()
   const { data: allCalls } = useMyAllCalls(profile?.id)
@@ -346,7 +371,7 @@ export default function Stats() {
           <div>
             <h2 className="font-display text-lg font-medium text-fg-primary">Last 21 Business Days</h2>
             <div className="mt-3 rounded-card border border-line bg-elevated p-5">
-              <ActivityHeatmap days={heatmapDays} lowRgb={heatmapLowRgb} />
+              <ActivityHeatmap days={heatmapDays} />
             </div>
           </div>
         </div>
