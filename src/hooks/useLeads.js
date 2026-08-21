@@ -251,6 +251,29 @@ export function useMyPool(setterId) {
   })
 }
 
+// Prompt 509 — a closer's on-demand version of what `assign_setter_batches`
+// does automatically for setters every 15 minutes. Not a client-side
+// clamp-and-hope: `request_closer_leads` (SECURITY DEFINER) re-checks the
+// caller's own current New-status count and the 150 cap server-side, and
+// returns however many it actually assigned — which may be less than
+// `count` if the closer was already close to the cap. The UI surfaces
+// that real number rather than assuming the full request went through.
+export function useRequestCloserLeads() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (count) => {
+      const { data, error } = await supabase.rpc('request_closer_leads', { p_count: count })
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-pool'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-leads'] })
+    },
+  })
+}
+
 // A closer's Appointment Booked leads, handed to them by the round-robin
 // assignment in the leads_pipeline_trigger.
 export function useMyBooked(closerId) {

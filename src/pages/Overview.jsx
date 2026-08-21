@@ -73,7 +73,11 @@ function TodayStrip({ profile }) {
 
 const STATUS_TABS = ['new', 'no_answer', 'follow_up', 'not_interested', 'appointment_booked']
 
-function SetterOverview({ profile }) {
+// Prompt 509: exported so MyLeads.jsx (closer self-dial) can reuse this
+// exact component rather than duplicating it — `useMyPool(profile.id)`
+// is already generic on `assigned_setter`, so this works verbatim for a
+// closer's own id, no changes needed here at all.
+export function SetterOverview({ profile, title = 'Overview' }) {
   const { data: leads, isLoading } = useMyPool(profile.id)
   const [callLead, setCallLead] = useState(null)
   const [search, setSearch] = useState('')
@@ -105,7 +109,7 @@ function SetterOverview({ profile }) {
     <div>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-medium text-fg-primary">Overview</h1>
+          <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
           <p className="mt-1 font-sans text-sm text-fg-secondary">
             {leads?.length ?? 0} lead{leads?.length === 1 ? '' : 's'} in your pool
           </p>
@@ -217,7 +221,13 @@ const CLOSER_OUTCOME_TILES = ['pending', 'needs_reschedule', 'lost', 'closed']
 // `closer_outcome` (defaulting missing/null to 'pending', matching
 // LogOutcomeForm's own default) covers the closer's full working set,
 // not just unresolved ones.
-function CloserOverview({ profile }) {
+// Prompt 509: exported so MyPipeline.jsx can reuse this exact component
+// as its own page content — Brayden's own call (asked directly rather
+// than guessed) was that "My Pipeline" is a separate additional tab with
+// the same content shape as Overview already has for closers, not a
+// replacement or relocation of Overview itself. Overview stays completely
+// unchanged; MyPipeline.jsx is a thin wrapper mounting this same component.
+export function CloserOverview({ profile, title = 'Overview' }) {
   const { data: leads, isLoading } = useMyBooked(profile.id)
   const [activeLead, setActiveLead] = useState(null)
 
@@ -233,7 +243,7 @@ function CloserOverview({ profile }) {
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-medium text-fg-primary">Overview</h1>
+      <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
       <p className="mt-1 font-sans text-sm text-fg-secondary">{leads?.length ?? 0} booked leads</p>
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

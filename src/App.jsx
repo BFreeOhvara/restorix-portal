@@ -19,6 +19,8 @@ import MyCalls from './pages/MyCalls'
 import Profile from './pages/Profile'
 import Settings from './pages/Settings'
 import Survey from './pages/Survey'
+import MyLeads from './pages/MyLeads'
+import MyPipeline from './pages/MyPipeline'
 
 const queryClient = new QueryClient()
 
@@ -114,6 +116,22 @@ export default function App() {
                         element={
                           <RoleRoute roles={['closer', 'admin']}>
                             <Survey />
+                          </RoleRoute>
+                        }
+                      />
+                      <Route
+                        path="/my-leads"
+                        element={
+                          <RoleRoute roles={['closer']}>
+                            <MyLeads />
+                          </RoleRoute>
+                        }
+                      />
+                      <Route
+                        path="/my-pipeline"
+                        element={
+                          <RoleRoute roles={['closer']}>
+                            <MyPipeline />
                           </RoleRoute>
                         }
                       />
