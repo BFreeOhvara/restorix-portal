@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, ListChecks } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import ParticleField from './ui/ParticleField'
+import { Avatar } from './ui/Avatar'
 
 // Prompt 448: grouped into labeled sections (matching ohvara-dashboard's
 // Sidebar.jsx grouped-nav pattern) instead of one flat list. Bucket names
@@ -125,17 +126,20 @@ function NotificationBell() {
 // Prompt 477: ohvara-dashboard's own AccountMenu row carries a permanent
 // `--bg-elevated` card background to read as clickable against its
 // (darker) sidebar — copying that literal token here would do nothing,
-// since Restorix's sidebar itself IS `bg-elevated` (white). Used a light
-// accent tint instead — the same `#e3e9ff` light-blue reused verbatim
-// from StatusBadge.jsx's "new" tint (this project's own established
-// light-blue token, not a new color). Tried `bg-accent/10` first; this
-// Tailwind config defines `accent` as a plain `var(--accent)` string
-// rather than the `rgb(var(--x) / <alpha-value>)` form opacity modifiers
-// need, so `/N` suffixes on it silently generate no CSS at all (confirmed
-// via the built stylesheet — worth remembering, since `border-accent/NN`
-// is already used elsewhere in this codebase and is likely equally
-// inert). Hover uses `brightness` instead of a second invented tint, so
-// there's still a real, visible change without a new color.
+// since Restorix's sidebar itself IS `bg-elevated` (white).
+//
+// Prompt 505: Prompt 477's original fix used a one-off `#e3e9ff` hex tint
+// instead, but Brayden's live read was that it didn't read as a bounded,
+// clickable element the way the sidebar's own active-nav-item treatment
+// does (see `NavItemLink` below: `bg-surface` fill, no border). Switched
+// to that exact same token instead of inventing a second "selected"
+// treatment — same background color, same visual weight, one consistent
+// language for "this is the current/active thing" across the sidebar.
+// `hover:bg-muted` is the next token up the base<surface<elevated<muted
+// ladder, giving real hover feedback without a new color. Both tokens
+// already carry correct dark values (Prompt 502), so the old per-theme
+// `dark:bg-[...]` overrides this button needed are gone too — genuinely
+// simpler code, not just a different color.
 function AccountPopover({ profile, onSignOut, onNavigate }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -152,9 +156,16 @@ function AccountPopover({ profile, onSignOut, onNavigate }) {
     <div ref={ref} className="relative border-t border-line p-3">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between rounded-lg bg-[#e3e9ff] px-2 py-2 text-left transition-all hover:brightness-95 dark:bg-[#1f2c4d] dark:hover:brightness-125"
+        className="flex w-full items-center gap-2 rounded-lg bg-surface px-2 py-2 text-left transition-colors hover:bg-muted"
       >
-        <div className="min-w-0">
+        {/* Prompt 505: avatar added matching ohvara-dashboard's own
+            AccountMenu row (Sidebar.jsx) — Avatar left of the stacked
+            name/role text, same `gap` proportions. Reuses the existing
+            Avatar component verbatim (Prompt 491, already handles the
+            real-photo vs. pastel-initials fallback) rather than building
+            a second one. */}
+        <Avatar profile={profile} size={28} />
+        <div className="min-w-0 flex-1">
           <p className="truncate font-sans text-sm font-medium text-fg-primary">{profile?.full_name}</p>
           <p className="eyebrow !text-fg-faint">{profile?.role}</p>
         </div>
