@@ -52,24 +52,65 @@ function weekdayLabel(dateStr) {
 // dials — not specified either way, but any faithful rendering of "two
 // lines" needs to solve this, so calling it out rather than a silent
 // choice.
+// Prompt 506 — "0-10"/"0-2" in the caption text was the only scale
+// information this chart ever gave; there was no way to read an actual
+// data point's value off the chart itself. `niceTicks` picks round,
+// human-readable tick values (1/2/5 × a power of ten, the standard
+// axis-tick heuristic) rather than dividing the raw max into N equal
+// slices, which would produce ugly ticks like "0, 3.67, 7.33, 11".
+// Dials and bookings both plot against their own tick scale's own
+// top tick (not the raw data max) so gridlines and data agree exactly —
+// a data point can now land anywhere at or below its axis line, not
+// necessarily pinned to the very top of the chart.
+function niceTicks(max, count = 4) {
+  if (max <= 0) return [0]
+  const rawStep = max / (count - 1)
+  const mag = Math.pow(10, Math.floor(Math.log10(rawStep)))
+  const norm = rawStep / mag
+  const niceNorm = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10
+  const step = niceNorm * mag
+  const ticks = []
+  for (let v = 0; v <= max + step * 0.001; v += step) ticks.push(Math.round(v))
+  return [...new Set(ticks)]
+}
+
 function WeeklyLineChart({ days }) {
   const W = 600
   const H = 200
-  const padX = 30
+  const padX = 34
   const padY = 24
   const maxDials = Math.max(1, ...days.map((d) => d.dials))
   const maxBookings = Math.max(1, ...days.map((d) => d.bookings))
+  const dialsTicks = niceTicks(maxDials)
+  const bookingsTicks = niceTicks(maxBookings)
+  const dialsAxisMax = dialsTicks[dialsTicks.length - 1] || 1
+  const bookingsAxisMax = bookingsTicks[bookingsTicks.length - 1] || 1
   const stepX = days.length > 1 ? (W - padX * 2) / (days.length - 1) : 0
   const xFor = (i) => padX + i * stepX
-  const yForDials = (v) => H - padY - (v / maxDials) * (H - padY * 2)
-  const yForBookings = (v) => H - padY - (v / maxBookings) * (H - padY * 2)
+  const yForDials = (v) => H - padY - (v / dialsAxisMax) * (H - padY * 2)
+  const yForBookings = (v) => H - padY - (v / bookingsAxisMax) * (H - padY * 2)
   const dialsPoints = days.map((d, i) => `${xFor(i)},${yForDials(d.dials)}`).join(' ')
   const bookingsPoints = days.map((d, i) => `${xFor(i)},${yForBookings(d.bookings)}`).join(' ')
 
   return (
     <div>
       <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full">
-        <line x1={padX} y1={H - padY} x2={W - padX} y2={H - padY} className="stroke-line" strokeWidth="1" />
+        {/* Dials axis (left) — gridlines + tick labels, accent-colored to
+            match its own line/dot color so it's unambiguous which scale
+            a number belongs to without a separate legend lookup. */}
+        {dialsTicks.map((t) => (
+          <g key={`dials-${t}`}>
+            <line x1={padX} y1={yForDials(t)} x2={W - padX} y2={yForDials(t)} className="stroke-line" strokeWidth="1" opacity={t === 0 ? 1 : 0.5} />
+            <text x={padX - 6} y={yForDials(t)} dy="3.5" textAnchor="end" fontSize="10" className="fill-accent">{t}</text>
+          </g>
+        ))}
+        {/* Bookings axis (right) — tick labels only, no second set of
+            gridlines (the dials gridlines already give the eye a scale
+            to read against; a second overlapping grid reads as clutter,
+            not more information). */}
+        {bookingsTicks.map((t) => (
+          <text key={`bookings-${t}`} x={W - padX + 6} y={yForBookings(t)} dy="3.5" textAnchor="start" fontSize="10" className="fill-success">{t}</text>
+        ))}
         <polyline points={dialsPoints} className="fill-none stroke-accent" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
         <polyline points={bookingsPoints} className="fill-none stroke-success" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
         {days.map((d, i) => (
@@ -87,7 +128,7 @@ function WeeklyLineChart({ days }) {
       <div className="mt-2 flex flex-wrap items-center gap-4 font-sans text-xs text-fg-faint">
         <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-accent" /> Dials</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" /> Bookings</span>
-        <span>Independent scales — dials 0–{maxDials.toLocaleString()}, bookings 0–{maxBookings.toLocaleString()}</span>
+        <span>Independent scales — dials 0–{dialsAxisMax.toLocaleString()}, bookings 0–{bookingsAxisMax.toLocaleString()}</span>
       </div>
     </div>
   )
