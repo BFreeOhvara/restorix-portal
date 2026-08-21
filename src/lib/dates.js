@@ -40,6 +40,32 @@ export function shiftWeek(mondayStr, deltaWeeks) {
   return shiftDay(mondayStr, deltaWeeks * 7)
 }
 
+// Prompt 516 — whether a calendar date string falls on a weekday (Mon–Fri).
+// Same UTC calendar-string-arithmetic flavor as shiftDay/mondayOf above —
+// doesn't care what zone the string came from, only that it was computed
+// correctly for the right zone to begin with.
+export function isWeekday(dateStr) {
+  const day = new Date(`${dateStr}T00:00:00.000Z`).getUTCDay()
+  return day !== 0 && day !== 6
+}
+
+// The last `count` business days ending on (and including, if itself a
+// weekday) `dateStr`, ascending order — Stats' "Last 21 Days" heatmap
+// means 21 business days, not 21 calendar days (dialers aren't expected
+// to work weekends under the current model), so a Monday's cell no longer
+// sits three real days after the preceding Friday's on the calendar axis
+// while a Sat/Sun cell that never had any activity to show gets skipped
+// entirely instead of padding the grid with two guaranteed-empty squares.
+export function lastNBusinessDays(dateStr, count) {
+  const days = []
+  let cursor = dateStr
+  while (days.length < count) {
+    if (isWeekday(cursor)) days.unshift(cursor)
+    cursor = shiftDay(cursor, -1)
+  }
+  return days
+}
+
 // The UTC offset (minutes) of `timeZone` at the instant `date` represents.
 // Ported from ohvara-dashboard's lib/timezones.js.
 function getTimezoneOffsetMinutes(timeZone, date) {
