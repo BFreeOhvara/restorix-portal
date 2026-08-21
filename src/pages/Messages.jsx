@@ -4,43 +4,12 @@ import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useContacts, useMyMessages, useSendMessage, useMarkRead } from '../hooks/useMessages'
 import { Button } from '../components/ui/Button'
+import { Avatar } from '../components/ui/Avatar'
 
 function fmtTime(dt) {
   return new Date(dt).toLocaleString(undefined, {
     month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   })
-}
-
-function initials(name) {
-  return (name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('')
-}
-
-// Deterministic avatar tint by name, not random — same name always gets
-// the same color across a session and across reloads.
-//
-// Prompt 502: `bg-accent-deep` here relies on white text staying readable
-// against it — true in light mode (accent-deep is a dark navy), but
-// accent-deep intentionally flips to a LIGHT color in dark mode (see
-// index.css) since its dominant use elsewhere is text sitting on dark
-// cards, not a solid chip. White-on-light-lavender would be illegible, so
-// this one tint gets a `dark:` override pinned to the same dark navy the
-// light theme already uses — a fixed solid chip color independent of the
-// token's dark-mode text role, same fix pattern as Avatar.jsx's initials.
-const AVATAR_TINTS = ['bg-accent', 'bg-success', 'bg-warning', 'bg-danger', 'bg-accent-deep dark:!bg-[#24469e]']
-function avatarTint(name) {
-  const sum = [...(name || '')].reduce((s, c) => s + c.charCodeAt(0), 0)
-  return AVATAR_TINTS[sum % AVATAR_TINTS.length]
-}
-
-function Avatar({ name, size = 36 }) {
-  return (
-    <span
-      className={clsx('flex flex-shrink-0 items-center justify-center rounded-full font-sans font-semibold text-white', avatarTint(name))}
-      style={{ width: size, height: size, fontSize: size * 0.38 }}
-    >
-      {initials(name)}
-    </span>
-  )
 }
 
 function NewConversationPicker({ contacts, onPick, onClose }) {
@@ -62,7 +31,7 @@ function NewConversationPicker({ contacts, onPick, onClose }) {
               onClick={() => onPick(c)}
               className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-surface"
             >
-              <Avatar name={c.full_name} size={28} />
+              <Avatar profile={c} size={28} />
               <div className="min-w-0">
                 <p className="truncate font-sans text-sm font-medium text-fg-primary">{c.full_name}</p>
                 <p className="eyebrow !text-fg-faint">{c.role}</p>
@@ -161,7 +130,7 @@ export default function Messages() {
                     selectedId === c.otherId && 'bg-surface'
                   )}
                 >
-                  <Avatar name={contact?.full_name} />
+                  <Avatar profile={contact} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate font-sans text-sm font-medium text-fg-primary">
@@ -194,7 +163,7 @@ export default function Messages() {
         ) : (
           <>
             <div className="flex items-center gap-2.5 border-b border-line p-3">
-              <Avatar name={activeContact?.full_name} size={30} />
+              <Avatar profile={activeContact} size={30} />
               <div>
                 <p className="font-sans text-sm font-medium text-fg-primary">{activeContact?.full_name}</p>
                 <p className="eyebrow !text-fg-faint">{activeContact?.role}</p>

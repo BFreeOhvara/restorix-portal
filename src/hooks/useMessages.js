@@ -21,7 +21,7 @@ export function useContacts(myRole) {
       if (!roles.length) return []
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, role')
+        .select('id, full_name, role, avatar_url, avatar_color')
         .in('role', roles)
         .order('full_name')
       if (error) throw error
