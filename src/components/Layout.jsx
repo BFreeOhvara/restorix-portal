@@ -230,10 +230,11 @@ export default function Layout() {
             restorix-marketing's own Nav.jsx icon+wordmark convention
             (Prompt 498: gap-2.5, h-8 w-auto — not h-8 w-8, since the
             source PNG isn't perfectly square and a fixed square box would
-            silently squish it). Deliberately a different, violet-recolored
-            asset from the marketing site's blue one — Brayden's own
-            explicit choice to keep the portal visually distinct, not an
-            inconsistency. */}
+            silently squish it). Prompt 503 shipped a violet-recolored
+            variant to keep the portal visually distinct from the
+            marketing site's icon; Prompt 504 dropped that idea and
+            reverted `logo-icon.png` back to the original teal/mint asset
+            both sites now share again — same file, not a new one. */}
         <div className="flex h-16 items-center gap-2.5 px-5">
           <img src="/logo-icon.png" alt="" className="h-8 w-auto" />
           <span className="font-display text-lg font-semibold tracking-tight text-fg-primary">Restorix Portal</span>
