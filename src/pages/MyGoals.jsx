@@ -21,6 +21,15 @@ const PERIODS = {
   monthly: { label: 'Monthly', noun: 'This Month', callsTarget: 3255, bookedTarget: 43 },
 }
 
+// Prompt 517 — named constant (was an inline array literal inside
+// SpecialSection's own JSX call) so its `.length` can feed the X/26
+// earned-count total below without a second hardcoded "2" drifting out
+// of sync with the actual row.
+const SPECIAL_BADGES = [
+  { key: 'backToBack', icon: Flame, label: 'Back-to-Back', title: '2 bookings in a row, no other outcome logged in between' },
+  { key: 'hatTrick', icon: Trophy, label: 'Hat Trick', title: '3 bookings in the same day' },
+]
+
 // Prompt 458: "today"/"this week"/"this month" now follow the viewing
 // user's own saved timezone instead of the UTC calendar day — daily/
 // weekly/monthly all resolve to real instant bounds via zonedDayRange
@@ -148,6 +157,23 @@ export default function MyGoals() {
     return totalCommission(commissionLeads.filter((l) => l.last_action_by === profile.id))
   }, [commissionLeads, profile?.id])
 
+  // Prompt 517 — X/26 earned-count next to the Badges heading. Driven by
+  // the exact same tier arrays and threshold logic (`tieredProgress`) the
+  // rows below already render from, plus SPECIAL_BADGES' own length for
+  // the two non-tiered badges — nothing here is a separately-hardcoded
+  // "26," so it can't silently drift if a tier list or SPECIAL_BADGES
+  // ever changes size.
+  const badgeTotals = useMemo(() => {
+    const tieredEarned =
+      tieredProgress(badgeProgress.dials, DIAL_TIERS).earned.length +
+      tieredProgress(badgeProgress.bookings, BOOKING_TIERS).earned.length +
+      tieredProgress(badgeProgress.perfectDays, PERFECT_DAY_TIERS).earned.length +
+      tieredProgress(myCommission, COMMISSION_TIERS).earned.length
+    const specialEarned = SPECIAL_BADGES.filter((b) => badgeProgress[b.key]).length
+    const total = DIAL_TIERS.length + BOOKING_TIERS.length + PERFECT_DAY_TIERS.length + COMMISSION_TIERS.length + SPECIAL_BADGES.length
+    return { earned: tieredEarned + specialEarned, total }
+  }, [badgeProgress, myCommission])
+
   const target = PERIODS[period]
   const isPerfectDay = period === 'daily' && periodStats.logged >= target.callsTarget && periodStats.booked >= target.bookedTarget
 
@@ -189,7 +215,10 @@ export default function MyGoals() {
             <ProgressTile label={`Booked ${target.noun}`} value={periodStats.booked} target={target.bookedTarget} />
           </div>
 
-          <p className="mt-6 eyebrow">Badges — all-time, not affected by the toggle above</p>
+          <div className="mt-6 flex items-baseline justify-between gap-3">
+            <p className="eyebrow">Badges — all-time, not affected by the toggle above</p>
+            <p className="font-sans text-sm font-semibold text-accent">{badgeTotals.earned}/{badgeTotals.total}</p>
+          </div>
 
           <div className="mt-3 rounded-card border border-line bg-elevated px-5">
             <BadgeSection icon={PhoneCall} title="Dials" value={badgeProgress.dials} thresholds={DIAL_TIERS} first />
@@ -210,10 +239,7 @@ export default function MyGoals() {
               format={(n) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
             />
             <SpecialSection
-              items={[
-                { icon: Flame, label: 'Back-to-Back', unlocked: badgeProgress.backToBack, title: '2 bookings in a row, no other outcome logged in between' },
-                { icon: Trophy, label: 'Hat Trick', unlocked: badgeProgress.hatTrick, title: '3 bookings in the same day' },
-              ]}
+              items={SPECIAL_BADGES.map((b) => ({ ...b, unlocked: badgeProgress[b.key] }))}
             />
           </div>
 
