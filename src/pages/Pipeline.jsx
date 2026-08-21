@@ -6,6 +6,7 @@ import {
   usePipelineSetterLeads,
   usePipelineSetterStatusCounts,
   usePipelineCloserLeads,
+  usePipelineNotInterestedLeads,
 } from '../hooks/useLeads'
 import { useReps } from '../hooks/useStats'
 import { Button } from '../components/ui/Button'
@@ -25,7 +26,10 @@ function fmt(dt) {
 
 const OUTCOME_FILTERS = ['all', 'pending', 'needs_reschedule', 'lost', 'closed']
 // Prompt 465 — Brayden's explicit ordering for the new Setter-tab chips.
-const SETTER_STATUS_FILTERS = ['all', 'new', 'no_answer', 'follow_up', 'not_interested']
+// Prompt 515 Part 3: 'not_interested' moved to its own dedicated tab
+// (NotInterestedTab below) — that status's assigned_setter is null by
+// design, so this assigned_setter-scoped tab could never show it anyway.
+const SETTER_STATUS_FILTERS = ['all', 'new', 'no_answer', 'follow_up']
 
 // Prompt 465 — the raw backlog still sitting in the pool before
 // assign_setter_batches()'s 15-min cron distributes it into an actual
@@ -295,13 +299,76 @@ function CloserTab() {
   )
 }
 
+// Prompt 515 Part 3 — every setter's Not Interested leads, admin-visible
+// for tracking (per the design doc: terminal state, no automatic
+// recycling). `assigned_setter` is null for this status by design (same
+// as before Part 2), so this reads `last_action_by` instead — same shape
+// as `CloserTab` above, not `SetterTab`'s assigned_setter-based query,
+// which would always return zero rows for this status.
+function NotInterestedTab() {
+  const { data: leads, isLoading } = usePipelineNotInterestedLeads()
+  const { data: reps } = useReps()
+
+  const setterNames = useMemo(() => {
+    const map = new Map()
+    ;(reps || []).forEach((r) => map.set(r.id, r.full_name))
+    return map
+  }, [reps])
+
+  return (
+    <div>
+      <p className="font-sans text-sm text-fg-secondary">
+        {leads?.length ?? 0} not-interested lead{leads?.length === 1 ? '' : 's'}
+      </p>
+
+      <div className="mt-4 overflow-hidden rounded-card border border-line bg-elevated">
+        {isLoading ? (
+          <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
+        ) : !leads?.length ? (
+          <p className="p-8 text-center font-sans text-sm text-fg-secondary">No not-interested leads yet.</p>
+        ) : (
+          <table className="w-full text-left">
+            <thead className="eyebrow bg-surface">
+              <tr>
+                <th className="px-5 py-3">Facility</th>
+                <th className="px-5 py-3">Contact</th>
+                <th className="px-5 py-3">Phone</th>
+                <th className="px-5 py-3">Logged By</th>
+                <th className="px-5 py-3">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leads.map((lead) => (
+                <tr key={lead.id} className="border-t border-line font-sans text-sm">
+                  <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
+                  <td className="px-5 py-4 text-fg-secondary">{lead.contact_name || '—'}</td>
+                  <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
+                  <td className="px-5 py-4 text-fg-secondary">
+                    {lead.last_action_by ? setterNames.get(lead.last_action_by) || '—' : '—'}
+                  </td>
+                  <td className="px-5 py-4 text-fg-secondary">{fmt(lead.last_action_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // Prompt 465 — Unassigned/Setter/Closer, Brayden's explicit ordering. The
 // three tabs partition the full lead pool: Unassigned + Setter together
 // cover every New-and-not-yet-booked lead (split on assigned_setter),
 // Closer covers everything Appointment Booked.
+// Prompt 515 Part 3 — added Not Interested as a 4th tab: that status's
+// `assigned_setter` is null by design, so it structurally can't live
+// inside the Setter tab's assigned_setter-based query (same reasoning as
+// Closer already not living there).
 const TABS = [
   { key: 'unassigned', label: 'Unassigned' },
   { key: 'setter', label: 'Setter' },
+  { key: 'not_interested', label: 'Not Interested' },
   { key: 'closer', label: 'Closer' },
 ]
 
@@ -328,7 +395,10 @@ export default function Pipeline() {
       </div>
 
       <div className="mt-6">
-        {tab === 'unassigned' ? <UnassignedTab /> : tab === 'setter' ? <SetterTab /> : <CloserTab />}
+        {tab === 'unassigned' ? <UnassignedTab />
+          : tab === 'setter' ? <SetterTab />
+          : tab === 'not_interested' ? <NotInterestedTab />
+          : <CloserTab />}
       </div>
     </div>
   )

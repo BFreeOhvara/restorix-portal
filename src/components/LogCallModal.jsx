@@ -216,6 +216,15 @@ export default function LogCallModal({ lead, onClose }) {
     if (callRowId && sid) updateCall.mutate({ id: callRowId, patch: { twilio_call_sid: sid } })
   }
 
+  // Prompt 515 Part 3 — was an unguarded `await ... mutateAsync(...)` with no
+  // try/catch: a failed save (any cause — RLS, a network blip, a future
+  // constraint violation) threw past `onClose()`, so the modal just sat
+  // there looking stuck with nothing telling the setter it didn't save.
+  // Found this live: a real pre-existing `follow_up_queue` RLS gap
+  // (`handle_lead_pipeline` isn't SECURITY DEFINER, unlike every other
+  // pipeline function — flagged separately for a DDL fix) currently makes
+  // every Follow-up save fail this exact way. This fix doesn't touch that
+  // root cause, but no save should ever fail silently regardless of cause.
   async function handleSubmit(e) {
     e.preventDefault()
     if (!outcome) return
@@ -224,7 +233,11 @@ export default function LogCallModal({ lead, onClose }) {
     if (outcome === 'follow_up') patch.follow_up_at = new Date(when).toISOString()
     if (outcome === 'appointment_booked') patch.strategy_call_at = new Date(when).toISOString()
 
-    await logCall.mutateAsync({ id: lead.id, ...patch })
+    try {
+      await logCall.mutateAsync({ id: lead.id, ...patch })
+    } catch {
+      return
+    }
 
     if (callRowId) {
       const duration_seconds = attemptedAtRef.current
@@ -296,6 +309,12 @@ export default function LogCallModal({ lead, onClose }) {
             placeholder="What happened on the call…"
           />
         </Field>
+
+        {logCall.isError && (
+          <p className="font-sans text-sm text-danger">
+            Couldn't save: {logCall.error?.message || 'something went wrong. Try again.'}
+          </p>
+        )}
 
         <div className="flex justify-end gap-3 pt-2">
           <Button type="button" variant="ghost" onClick={onClose}>

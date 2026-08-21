@@ -18,7 +18,9 @@ export function useLeads(statusFilter) {
 }
 
 // Prompt 465: leads still sitting in the raw backlog, not yet distributed
-// into a setter's working queue by assign_setter_batches()'s 15-min cron.
+// into a setter's working queue. (Distribution is now the day-end
+// rotation, Prompt 515 Part 2 — was assign_setter_batches()'s continuous
+// 15-min cron, since unscheduled in favor of a bounded-day refill.)
 // Partitions the New-and-not-yet-booked population against
 // usePipelineSetterLeads below — assigned_setter IS NULL here, IS NOT NULL
 // there — so the two tabs never overlap.
@@ -39,7 +41,11 @@ export function usePipelineUnassignedLeads() {
   })
 }
 
-const SETTER_LEAD_STATUSES = ['new', 'no_answer', 'follow_up', 'not_interested']
+// Prompt 515 Part 3: 'not_interested' dropped from this list — that
+// status's `assigned_setter` is null by design, so a chip driven by this
+// assigned_setter-based count query could only ever show 0. It now has
+// its own dedicated admin tab (usePipelineNotInterestedLeads, Pipeline.jsx).
+const SETTER_LEAD_STATUSES = ['new', 'no_answer', 'follow_up']
 
 // Prompt 464: admin Pipeline's Setter tab — a real server-side filter
 // excluding Appointment Booked (verified via direct query, not a client-side
@@ -232,8 +238,121 @@ export function useLogCall() {
   })
 }
 
-// A setter's active working pool — leads currently assigned to them
-// (capped at 150, maintained by the assign_setter_batches cron job).
+// Prompt 515 Part 3 — a setter's own Follow-up leads, split into `due`
+// (today or overdue) vs `future` (not yet due). Deliberately reads from
+// `leads`, NOT `follow_up_queue` — `follow_up_queue`'s only SELECT policy
+// is admin-only (`follow_up_queue_select_admin`), so a setter querying it
+// directly gets silently RLS-filtered to zero rows. This is the exact same
+// landmine Prompt 440/441 already hit and worked around the same way: the
+// frozen `last_action_by`/`follow_up_at` stamps on `leads` itself are the
+// reliable source, and `leads_select_all` is already open to any
+// authenticated user. A follow-up lead's `assigned_setter` stays null
+// (Part 2's design — see [[Prompt 515 — Lead Rotation Redesign (Blocked,
+// SQL Ready)]]) whether due or not; "due" is purely `follow_up_at`'s date,
+// in the setter's own timezone, compared against today, computed live here
+// rather than stored.
+export function useMyFollowUps(setterId, timezone) {
+  return useQuery({
+    queryKey: ['my-follow-ups', setterId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('status', 'follow_up')
+        .eq('last_action_by', setterId)
+        .order('follow_up_at', { ascending: true })
+      if (error) throw error
+      const today = zonedDateStr(Date.now(), timezone)
+      const due = []
+      const future = []
+      for (const lead of data) {
+        const leadDay = zonedDateStr(new Date(lead.follow_up_at).getTime(), timezone)
+        ;(leadDay <= today ? due : future).push(lead)
+      }
+      return { due, future }
+    },
+    enabled: !!setterId,
+    refetchInterval: 15000,
+  })
+}
+
+// Prompt 515 Part 3 — a setter's own Not Interested leads. `assigned_setter`
+// is null for this terminal state (unchanged from before Part 2), so this
+// reads from `last_action_by` instead — same reasoning as useMyFollowUps
+// above, though this one was never actually RLS-blocked (leads_select_all
+// covers it); it's `assigned_setter` being null, not RLS, that rules out
+// the useMyPool shape here.
+export function useMyNotInterested(setterId) {
+  return useQuery({
+    queryKey: ['my-not-interested', setterId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('status', 'not_interested')
+        .eq('last_action_by', setterId)
+        .order('last_action_at', { ascending: false })
+      if (error) throw error
+      return data
+    },
+    enabled: !!setterId,
+    refetchInterval: 15000,
+  })
+}
+
+// Admin Pipeline's Not Interested tab — every setter's terminal leads at
+// once, same shape as usePipelineCloserLeads (no assigned_setter filter,
+// since it's null for this status by design).
+export function usePipelineNotInterestedLeads() {
+  return useQuery({
+    queryKey: ['pipeline-not-interested-leads'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('status', 'not_interested')
+        .order('last_action_at', { ascending: false })
+      if (error) throw error
+      return data
+    },
+    refetchInterval: 15000,
+  })
+}
+
+// Prompt 515 Part 3 — the setter-initiated half of day-end rotation
+// ("Finish Day" button, shown once the New tab hits zero). Calls the same
+// `run_setter_day_end` RPC path as the passive `process-setter-day-ends`
+// cron ultimately does (both bottom out in `_do_setter_day_end`, which is
+// idempotent per local calendar day) — see the linked design doc for why
+// that's "the same rotation logic," not two paths that happen to agree.
+export function useFinishDay() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('run_setter_day_end')
+      if (error) throw error
+      return data?.[0] ?? { no_answer_rolled: 0, refilled: 0 }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-pool'] })
+      queryClient.invalidateQueries({ queryKey: ['my-follow-ups'] })
+      queryClient.invalidateQueries({ queryKey: ['my-not-interested'] })
+      queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-setter-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-setter-status-counts'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-health'] })
+    },
+  })
+}
+
+// A setter's active working pool — leads currently assigned to them (New
+// and, since Prompt 515 Part 2, No Answer too — those now stay assigned
+// until day-end instead of vanishing the instant they're logged). Capped
+// at 150 New+Follow-Up-Due, refilled by the day-end rotation
+// (`process-setter-day-ends` cron / the Finish Day button) rather than the
+// old continuous `assign_setter_batches` 15-min cron, which Part 2
+// unscheduled in favor of this bounded-day model.
 export function useMyPool(setterId) {
   return useQuery({
     queryKey: ['my-pool', setterId],

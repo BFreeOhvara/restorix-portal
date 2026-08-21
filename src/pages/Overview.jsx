@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react'
-import { Phone, Search, ClipboardEdit } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Phone, Search, ClipboardEdit, CheckCircle2 } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
-import { useMyPool, useMyBooked, usePipelineHealth } from '../hooks/useLeads'
+import { useMyPool, useMyBooked, useMyFollowUps, useMyNotInterested, useFinishDay, usePipelineHealth } from '../hooks/useLeads'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, followUpsDueToday } from '../hooks/useStats'
-import StatusBadge, { STATUS_LABELS, STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
+import StatusBadge, { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
 import OutcomeBadge, { OUTCOME_LABELS } from '../components/ui/OutcomeBadge'
 import { LiveClock } from '../components/ui/LiveClock'
+import { Button } from '../components/ui/Button'
 import LogCallModal from '../components/LogCallModal'
 import CloserLeadModal from '../components/CloserLeadModal'
 import { zonedDateStr, zonedDayRange } from '../lib/dates'
@@ -71,39 +72,111 @@ function TodayStrip({ profile }) {
   )
 }
 
-const STATUS_TABS = ['new', 'no_answer', 'follow_up', 'not_interested', 'appointment_booked']
+// Prompt 515 Part 3 — New → Follow-Up Due → No Answer → Follow-up →
+// Not Interested → Appointment Booked, Brayden's own explicit tab order.
+// `key` is what drives state/counts/data-source lookup below; `styleKey`
+// is which STATUS_TINT/STATUS_SOLID entry to render with —
+// Follow-Up Due has no real `lead_status` enum value of its own (see the
+// design doc: it's a live date-comparison over ordinary 'follow_up' rows,
+// not a stored state), so it deliberately borrows 'follow_up''s existing
+// yellow styling rather than inventing a new color for what's really the
+// same underlying status viewed two different ways.
+const STATUS_TABS = [
+  { key: 'new', label: 'New', styleKey: 'new' },
+  { key: 'follow_up_due', label: 'Follow-Up Due', styleKey: 'follow_up' },
+  { key: 'no_answer', label: 'No Answer', styleKey: 'no_answer' },
+  { key: 'follow_up', label: 'Follow-up', styleKey: 'follow_up' },
+  { key: 'not_interested', label: 'Not Interested', styleKey: 'not_interested' },
+  { key: 'appointment_booked', label: 'Appointment Booked', styleKey: 'appointment_booked' },
+]
+
+// Prompt 515 Part 3 — the "Finish Day" action, shown once the New tab
+// hits zero (lets a fast setter skip waiting for local midnight; see the
+// design doc for why this and the passive cron produce identical state).
+function FinishDayCard() {
+  const finishDay = useFinishDay()
+  const [result, setResult] = useState(null)
+
+  async function handleClick() {
+    setResult(null)
+    const res = await finishDay.mutateAsync()
+    setResult(res)
+  }
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-3 rounded-card border border-success/30 bg-success/10 px-4 py-3">
+      <CheckCircle2 size={18} className="text-success" />
+      <p className="flex-1 font-sans text-sm font-medium text-success">
+        New leads all worked — finish today's day now instead of waiting for midnight.
+      </p>
+      <Button type="button" onClick={handleClick} disabled={finishDay.isPending}>
+        {finishDay.isPending ? 'Finishing…' : 'Finish Day'}
+      </Button>
+      {result && (
+        <span className="w-full font-sans text-xs text-fg-secondary">
+          {result.no_answer_rolled} no-answer{result.no_answer_rolled === 1 ? '' : 's'} moved to 24h hold ·{' '}
+          {result.refilled} new lead{result.refilled === 1 ? '' : 's'} pulled in for tomorrow.
+        </span>
+      )}
+    </div>
+  )
+}
 
 // Prompt 509: exported so MyLeads.jsx (closer self-dial) can reuse this
 // exact component rather than duplicating it — `useMyPool(profile.id)`
 // is already generic on `assigned_setter`, so this works verbatim for a
 // closer's own id, no changes needed here at all.
+// Prompt 515 Part 3: a closer never sees Follow-Up Due/Follow-up/Not
+// Interested rows in practice (a closer's own leads never pass through
+// setter-side follow-up/not-interested logging), so merging the three
+// data sources here doesn't add anything closer-facing MyPipeline.jsx
+// needs to special-case — useMyFollowUps/useMyNotInterested just return
+// empty for a closer id and those tabs never show a nonzero count.
 export function SetterOverview({ profile, title = 'Overview' }) {
-  const { data: leads, isLoading } = useMyPool(profile.id)
+  const { data: pool, isLoading: poolLoading } = useMyPool(profile.id)
+  const tz = profile.timezone || DEFAULT_TIMEZONE
+  const { data: followUps, isLoading: followUpsLoading } = useMyFollowUps(profile.id, tz)
+  const { data: notInterested, isLoading: notInterestedLoading } = useMyNotInterested(profile.id)
   const [callLead, setCallLead] = useState(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('new')
-  const tz = profile.timezone || DEFAULT_TIMEZONE
+  const isLoading = poolLoading || followUpsLoading || notInterestedLoading
 
-  const filtered = useMemo(() => {
-    if (!leads) return []
-    const q = search.trim().toLowerCase()
-    return leads.filter((lead) => {
-      if (lead.status !== statusFilter) return false
-      if (!q) return true
-      return (
-        lead.facility_name?.toLowerCase().includes(q) ||
-        lead.contact_name?.toLowerCase().includes(q) ||
-        lead.phone?.toLowerCase().includes(q)
-      )
-    })
-  }, [leads, search, statusFilter])
+  const leadsByTab = useMemo(() => ({
+    new: (pool || []).filter((l) => l.status === 'new'),
+    no_answer: (pool || []).filter((l) => l.status === 'no_answer'),
+    appointment_booked: (pool || []).filter((l) => l.status === 'appointment_booked'),
+    follow_up_due: followUps?.due || [],
+    follow_up: followUps?.future || [],
+    not_interested: notInterested || [],
+  }), [pool, followUps, notInterested])
 
   const counts = useMemo(() => {
     const c = {}
-    for (const status of STATUS_TABS) c[status] = 0
-    for (const lead of leads || []) c[lead.status] = (c[lead.status] || 0) + 1
+    for (const tab of STATUS_TABS) c[tab.key] = leadsByTab[tab.key]?.length || 0
     return c
-  }, [leads])
+  }, [leadsByTab])
+
+  // Follow-Up Due only appears in the tab row on a day there's at least
+  // one due — if the tab is currently open and its last row just got
+  // worked down to zero, fall back to New rather than leaving the view
+  // stuck on a tab that's about to disappear.
+  useEffect(() => {
+    if (statusFilter === 'follow_up_due' && counts.follow_up_due === 0) setStatusFilter('new')
+  }, [statusFilter, counts.follow_up_due])
+
+  const visibleTabs = STATUS_TABS.filter((tab) => tab.key !== 'follow_up_due' || counts.follow_up_due > 0)
+
+  const filtered = useMemo(() => {
+    const active = leadsByTab[statusFilter] || []
+    const q = search.trim().toLowerCase()
+    if (!q) return active
+    return active.filter((lead) =>
+      lead.facility_name?.toLowerCase().includes(q) ||
+      lead.contact_name?.toLowerCase().includes(q) ||
+      lead.phone?.toLowerCase().includes(q)
+    )
+  }, [leadsByTab, search, statusFilter])
 
   return (
     <div>
@@ -111,13 +184,15 @@ export function SetterOverview({ profile, title = 'Overview' }) {
         <div>
           <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
           <p className="mt-1 font-sans text-sm text-fg-secondary">
-            {leads?.length ?? 0} lead{leads?.length === 1 ? '' : 's'} in your pool
+            {pool?.length ?? 0} lead{pool?.length === 1 ? '' : 's'} in your pool
           </p>
         </div>
         <DateClockRow timezone={tz} />
       </div>
 
       <TodayStrip profile={profile} />
+
+      {!isLoading && counts.new === 0 && <FinishDayCard />}
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[220px]">
@@ -133,16 +208,16 @@ export function SetterOverview({ profile, title = 'Overview' }) {
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {STATUS_TABS.map((status) => (
+        {visibleTabs.map((tab) => (
           <button
-            key={status}
-            onClick={() => setStatusFilter(status)}
+            key={tab.key}
+            onClick={() => setStatusFilter(tab.key)}
             className={clsx(
               'eyebrow rounded-full px-3.5 py-2 transition-colors hover:opacity-85',
-              statusFilter === status ? STATUS_SOLID[status] : STATUS_TINT[status]
+              statusFilter === tab.key ? STATUS_SOLID[tab.styleKey] : STATUS_TINT[tab.styleKey]
             )}
           >
-            {STATUS_LABELS[status]} ({counts[status] || 0})
+            {tab.label} ({counts[tab.key] || 0})
           </button>
         ))}
       </div>
@@ -155,9 +230,9 @@ export function SetterOverview({ profile, title = 'Overview' }) {
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
         ) : !filtered.length ? (
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">
-            {leads?.length
+            {leadsByTab[statusFilter]?.length
               ? 'No leads match this filter.'
-              : 'Your pool is empty right now — new leads are assigned automatically.'}
+              : 'Nothing here right now.'}
           </p>
         ) : (
           <div className="max-h-[65vh] overflow-y-auto">
@@ -167,6 +242,9 @@ export function SetterOverview({ profile, title = 'Overview' }) {
                   <th className="px-5 py-3">Business</th>
                   <th className="px-5 py-3">Phone</th>
                   <th className="px-5 py-3">Status</th>
+                  {(statusFilter === 'follow_up_due' || statusFilter === 'follow_up') && (
+                    <th className="px-5 py-3">Callback</th>
+                  )}
                   <th className="px-5 py-3"></th>
                 </tr>
               </thead>
@@ -182,6 +260,9 @@ export function SetterOverview({ profile, title = 'Overview' }) {
                     <td className="px-5 py-4">
                       <StatusBadge status={lead.status} />
                     </td>
+                    {(statusFilter === 'follow_up_due' || statusFilter === 'follow_up') && (
+                      <td className="px-5 py-4 text-fg-secondary">{fmt(lead.follow_up_at)}</td>
+                    )}
                     <td className="px-5 py-4">
                       <button
                         onClick={(e) => { e.stopPropagation(); setCallLead(lead) }}
