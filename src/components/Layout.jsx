@@ -226,7 +226,16 @@ export default function Layout() {
           device-pixel or two on some displays, which is what let it get
           dragged into page scroll on long pages (Prompt 441 bug). */}
       <aside className="fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-line bg-elevated">
-        <div className="flex h-16 items-center px-5">
+        {/* Prompt 503 — icon added next to the existing wordmark, matching
+            restorix-marketing's own Nav.jsx icon+wordmark convention
+            (Prompt 498: gap-2.5, h-8 w-auto — not h-8 w-8, since the
+            source PNG isn't perfectly square and a fixed square box would
+            silently squish it). Deliberately a different, violet-recolored
+            asset from the marketing site's blue one — Brayden's own
+            explicit choice to keep the portal visually distinct, not an
+            inconsistency. */}
+        <div className="flex h-16 items-center gap-2.5 px-5">
+          <img src="/logo-icon.png" alt="" className="h-8 w-auto" />
           <span className="font-display text-lg font-semibold tracking-tight text-fg-primary">Restorix Portal</span>
         </div>
 
