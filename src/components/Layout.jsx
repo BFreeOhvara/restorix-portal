@@ -25,14 +25,21 @@ const NAV_GROUPS = [
   {
     label: 'RESOURCES',
     items: [
-      { to: '/training', label: 'Training', icon: GraduationCap, roles: ['setter', 'admin', 'closer'] },
+      // Prompt 513 — admin's job is overseeing the operation, not doing
+      // setter/closer performance work, so Training/My Goals/Stats/My
+      // Calls (Brayden's own explicit list, not extended to anything he
+      // didn't name) drop out of admin's own sidebar here and below. The
+      // routes/pages themselves are untouched — setters and closers still
+      // see and use all of them exactly as before; this is nav visibility
+      // only, via the same roles-array gating every item already uses.
+      { to: '/training', label: 'Training', icon: GraduationCap, roles: ['setter', 'closer'] },
     ],
   },
   {
     label: 'PERFORMANCE',
     items: [
-      { to: '/goals', label: 'My Goals', icon: Target, roles: ['setter', 'admin'] },
-      { to: '/stats', label: 'Stats', icon: TrendingUp, roles: ['setter', 'admin', 'closer'] },
+      { to: '/goals', label: 'My Goals', icon: Target, roles: ['setter'] },
+      { to: '/stats', label: 'Stats', icon: TrendingUp, roles: ['setter', 'closer'] },
       { to: '/activity', label: 'Activity', icon: ActivityIcon, roles: ['setter'] },
       { to: '/setter-activity', label: 'Setter Activity', icon: Users2, roles: ['closer'] },
       { to: '/commissions', label: 'Commissions', icon: DollarSign, roles: ['setter', 'admin', 'closer'] },
@@ -46,7 +53,7 @@ const NAV_GROUPS = [
       // Prompt 474: setter-only label swap — "My Recordings" reads better
       // for a setter's own dial history, closer/admin keep "My Calls"
       // exactly as-is (same route, same data, label only).
-      { to: '/my-calls', label: 'My Calls', labelByRole: { setter: 'My Recordings' }, icon: PhoneCall, roles: ['setter', 'admin', 'closer'] },
+      { to: '/my-calls', label: 'My Calls', labelByRole: { setter: 'My Recordings' }, icon: PhoneCall, roles: ['setter', 'closer'] },
       // Prompt 469 — live-call talk-track tool, closer's own working
       // tool same as My Calls is the setter's, so it lives in WORK too.
       { to: '/survey', label: 'Closer Survey', icon: ListChecks, roles: ['closer', 'admin'] },
