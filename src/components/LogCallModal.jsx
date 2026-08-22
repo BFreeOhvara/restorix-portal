@@ -52,8 +52,50 @@ function fmtCallTime(total) {
 // on — so it deliberately is NOT given the stricter gate; see the
 // `onClick` on the tel: `<a>` below and Prompt 520's own CURRENT STATE
 // entry for the full reasoning, flagged rather than faked.
+//
+// Prompt 522 — Brayden found this gate could be WRONG: the browser-side
+// leg disconnected while his real phone call was still live, meaning
+// `call.on('disconnect')` had already fired (and Save had unlocked)
+// before the real call was actually over. Root-caused via the SDK's own
+// docs, not guessed: `maxCallSignalingTimeoutMs` — the option that
+// enables Signaling Reconnection (an SDK feature added specifically for
+// "the websocket blipped but the call itself is still bridging") —
+// defaults to `0` when omitted, which Twilio's own docs state plainly:
+// "the default value of 0 means signaling reconnection may not occur."
+// This Device was never passing that option, so a transient signaling
+// hiccup (common on a real home/mobile network, exactly Brayden's test
+// conditions) skipped straight to a hard client-side disconnect with no
+// recovery attempt — even though Twilio's servers don't necessarily tear
+// down the actual bridged call until that same window would have
+// elapsed, which is exactly why his phone stayed live after the
+// dashboard didn't. Fix: opt in with `maxCallSignalingTimeoutMs: 30000`
+// (Twilio's own documented max reconnection window) and add a real
+// `reconnecting`/`reconnected` state so a transient blip shows
+// "Reconnecting…" instead of either silently doing nothing or (as
+// before) misreporting itself as fully disconnected. `reconnecting` is
+// deliberately its own `callState`, distinct from `idle`/`error` — the
+// conclusion effect below only fires on those two, so a reconnect
+// attempt can never prematurely unlock Save.
 function CallSection({ lead, onAttempt, onCallSid, onCallConcluded }) {
-  const [deviceReady, setDeviceReady] = useState(false)
+  // Prompt 522 — was a single `deviceReady` boolean that started `false`
+  // and the render logic fell straight to the tel: fallback whenever it
+  // was still false, with zero distinction between "registration is
+  // still in flight" and "registration definitively will not happen."
+  // `device.register()` is async (a real WebSocket handshake) and this
+  // component mounts a brand-new Device from scratch on every single
+  // modal open — so a normal-speed registration that just hadn't
+  // finished yet by the time this rendered was indistinguishable from a
+  // real failure, and silently fell back to the zero-feedback tel: path.
+  // This is Brayden's own reported "first attempt fell back to tel:,
+  // very next attempt on the same page worked" — consistent with a pure
+  // timing race, not an actual intermittent failure. `deviceStatus`
+  // replaces the boolean with a real 3-state model: 'connecting' shows a
+  // real loading affordance instead of jumping to the degraded path,
+  // 'ready' is the old `deviceReady === true`, 'unavailable' is a
+  // genuine registration error OR an 8s timeout (so a hang can't leave
+  // the setter stuck on a spinner forever) — only 'unavailable' falls
+  // back to tel:.
+  const [deviceStatus, setDeviceStatus] = useState('connecting')
   const [callState, setCallState] = useState('idle')
   const [muted, setMuted] = useState(false)
   const [callSeconds, setCallSeconds] = useState(0)
@@ -64,9 +106,11 @@ function CallSection({ lead, onAttempt, onCallSid, onCallConcluded }) {
   // Fires exactly once per real call cycle, the instant it's genuinely
   // over — only after having actually reached 'connecting'/'in-call' at
   // least once, so the initial mount (idle) can't spuriously conclude a
-  // call that was never placed.
+  // call that was never placed. 'reconnecting' is deliberately excluded
+  // here (see the component-level comment above) — only a real 'idle'
+  // (clean disconnect/cancel) or 'error' concludes the call.
   useEffect(() => {
-    if (callState === 'connecting' || callState === 'in-call') hasConnectedRef.current = true
+    if (callState === 'connecting' || callState === 'in-call' || callState === 'reconnecting') hasConnectedRef.current = true
     if (hasConnectedRef.current && (callState === 'idle' || callState === 'error')) {
       onCallConcluded?.()
     }
@@ -75,27 +119,51 @@ function CallSection({ lead, onAttempt, onCallSid, onCallConcluded }) {
   useEffect(() => {
     let cancelled = false
     let device = null
+    let registrationTimeout = null
     async function init() {
       try {
         const { Device } = await import('@twilio/voice-sdk')
         const { data, error } = await supabase.functions.invoke('twilio-token')
-        if (error || !data?.token) return
+        if (error || !data?.token) {
+          if (!cancelled) setDeviceStatus('unavailable')
+          return
+        }
         if (cancelled) return
-        device = new Device(data.token, { codecPreferences: ['opus', 'pcmu'] })
-        device.on('registered', () => { if (!cancelled) setDeviceReady(true) })
+        // Prompt 522: `maxCallSignalingTimeoutMs` opts into Signaling
+        // Reconnection — without it (default 0), a transient websocket
+        // blip skips straight to a hard disconnect with no recovery
+        // attempt. 30000 is Twilio's own documented max reconnection
+        // window (docs.twilio.com/voice/sdks/javascript/edges).
+        device = new Device(data.token, { codecPreferences: ['opus', 'pcmu'], maxCallSignalingTimeoutMs: 30000 })
+        device.on('registered', () => {
+          if (cancelled) return
+          clearTimeout(registrationTimeout)
+          setDeviceStatus('ready')
+        })
         device.on('error', (e) => {
           console.error('[Twilio Device] error:', e?.message || e?.code || e)
-          if (!cancelled) setCallState((prev) => (prev !== 'idle' ? 'error' : prev))
+          if (cancelled) return
+          setCallState((prev) => (prev !== 'idle' ? 'error' : prev))
+          setDeviceStatus((prev) => (prev === 'ready' ? prev : 'unavailable'))
         })
         deviceRef.current = device
         device.register()
+        // A registration that never resolves (network issue that isn't a
+        // clean error, a misconfigured account, etc.) would otherwise
+        // leave `deviceStatus` at 'connecting' forever — fall back after
+        // a real timeout rather than spin indefinitely.
+        registrationTimeout = setTimeout(() => {
+          if (!cancelled) setDeviceStatus((prev) => (prev === 'connecting' ? 'unavailable' : prev))
+        }, 8000)
       } catch (e) {
         console.error('[twilio-token] failed:', e)
+        if (!cancelled) setDeviceStatus('unavailable')
       }
     }
     init()
     return () => {
       cancelled = true
+      clearTimeout(registrationTimeout)
       try { callRef.current?.disconnect() } catch { /* already gone */ }
       try { device?.destroy() } catch { /* already gone */ }
     }
@@ -124,6 +192,16 @@ function CallSection({ lead, onAttempt, onCallSid, onCallConcluded }) {
       call.on('disconnect', () => { callRef.current = null; setMuted(false); setCallState('idle') })
       call.on('cancel', () => { callRef.current = null; setCallState('idle') })
       call.on('error', (e) => { console.error('[Twilio call] error:', e?.message || e); callRef.current = null; setCallState('error') })
+      // Prompt 522: the actual fix — a lost signaling/media connection
+      // now shows as 'reconnecting' (SDK attempts real ICE/signaling
+      // recovery for up to 30s, per maxCallSignalingTimeoutMs above)
+      // instead of the SDK either doing nothing or (pre-fix) jumping
+      // straight to a misleading 'disconnect'.
+      call.on('reconnecting', (twilioError) => {
+        console.warn('[Twilio call] reconnecting:', twilioError?.message || twilioError)
+        setCallState('reconnecting')
+      })
+      call.on('reconnected', () => setCallState('in-call'))
     } catch (e) {
       console.error('[Twilio startCall] failed:', e?.message || e)
       setCallState('error')
@@ -170,6 +248,27 @@ function CallSection({ lead, onAttempt, onCallSid, onCallConcluded }) {
     )
   }
 
+  // Prompt 522 — a real, distinct state: the call isn't over, the SDK is
+  // actively trying to recover a lost signaling/media connection (up to
+  // 30s). Deliberately NOT treated as 'in-call' (the timer/mute/hangup
+  // panel would be misleading while audio may not be flowing) and NOT
+  // treated as concluded (see the conclusion effect above) — Hang Up
+  // stays available in case the setter wants to give up on the recovery
+  // attempt rather than wait it out.
+  if (callState === 'reconnecting') {
+    return (
+      <div className="space-y-2">
+        <div className="flex h-10 items-center justify-center gap-2 rounded-lg border border-line bg-muted font-sans text-sm font-medium text-fg-secondary">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-fg-faint" />
+          Reconnecting…
+        </div>
+        <Button type="button" variant="danger" className="w-full" onClick={hangUp}>
+          <PhoneOff size={14} /> Hang Up
+        </Button>
+      </div>
+    )
+  }
+
   if (callState === 'connecting') {
     return (
       <Button type="button" variant="secondary" className="w-full" disabled>
@@ -178,7 +277,15 @@ function CallSection({ lead, onAttempt, onCallSid, onCallConcluded }) {
     )
   }
 
-  if (deviceReady) {
+  if (deviceStatus === 'connecting') {
+    return (
+      <Button type="button" variant="secondary" className="w-full" disabled>
+        Connecting to dialer…
+      </Button>
+    )
+  }
+
+  if (deviceStatus === 'ready') {
     return (
       <div>
         <Button type="button" className="w-full" onClick={startCall}>
