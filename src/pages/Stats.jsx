@@ -81,56 +81,78 @@ function niceTicks(max, targetIntervals = 6) {
 }
 
 // Prompt 516 — grouped bar chart, one shared Y-axis for both series (was
-// two independent-scale lines, Prompt 450). Dials and bookings are
-// naturally very different magnitudes (e.g. 150 dials vs. 2 bookings/day)
-// so the bookings bar reads small next to the dials bar on a shared
-// axis — that's an accurate picture of the real ratio, not something to
-// rescale away. Axis max comes from `niceTicks` over both series at once
-// (not each series' own max) so there's exactly one scale to read.
+// two independent-scale lines, Prompt 450).
+//
+// Prompt 526 — Brayden confirmed live that the shared axis (Dials
+// 100-150, Bookings 0-3) makes Bookings visually unreadable: it's not a
+// bug in the axis math itself (Prompt 519 already verified `niceTicks`
+// is correct), it's the wrong visual encoding for two series this far
+// apart in magnitude. A bar needs real pixel height to register at all;
+// a line with dot markers doesn't, so a 0→2→1 trend across the week
+// stays legible even on a tiny axis. Dials stays a bar on the original
+// left/primary axis (0-150ish, unchanged); Bookings becomes a line+dots
+// on its own right/secondary axis scaled to Bookings' own real range —
+// two independent `niceTicks()` calls now, one per series, not one call
+// over both combined like before.
 function WeeklyBarChart({ days }) {
   const W = 600
   const H = 200
-  const padX = 34
+  const padXLeft = 34
+  const padXRight = 26
   const padY = 24
-  const maxVal = Math.max(1, ...days.map((d) => Math.max(d.dials, d.bookings)))
-  const ticks = niceTicks(maxVal)
-  const axisMax = ticks[ticks.length - 1] || 1
-  const yFor = (v) => H - padY - (v / axisMax) * (H - padY * 2)
-  const groupWidth = days.length > 0 ? (W - padX * 2) / days.length : 0
-  const groupPad = groupWidth * 0.18
-  const barGap = 3
-  const barWidth = Math.max(1, (groupWidth - groupPad * 2 - barGap) / 2)
+  const maxDials = Math.max(1, ...days.map((d) => d.dials))
+  const dialsTicks = niceTicks(maxDials)
+  const dialsAxisMax = dialsTicks[dialsTicks.length - 1] || 1
+  const yForDials = (v) => H - padY - (v / dialsAxisMax) * (H - padY * 2)
+  const maxBookings = Math.max(1, ...days.map((d) => d.bookings))
+  const bookingsTicks = niceTicks(maxBookings, 4)
+  const bookingsAxisMax = bookingsTicks[bookingsTicks.length - 1] || 1
+  const yForBookings = (v) => H - padY - (v / bookingsAxisMax) * (H - padY * 2)
+  const groupWidth = days.length > 0 ? (W - padXLeft - padXRight) / days.length : 0
+  const groupPad = groupWidth * 0.28
+  const barWidth = Math.max(1, groupWidth - groupPad * 2)
+  const points = days.map((d, i) => ({
+    x: padXLeft + i * groupWidth + groupWidth / 2,
+    y: yForBookings(d.bookings),
+  }))
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')
 
   return (
     <div>
       <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full">
-        {ticks.map((t) => (
-          <g key={`tick-${t}`}>
-            <line x1={padX} y1={yFor(t)} x2={W - padX} y2={yFor(t)} className="stroke-line" strokeWidth="1" opacity={t === 0 ? 1 : 0.5} />
-            <text x={padX - 6} y={yFor(t)} dy="3.5" textAnchor="end" fontSize="10" className="fill-fg-faint">{t}</text>
+        {/* Left axis (Dials) drives the gridlines — a second full set from
+            the right axis would draw non-aligned lines and read as noise. */}
+        {dialsTicks.map((t) => (
+          <g key={`dials-tick-${t}`}>
+            <line x1={padXLeft} y1={yForDials(t)} x2={W - padXRight} y2={yForDials(t)} className="stroke-line" strokeWidth="1" opacity={t === 0 ? 1 : 0.5} />
+            <text x={padXLeft - 6} y={yForDials(t)} dy="3.5" textAnchor="end" fontSize="10" className="fill-fg-faint">{t}</text>
           </g>
         ))}
+        {bookingsTicks.map((t) => (
+          <text key={`bookings-tick-${t}`} x={W - padXRight + 6} y={yForBookings(t)} dy="3.5" textAnchor="start" fontSize="10" className="fill-success">{t}</text>
+        ))}
         {days.map((d, i) => {
-          const groupX = padX + i * groupWidth
+          const groupX = padXLeft + i * groupWidth
           const dialsX = groupX + groupPad
-          const bookingsX = dialsX + barWidth + barGap
           return (
             <g key={d.date}>
-              <rect x={dialsX} y={yFor(d.dials)} width={barWidth} height={Math.max(0, H - padY - yFor(d.dials))} rx="2" className="fill-accent">
+              <rect x={dialsX} y={yForDials(d.dials)} width={barWidth} height={Math.max(0, H - padY - yForDials(d.dials))} rx="2" className="fill-accent">
                 <title>{d.label}: {d.dials} dials</title>
-              </rect>
-              <rect x={bookingsX} y={yFor(d.bookings)} width={barWidth} height={Math.max(0, H - padY - yFor(d.bookings))} rx="2" className="fill-success">
-                <title>{d.label}: {d.bookings} bookings</title>
               </rect>
               <text x={groupX + groupWidth / 2} y={H - 6} textAnchor="middle" fontSize="11" className="fill-fg-faint">{d.label}</text>
             </g>
           )
         })}
+        <path d={linePath} fill="none" className="stroke-success" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        {points.map((p, i) => (
+          <circle key={`booking-dot-${days[i].date}`} cx={p.x} cy={p.y} r="3.5" className="fill-success">
+            <title>{days[i].label}: {days[i].bookings} bookings</title>
+          </circle>
+        ))}
       </svg>
       <div className="mt-2 flex flex-wrap items-center gap-4 font-sans text-xs text-fg-faint">
-        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-accent" /> Dials</span>
-        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" /> Bookings</span>
-        <span>Shared scale — 0–{axisMax.toLocaleString()}</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-accent" /> Dials — 0–{dialsAxisMax.toLocaleString()} (left)</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" /> Bookings — 0–{bookingsAxisMax.toLocaleString()} (right)</span>
       </div>
     </div>
   )
