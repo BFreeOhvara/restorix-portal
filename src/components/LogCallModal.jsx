@@ -381,6 +381,26 @@ export default function LogCallModal({ lead, onClose }) {
   // might close the modal without ever picking an outcome.
   const [callRowId, setCallRowId] = useState(null)
   const attemptedAtRef = useRef(null)
+  // Prompt 525 — root cause of "My Recordings" showing "No recording" for
+  // real, successfully-connected calls: `handleCallSid` closed over
+  // `callRowId` state, but `call.on('accept', ...)` (which fires
+  // `onCallSid`) gets registered synchronously right after
+  // `device.connect()` resolves — essentially immediately after
+  // `onAttempt()` — while `createCall.mutate`'s INSERT round-trip that
+  // sets `callRowId` is still in flight. That closure captures whatever
+  // `callRowId` was at click time, which is always still `null` at that
+  // point, so the CallSid write silently no-op'd on every real call —
+  // invisible before Prompt 524's ICE fix, since calls almost never
+  // reached 'accept' at all. `twilio_call_sid` is exactly what the
+  // deployed `twilio-voice-webhook`'s recording-status-callback
+  // correlates a finished recording back to a `calls` row by (confirmed
+  // via the real deployed function source, not the stale local file) —
+  // with it never written, a recording Twilio genuinely captured could
+  // never be matched to the row that shows it. `callRowIdRef` plus a
+  // pending-SID buffer makes this correct regardless of which side of
+  // the race resolves first.
+  const callRowIdRef = useRef(null)
+  const pendingCallSidRef = useRef(null)
 
   function handleAttempt() {
     if (hasAttempted) return
@@ -388,12 +408,24 @@ export default function LogCallModal({ lead, onClose }) {
     attemptedAtRef.current = Date.now()
     createCall.mutate(
       { leadId: lead.id, setterId: profile.id },
-      { onSuccess: (row) => setCallRowId(row.id) }
+      { onSuccess: (row) => {
+          callRowIdRef.current = row.id
+          setCallRowId(row.id)
+          if (pendingCallSidRef.current) {
+            updateCall.mutate({ id: row.id, patch: { twilio_call_sid: pendingCallSidRef.current } })
+            pendingCallSidRef.current = null
+          }
+        } }
     )
   }
 
   function handleCallSid(sid) {
-    if (callRowId && sid) updateCall.mutate({ id: callRowId, patch: { twilio_call_sid: sid } })
+    if (!sid) return
+    if (callRowIdRef.current) {
+      updateCall.mutate({ id: callRowIdRef.current, patch: { twilio_call_sid: sid } })
+    } else {
+      pendingCallSidRef.current = sid
+    }
   }
 
   // Prompt 515 Part 3 — was an unguarded `await ... mutateAsync(...)` with no
