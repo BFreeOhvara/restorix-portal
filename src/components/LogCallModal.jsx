@@ -141,7 +141,12 @@ function CallSection({ lead, onAttempt, onCallSid, onCallConcluded }) {
           setDeviceStatus('ready')
         })
         device.on('error', (e) => {
-          console.error('[Twilio Device] error:', e?.message || e?.code || e)
+          // Prompt 523: log the numeric Twilio error code alongside the
+          // message — code alone (e.g. 53405 = Media.ConnectionError,
+          // the documented ICE/media-connection-failed class) is what
+          // actually distinguishes a signaling issue from a media/ICE
+          // issue; message text alone doesn't reliably do that.
+          console.error('[Twilio Device] error:', { code: e?.code, message: e?.message, causes: e?.causes, solutions: e?.solutions } , e)
           if (cancelled) return
           setCallState((prev) => (prev !== 'idle' ? 'error' : prev))
           setDeviceStatus((prev) => (prev === 'ready' ? prev : 'unavailable'))
@@ -191,7 +196,17 @@ function CallSection({ lead, onAttempt, onCallSid, onCallConcluded }) {
       })
       call.on('disconnect', () => { callRef.current = null; setMuted(false); setCallState('idle') })
       call.on('cancel', () => { callRef.current = null; setCallState('idle') })
-      call.on('error', (e) => { console.error('[Twilio call] error:', e?.message || e); callRef.current = null; setCallState('error') })
+      // Prompt 523: same reasoning as the Device-level handler above —
+      // capture `code` explicitly so a real repro's console output can
+      // confirm whether this is a 53405-range media/ICE failure (per
+      // Twilio's own @twilio/voice-errors data: 53=WebRTC, 4=Media,
+      // 5=ConnectionError, "Media connection failed") vs. a 31xxx
+      // signaling-class error, instead of guessing from message text.
+      call.on('error', (e) => {
+        console.error('[Twilio call] error:', { code: e?.code, message: e?.message, causes: e?.causes, solutions: e?.solutions }, e)
+        callRef.current = null
+        setCallState('error')
+      })
       // Prompt 522: the actual fix — a lost signaling/media connection
       // now shows as 'reconnecting' (SDK attempts real ICE/signaling
       // recovery for up to 30s, per maxCallSignalingTimeoutMs above)
