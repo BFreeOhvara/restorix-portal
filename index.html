@@ -7,6 +7,15 @@
     <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <!-- Prompt 528 — real PWA manifest so "Add to Home Screen" installs a
+         proper app icon (Android reads this; iOS uses apple-touch-icon
+         above instead). No service worker — that's a separate, larger
+         piece (offline caching strategy) this prompt didn't ask for; a
+         manual Add to Home Screen still produces a real icon+name from
+         this manifest alone, it just won't trigger Chrome's automatic
+         install-banner prompt without one. -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#3a63d6" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Restorix Portal</title>
   </head>

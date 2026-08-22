@@ -21,6 +21,7 @@ import Settings from './pages/Settings'
 import Survey from './pages/Survey'
 import MyLeads from './pages/MyLeads'
 import MyPipeline from './pages/MyPipeline'
+import BugReports from './pages/BugReports'
 
 const queryClient = new QueryClient()
 
@@ -132,6 +133,14 @@ export default function App() {
                         element={
                           <RoleRoute roles={['closer']}>
                             <MyPipeline />
+                          </RoleRoute>
+                        }
+                      />
+                      <Route
+                        path="/bug-reports"
+                        element={
+                          <RoleRoute roles={['admin']}>
+                            <BugReports />
                           </RoleRoute>
                         }
                       />

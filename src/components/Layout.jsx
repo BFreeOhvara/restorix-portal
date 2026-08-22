@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, ListChecks, UserPlus, GitBranch } from 'lucide-react'
+import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, ListChecks, UserPlus, GitBranch, Bug, Smartphone } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import ParticleField from './ui/ParticleField'
 import { Avatar } from './ui/Avatar'
+import BugReportModal from './BugReportModal'
+import AddToHomeScreenModal from './AddToHomeScreenModal'
 
 // Prompt 448: grouped into labeled sections (matching ohvara-dashboard's
 // Sidebar.jsx grouped-nav pattern) instead of one flat list. Bucket names
@@ -71,6 +73,9 @@ const NAV_GROUPS = [
     items: [
       { to: '/pipeline', label: 'Pipeline', icon: Workflow, roles: ['admin'] },
       { to: '/users', label: 'Users', icon: UsersIcon, roles: ['admin'] },
+      // Prompt 528 — the real destination the sidebar's Report a Bug
+      // button submits to.
+      { to: '/bug-reports', label: 'Bug Reports', icon: Bug, roles: ['admin'] },
     ],
   },
   // Prompt 456: reverses Prompt 454's headerless standalone block —
@@ -154,6 +159,32 @@ function NotificationBell() {
 // already carry correct dark values (Prompt 502), so the old per-theme
 // `dark:bg-[...]` overrides this button needed are gone too — genuinely
 // simpler code, not just a different color.
+// Prompt 528 — two small circular icon buttons above the account box,
+// visual concept pointed at from ohvara-dashboard's own floating
+// bug-report button (a circular icon button) but explicitly smaller and
+// sized to sit naturally in the sidebar. Unlike the header bell (which
+// only shows a circle on hover), these carry a persistent visible
+// border/background — that's the whole ask, "an actual circular
+// background/border around it." Bug button gets the app's `--danger`
+// token rather than a literal hardcoded red — same "something needs
+// attention" meaning, token-driven like everything else here, not a
+// one-off color; the phone/mobile button stays neutral like the bell.
+function SidebarIconButton({ icon: Icon, emoji, label, onClick, tone = 'neutral' }) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors ${
+        tone === 'danger'
+          ? 'border-danger/30 bg-danger/5 hover:bg-danger/10'
+          : 'border-line bg-surface text-fg-secondary hover:border-fg-primary/40 hover:text-fg-primary'
+      }`}
+    >
+      {emoji ? <span aria-hidden="true">{emoji}</span> : <Icon size={14} />}
+    </button>
+  )
+}
+
 function AccountPopover({ profile, onSignOut, onNavigate }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -236,6 +267,9 @@ export default function Layout() {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  // Prompt 528
+  const [showBugReport, setShowBugReport] = useState(false)
+  const [showAddToHome, setShowAddToHome] = useState(false)
   // Prompt 456: Messages is the one page that fills the full content area
   // edge-to-edge instead of sitting in the standard padded/max-width
   // container every other page uses — Brayden's explicit call, not a
@@ -282,8 +316,20 @@ export default function Layout() {
           })}
         </nav>
 
+        {/* Prompt 528 — stacked vertically, bug button closer to the
+            account box (bottom), phone/mobile button above it, per
+            Brayden's explicit ordering. Sits directly above the existing
+            divider line (drawn by AccountPopover's own border-t). */}
+        <div className="flex flex-col items-center gap-2 pb-3">
+          <SidebarIconButton icon={Smartphone} label="Add to Home Screen" onClick={() => setShowAddToHome(true)} />
+          <SidebarIconButton emoji="🐛" label="Report a Bug" tone="danger" onClick={() => setShowBugReport(true)} />
+        </div>
+
         <AccountPopover profile={profile} onSignOut={signOut} onNavigate={navigate} />
       </aside>
+
+      {showBugReport && <BugReportModal onClose={() => setShowBugReport(false)} />}
+      {showAddToHome && <AddToHomeScreenModal onClose={() => setShowAddToHome(false)} />}
 
       {/* Prompt 500 — dot-network background, mounted once here rather than
           per-page, since Layout persists across route changes (<Outlet/>
