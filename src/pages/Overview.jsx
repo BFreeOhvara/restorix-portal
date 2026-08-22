@@ -327,6 +327,7 @@ const CLOSER_OUTCOME_TILES = ['pending', 'needs_reschedule', 'lost', 'closed']
 export function CloserOverview({ profile, title = 'Overview' }) {
   const { data: leads, isLoading } = useMyBooked(profile.id)
   const [activeLead, setActiveLead] = useState(null)
+  const tz = profile.timezone || DEFAULT_TIMEZONE
 
   const counts = useMemo(() => {
     const c = {}
@@ -340,8 +341,13 @@ export function CloserOverview({ profile, title = 'Overview' }) {
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
-      <p className="mt-1 font-sans text-sm text-fg-secondary">{leads?.length ?? 0} booked leads</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
+          <p className="mt-1 font-sans text-sm text-fg-secondary">{leads?.length ?? 0} booked leads</p>
+        </div>
+        <DateClockRow timezone={tz} />
+      </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {CLOSER_OUTCOME_TILES.map((key) => (
