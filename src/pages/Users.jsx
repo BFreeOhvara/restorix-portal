@@ -18,6 +18,20 @@ function useUsers() {
   })
 }
 
+// Prompt 530 — Fork 3's admin-visible indicator: connected/not-connected
+// only, via the column grant that already blocks admin (or anyone) from
+// selecting the raw access_token/refresh_token columns at the DB level.
+function useZoomConnections() {
+  return useQuery({
+    queryKey: ['zoom-connections'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('closer_zoom_tokens').select('closer_id')
+      if (error) throw error
+      return new Set(data.map((r) => r.closer_id))
+    },
+  })
+}
+
 function CreateUserModal({ onClose }) {
   const [form, setForm] = useState({ username: '', full_name: '', password: '', role: 'setter' })
   const [error, setError] = useState('')
@@ -205,6 +219,7 @@ function PendingInvites() {
 
 export default function Users() {
   const { data: users, isLoading } = useUsers()
+  const { data: zoomConnections } = useZoomConnections()
   const [showCreate, setShowCreate] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
 
@@ -235,6 +250,7 @@ export default function Users() {
                 <th className="px-5 py-3">Username</th>
                 <th className="px-5 py-3">Role</th>
                 <th className="px-5 py-3">Status</th>
+                <th className="px-5 py-3">Zoom</th>
               </tr>
             </thead>
             <tbody>
@@ -247,6 +263,15 @@ export default function Users() {
                     <span className={`eyebrow ${u.is_active ? '!text-success' : '!text-danger'}`}>
                       {u.is_active ? 'Active' : 'Deactivated'}
                     </span>
+                  </td>
+                  <td className="px-5 py-4">
+                    {u.role === 'closer' ? (
+                      <span className={`eyebrow ${zoomConnections?.has(u.id) ? '!text-success' : '!text-fg-faint'}`}>
+                        {zoomConnections?.has(u.id) ? 'Connected' : 'Not connected'}
+                      </span>
+                    ) : (
+                      <span className="text-fg-faint">—</span>
+                    )}
                   </td>
                 </tr>
               ))}

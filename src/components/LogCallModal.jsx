@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Mic, MicOff, Phone, PhoneOff } from 'lucide-react'
+import { Mic, MicOff, Phone, PhoneOff, Video, Copy, CheckCircle2, Loader2, Clock } from 'lucide-react'
 import clsx from 'clsx'
 import Modal from './ui/Modal'
 import { Field, inputClass } from './ui/Field'
@@ -401,6 +401,11 @@ export default function LogCallModal({ lead, onClose }) {
   // the race resolves first.
   const callRowIdRef = useRef(null)
   const pendingCallSidRef = useRef(null)
+  // Prompt 530 — Appointment Booked creates a real Zoom meeting on save
+  // (per Prompt 529's confirmed design), not a manual follow-up step.
+  // 'idle' | 'creating' | 'done'; zoomResult is { join_url } | { pending: true } | { error }.
+  const [zoomState, setZoomState] = useState('idle')
+  const [zoomResult, setZoomResult] = useState(null)
 
   function handleAttempt() {
     if (hasAttempted) return
@@ -458,7 +463,35 @@ export default function LogCallModal({ lead, onClose }) {
       updateCall.mutate({ id: callRowId, patch: { outcome, duration_seconds } })
     }
 
+    // Prompt 530 — real external API call (Zoom), so this can't be
+    // instant; show a result screen instead of closing immediately so
+    // the setter actually sees the join link (or the "pending" state)
+    // before the modal goes away, matching Brayden's own "leave the call
+    // with something" framing from Prompt 529.
+    if (outcome === 'appointment_booked') {
+      setZoomState('creating')
+      try {
+        const { data, error } = await supabase.functions.invoke('create-zoom-meeting', {
+          body: { leadId: lead.id },
+        })
+        if (error) throw error
+        setZoomResult(data)
+      } catch (err) {
+        setZoomResult({ error: err.message || 'Something went wrong creating the Zoom meeting.' })
+      }
+      setZoomState('done')
+      return
+    }
+
     onClose()
+  }
+
+  if (zoomState !== 'idle') {
+    return (
+      <Modal title={`Log call — ${lead.facility_name}`} onClose={onClose} width="max-w-xl">
+        <ZoomResultView state={zoomState} result={zoomResult} onDone={onClose} />
+      </Modal>
+    )
   }
 
   return (
@@ -547,5 +580,65 @@ export default function LogCallModal({ lead, onClose }) {
         </div>
       </form>
     </Modal>
+  )
+}
+
+// Prompt 530 — shown after an Appointment Booked save while
+// create-zoom-meeting runs, then either the real join link (Brayden's
+// own "leave the call with something" framing from Prompt 529) or the
+// Fork-1 pending state if the closer hasn't connected Zoom yet.
+function ZoomResultView({ state, result, onDone }) {
+  const [copied, setCopied] = useState(false)
+
+  function copyLink() {
+    if (!result?.join_url) return
+    navigator.clipboard.writeText(result.join_url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="font-sans text-sm text-success">Outcome saved.</p>
+
+      {state === 'creating' && (
+        <div className="flex items-center gap-2 rounded-lg border border-line bg-surface px-4 py-3 font-sans text-sm text-fg-secondary">
+          <Loader2 size={16} className="animate-spin" />
+          Creating Zoom meeting…
+        </div>
+      )}
+
+      {state === 'done' && result?.join_url && (
+        <div className="rounded-lg border border-line bg-surface p-4">
+          <p className="flex items-center gap-2 font-sans text-sm font-semibold text-fg-primary">
+            <Video size={16} className="text-accent" /> Zoom meeting created
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <input readOnly className={inputClass('flex-1 truncate')} value={result.join_url} />
+            <Button type="button" variant="secondary" onClick={copyLink} className="!px-3">
+              {copied ? <CheckCircle2 size={15} /> : <Copy size={15} />}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {state === 'done' && result?.pending && (
+        <div className="flex items-start gap-2 rounded-lg border border-line bg-surface px-4 py-3 font-sans text-sm text-fg-secondary">
+          <Clock size={16} className="mt-0.5 flex-shrink-0 text-fg-faint" />
+          Zoom link pending — the assigned closer hasn't connected their Zoom account yet. The meeting will
+          be created automatically once they do.
+        </div>
+      )}
+
+      {state === 'done' && result?.error && (
+        <p className="font-sans text-sm text-danger">{result.error}</p>
+      )}
+
+      <div className="flex justify-end pt-2">
+        <Button type="button" onClick={onDone} disabled={state === 'creating'}>
+          Done
+        </Button>
+      </div>
+    </div>
   )
 }

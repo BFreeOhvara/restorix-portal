@@ -1,9 +1,11 @@
-import { useState } from 'react'
-import { Moon, Sun, SunMoon } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Moon, Sun, SunMoon, Video, CheckCircle2 } from 'lucide-react'
 import clsx from 'clsx'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
+import { useZoomConnection, useConnectZoom } from '../hooks/useZoom'
 import { Field, inputClass } from '../components/ui/Field'
 import { Button } from '../components/ui/Button'
 import { SELECTABLE_TIMEZONES, DEFAULT_TIMEZONE } from '../lib/timezones'
@@ -32,6 +34,84 @@ export default function Settings() {
       <div className="mt-6 rounded-card border border-line bg-elevated p-6">
         <ThemeForm />
       </div>
+
+      {profile.role === 'closer' && (
+        <div className="mt-6 rounded-card border border-line bg-elevated p-6">
+          <ZoomForm profile={profile} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Prompt 530 — per-closer Zoom OAuth connect, per Prompt 529's confirmed
+// design (each closer connects their own account, not a shared company
+// credential). Same per-setting-card pattern as TimezoneForm/ThemeForm.
+const ZOOM_STATUS_COPY = {
+  connected: { tone: 'success', text: 'Zoom connected.' },
+  denied: { tone: 'danger', text: 'Zoom connection was cancelled.' },
+  expired: { tone: 'danger', text: 'That connection link expired — try again.' },
+  error: { tone: 'danger', text: "Couldn't connect Zoom — try again, or ask an admin to check the setup." },
+}
+
+function ZoomForm({ profile }) {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { data: connection, isLoading, refetch } = useZoomConnection(profile.id)
+  const connectZoom = useConnectZoom()
+  const [error, setError] = useState('')
+
+  // The zoom-oauth-callback edge function redirects back here with
+  // ?zoom=connected/denied/expired/error — surface it once, then clear
+  // it from the URL so a refresh doesn't re-show a stale result.
+  const zoomStatus = searchParams.get('zoom')
+  useEffect(() => {
+    if (!zoomStatus) return
+    if (zoomStatus === 'connected') refetch()
+    const next = new URLSearchParams(searchParams)
+    next.delete('zoom')
+    setSearchParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoomStatus])
+
+  async function connect() {
+    setError('')
+    try {
+      const url = await connectZoom.mutateAsync()
+      window.location.href = url
+    } catch (e) {
+      setError(e.message || 'Could not start the Zoom connection')
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="font-sans text-sm font-semibold text-fg-primary">Zoom</p>
+        <p className="mt-1 font-sans text-xs text-fg-secondary">
+          Connect your own Zoom account so meetings for your booked appointments run under you as host.
+        </p>
+      </div>
+
+      {zoomStatus && ZOOM_STATUS_COPY[zoomStatus] && (
+        <p className={clsx('font-sans text-sm', ZOOM_STATUS_COPY[zoomStatus].tone === 'success' ? 'text-success' : 'text-danger')}>
+          {ZOOM_STATUS_COPY[zoomStatus].text}
+        </p>
+      )}
+
+      {isLoading ? (
+        <p className="font-sans text-sm text-fg-secondary">Checking…</p>
+      ) : connection ? (
+        <div className="flex items-center gap-2 font-sans text-sm text-success">
+          <CheckCircle2 size={16} />
+          Connected{connection.zoom_email ? ` as ${connection.zoom_email}` : ''}
+        </div>
+      ) : (
+        <Button type="button" onClick={connect} disabled={connectZoom.isPending}>
+          <Video size={15} />
+          {connectZoom.isPending ? 'Redirecting…' : 'Connect Zoom'}
+        </Button>
+      )}
+      {error && <p className="font-sans text-sm text-danger">{error}</p>}
     </div>
   )
 }
