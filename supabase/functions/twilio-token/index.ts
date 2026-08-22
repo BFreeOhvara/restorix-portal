@@ -120,7 +120,45 @@ Deno.serve(async (req) => {
     nowSeconds,
   })
 
-  return new Response(JSON.stringify({ token, identity: user.id }), {
+  // Prompt 524 — root cause of Prompt 523's "call failed" bug, confirmed
+  // from the Voice SDK's own source (@twilio/voice-sdk has no default
+  // rtcConfiguration/iceServers anywhere — device.ts's _defaultOptions
+  // has no such key, and PeerConnection just passes whatever
+  // rtcConfiguration it's given straight to `new RTCPeerConnection()`).
+  // With no STUN/TURN ever configured, the browser can only gather local
+  // host candidates, which can't traverse a real NAT to reach Twilio's
+  // remote media servers — exactly matching Brayden's captured evidence
+  // (repeated onicegatheringfailure retries, 53405 Media.ConnectionError).
+  // Fetch real ephemeral STUN/TURN credentials from Twilio's Network
+  // Traversal Service (same API Key already used above authenticates
+  // this too — Twilio API Keys work as Basic Auth for the whole REST
+  // API, docs.twilio.com/docs/iam/api-keys) and hand them to the client
+  // so it can actually configure the RTCPeerConnection. Best-effort: if
+  // this call fails for any reason, still return the voice token —
+  // that's the pre-existing behavior, not a new regression.
+  let iceServers = null
+  try {
+    const ntsResp = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Tokens.json`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + btoa(`${apiKeySid}:${apiKeySecret}`),
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      },
+    )
+    if (ntsResp.ok) {
+      const ntsData = await ntsResp.json()
+      iceServers = ntsData.ice_servers || null
+    } else {
+      console.error('[twilio-token] NTS token fetch failed:', ntsResp.status, await ntsResp.text())
+    }
+  } catch (e) {
+    console.error('[twilio-token] NTS token fetch threw:', e?.message || e)
+  }
+
+  return new Response(JSON.stringify({ token, identity: user.id, iceServers }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 })

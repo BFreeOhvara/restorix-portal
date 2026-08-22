@@ -102,6 +102,11 @@ function CallSection({ lead, onAttempt, onCallSid, onCallConcluded }) {
   const deviceRef = useRef(null)
   const callRef = useRef(null)
   const hasConnectedRef = useRef(false)
+  // Prompt 524 — real STUN/TURN credentials from twilio-token's new NTS
+  // fetch, needed at connect() time (see rtcConfiguration below) but
+  // only available from the async init() effect — a ref survives that
+  // gap without forcing a re-render.
+  const iceServersRef = useRef(null)
 
   // Fires exactly once per real call cycle, the instant it's genuinely
   // over — only after having actually reached 'connecting'/'in-call' at
@@ -129,6 +134,10 @@ function CallSection({ lead, onAttempt, onCallSid, onCallConcluded }) {
           return
         }
         if (cancelled) return
+        iceServersRef.current = Array.isArray(data.iceServers) && data.iceServers.length ? data.iceServers : null
+        if (!iceServersRef.current) {
+          console.warn('[twilio-token] no ICE servers returned — call will attempt host-only candidates, likely to fail on most real networks')
+        }
         // Prompt 522: `maxCallSignalingTimeoutMs` opts into Signaling
         // Reconnection — without it (default 0), a transient websocket
         // blip skips straight to a hard disconnect with no recovery
@@ -188,7 +197,13 @@ function CallSection({ lead, onAttempt, onCallSid, onCallConcluded }) {
     setCallSeconds(0)
     setCallState('connecting')
     try {
-      const call = await device.connect({ params: { To: lead.phone } })
+      // Prompt 524: rtcConfiguration is a per-connect() option, not a
+      // Device-constructor one (confirmed in the SDK's own device.ts —
+      // Call.Options.rtcConfiguration there reads from connect()'s own
+      // argument, never from the Device's own options) — has to be
+      // passed here, every call, not just once at Device construction.
+      const rtcConfiguration = iceServersRef.current ? { iceServers: iceServersRef.current } : undefined
+      const call = await device.connect({ params: { To: lead.phone }, rtcConfiguration })
       callRef.current = call
       call.on('accept', () => {
         setCallState('in-call')
