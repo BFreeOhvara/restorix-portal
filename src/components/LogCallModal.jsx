@@ -39,13 +39,38 @@ function fmtCallTime(total) {
 // after a real attempt). `onCallSid` (Prompt 447) reports the Twilio
 // CallSid once a real (non-tel:) call connects, so the calls row created
 // on attempt can be correlated to its recording later.
-function CallSection({ lead, onAttempt, onCallSid }) {
+// `onCallConcluded` (Prompt 520) reports the real moment a call is over —
+// via the Twilio Voice SDK's own `disconnect`/`cancel`/`error` events on
+// the live call object, not a timer. Investigated first, per the prompt's
+// own explicit instruction, before building anything: this component
+// already has a genuine live signal for the Twilio-Device path (the SDK
+// fires real WebRTC call-state events in the browser the instant the
+// underlying call actually ends — a stronger signal than a server
+// webhook round-trip would even be). The tel: fallback path (Twilio
+// Device never registered) has zero programmatic feedback once the OS
+// phone app takes over — no event, no polling target, nothing to gate
+// on — so it deliberately is NOT given the stricter gate; see the
+// `onClick` on the tel: `<a>` below and Prompt 520's own CURRENT STATE
+// entry for the full reasoning, flagged rather than faked.
+function CallSection({ lead, onAttempt, onCallSid, onCallConcluded }) {
   const [deviceReady, setDeviceReady] = useState(false)
   const [callState, setCallState] = useState('idle')
   const [muted, setMuted] = useState(false)
   const [callSeconds, setCallSeconds] = useState(0)
   const deviceRef = useRef(null)
   const callRef = useRef(null)
+  const hasConnectedRef = useRef(false)
+
+  // Fires exactly once per real call cycle, the instant it's genuinely
+  // over — only after having actually reached 'connecting'/'in-call' at
+  // least once, so the initial mount (idle) can't spuriously conclude a
+  // call that was never placed.
+  useEffect(() => {
+    if (callState === 'connecting' || callState === 'in-call') hasConnectedRef.current = true
+    if (hasConnectedRef.current && (callState === 'idle' || callState === 'error')) {
+      onCallConcluded?.()
+    }
+  }, [callState, onCallConcluded])
 
   useEffect(() => {
     let cancelled = false
@@ -171,7 +196,15 @@ function CallSection({ lead, onAttempt, onCallSid }) {
   return (
     <a
       href={telHref}
-      onClick={onAttempt}
+      // Prompt 520: the Twilio Device never registered, so this hands off
+      // to the OS's own phone app with zero way for the browser to know
+      // if or when that call ends — no event, nothing to poll. Genuinely
+      // no real signal exists here (confirmed by investigation, not
+      // assumed), so this path deliberately does NOT get the stricter
+      // Save gate other than what already existed (fires both callbacks
+      // together, same as before this prompt) rather than leaving Save
+      // permanently locked with nothing that could ever unlock it.
+      onClick={() => { onAttempt(); onCallConcluded?.() }}
       className="flex h-11 items-center justify-center gap-2 rounded-full bg-accent font-sans text-sm font-semibold text-white"
     >
       <Phone size={14} /> Call {lead.phone}
@@ -192,6 +225,16 @@ export default function LogCallModal({ lead, onClose }) {
   // gating would just brick the modal for a data-quality problem the setter
   // didn't cause.
   const [hasAttempted, setHasAttempted] = useState(!lead.phone)
+  // Prompt 520 — separate from `hasAttempted` above: that gate unlocks
+  // the OUTCOME buttons the instant a dial goes out (so a setter can
+  // pre-select a likely outcome and type notes live during the call,
+  // explicitly still wanted per this prompt's own preamble); this one
+  // gates SAVE specifically, and only unlocks once CallSection reports
+  // the call has actually ended (real Twilio Voice SDK call-state
+  // events — see CallSection's own comment for why, and why the tel:
+  // fallback path is deliberately exempted rather than permanently
+  // locking Save with no way to ever unlock it).
+  const [callConcluded, setCallConcluded] = useState(!lead.phone)
   const logCall = useLogCall()
   const createCall = useCreateCall()
   const updateCall = useUpdateCall()
@@ -252,7 +295,12 @@ export default function LogCallModal({ lead, onClose }) {
   return (
     <Modal title={`Log call — ${lead.facility_name}`} onClose={onClose} width="max-w-xl">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <CallSection lead={lead} onAttempt={handleAttempt} onCallSid={handleCallSid} />
+        <CallSection
+          lead={lead}
+          onAttempt={handleAttempt}
+          onCallSid={handleCallSid}
+          onCallConcluded={() => setCallConcluded(true)}
+        />
 
         <Field label="Outcome">
           {!hasAttempted && (
@@ -310,6 +358,10 @@ export default function LogCallModal({ lead, onClose }) {
           />
         </Field>
 
+        {outcome && !callConcluded && (
+          <p className="font-sans text-xs text-fg-faint">Save unlocks once the call actually ends.</p>
+        )}
+
         {logCall.isError && (
           <p className="font-sans text-sm text-danger">
             Couldn't save: {logCall.error?.message || 'something went wrong. Try again.'}
@@ -320,7 +372,7 @@ export default function LogCallModal({ lead, onClose }) {
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={!outcome || logCall.isPending}>
+          <Button type="submit" disabled={!outcome || !callConcluded || logCall.isPending}>
             {logCall.isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>

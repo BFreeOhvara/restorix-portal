@@ -167,6 +167,17 @@ export function SetterOverview({ profile, title = 'Overview' }) {
 
   const visibleTabs = STATUS_TABS.filter((tab) => tab.key !== 'follow_up_due' || counts.follow_up_due > 0)
 
+  // Prompt 520 — only New and Follow-Up Due are actionable from this
+  // table; the other four are informational (No Answer's own re-dial
+  // happens on its own schedule via day-end + redistribution, not a
+  // setter-initiated re-call here; Follow-up isn't due yet; Not
+  // Interested/Appointment Booked are terminal from the setter's side).
+  // Gates both the visible Call button AND the row's own click-to-open —
+  // hiding just the button while leaving the whole row clickable would
+  // still open LogCallModal and let a setter re-log an outcome from a
+  // tab that's supposed to be call-free.
+  const canCallFromTab = statusFilter === 'new' || statusFilter === 'follow_up_due'
+
   const filtered = useMemo(() => {
     const active = leadsByTab[statusFilter] || []
     const q = search.trim().toLowerCase()
@@ -245,15 +256,18 @@ export function SetterOverview({ profile, title = 'Overview' }) {
                   {(statusFilter === 'follow_up_due' || statusFilter === 'follow_up') && (
                     <th className="px-5 py-3">Callback</th>
                   )}
-                  <th className="px-5 py-3"></th>
+                  {canCallFromTab && <th className="px-5 py-3"></th>}
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((lead) => (
                   <tr
                     key={lead.id}
-                    onClick={() => setCallLead(lead)}
-                    className="cursor-pointer border-t border-line font-sans text-sm hover:bg-surface"
+                    onClick={canCallFromTab ? () => setCallLead(lead) : undefined}
+                    className={clsx(
+                      'border-t border-line font-sans text-sm',
+                      canCallFromTab && 'cursor-pointer hover:bg-surface'
+                    )}
                   >
                     <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
                     <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
@@ -263,17 +277,19 @@ export function SetterOverview({ profile, title = 'Overview' }) {
                     {(statusFilter === 'follow_up_due' || statusFilter === 'follow_up') && (
                       <td className="px-5 py-4 text-fg-secondary">{fmt(lead.follow_up_at)}</td>
                     )}
-                    <td className="px-5 py-4">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setCallLead(lead) }}
-                        className={clsx(
-                          'inline-flex items-center gap-2 rounded-full px-4 py-2 font-sans text-sm font-semibold transition-colors hover:opacity-90',
-                          STATUS_SOLID[lead.status] || STATUS_SOLID.new
-                        )}
-                      >
-                        <Phone size={15} /> Call
-                      </button>
-                    </td>
+                    {canCallFromTab && (
+                      <td className="px-5 py-4">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setCallLead(lead) }}
+                          className={clsx(
+                            'inline-flex items-center gap-2 rounded-full px-4 py-2 font-sans text-sm font-semibold transition-colors hover:opacity-90',
+                            STATUS_SOLID.new
+                          )}
+                        >
+                          <Phone size={15} /> Call
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

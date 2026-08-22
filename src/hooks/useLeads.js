@@ -226,14 +226,28 @@ export function useLogCall() {
     // audit. Traced by logging one real call through the actual modal
     // and watching the pool count update while the stats tile didn't,
     // confirmed the underlying write was correct via a hard reload.
+    //
+    // Prompt 520 — same class of gap, found investigating Brayden's own
+    // "New tab didn't decrement" report: this list was still missing
+    // 'my-follow-ups'/'my-not-interested'/'pipeline-not-interested-leads',
+    // added when Prompt 515 Part 3 introduced those three query keys. A
+    // controlled repro (log a real Follow-up outcome, check immediately,
+    // no reload) showed 'my-pool' itself invalidating and refetching
+    // correctly — New's own count wasn't reproducibly stuck — but any
+    // outcome landing a lead in Follow-Up-Due/Follow-up/Not-Interested
+    // would only reflect there once the unrelated 15s poll caught up,
+    // exactly Prompt 459's own pattern repeating on the 3 newer tabs.
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['my-pool'] })
       queryClient.invalidateQueries({ queryKey: ['my-booked'] })
+      queryClient.invalidateQueries({ queryKey: ['my-follow-ups'] })
+      queryClient.invalidateQueries({ queryKey: ['my-not-interested'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-leads'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-setter-leads'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-setter-status-counts'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-not-interested-leads'] })
     },
   })
 }
