@@ -19,7 +19,10 @@ export default {
           bright: 'rgb(var(--accent-bright-rgb) / <alpha-value>)',
           deep: 'rgb(var(--accent-deep-rgb) / <alpha-value>)',
         },
-        line: 'var(--border)',
+        line: {
+          DEFAULT: 'var(--border)',
+          strong: 'var(--border-strong)',
+        },
         danger: 'rgb(var(--danger-rgb) / <alpha-value>)',
         success: 'rgb(var(--success-rgb) / <alpha-value>)',
       },

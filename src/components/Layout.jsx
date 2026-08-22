@@ -159,28 +159,25 @@ function NotificationBell() {
 // already carry correct dark values (Prompt 502), so the old per-theme
 // `dark:bg-[...]` overrides this button needed are gone too — genuinely
 // simpler code, not just a different color.
-// Prompt 528 — two small circular icon buttons above the account box,
-// visual concept pointed at from ohvara-dashboard's own floating
-// bug-report button (a circular icon button) but explicitly smaller and
-// sized to sit naturally in the sidebar. Unlike the header bell (which
-// only shows a circle on hover), these carry a persistent visible
-// border/background — that's the whole ask, "an actual circular
-// background/border around it." Bug button gets the app's `--danger`
-// token rather than a literal hardcoded red — same "something needs
-// attention" meaning, token-driven like everything else here, not a
-// one-off color; the phone/mobile button stays neutral like the bell.
-function SidebarIconButton({ icon: Icon, emoji, label, onClick, tone = 'neutral' }) {
+// Prompt 528 — two circular icon buttons above the account box, visual
+// concept pointed at from ohvara-dashboard's own floating bug-report
+// button. Unlike the header bell (which only shows a circle on hover),
+// these carry a persistent visible border/background.
+// Prompt 531 — Brayden revised the spec after seeing it live: the bug
+// button's literal 🐛 emoji read as "wormy," not the clean vector-icon
+// look he wanted (swapped for lucide's own `Bug` icon, already imported
+// above), and the `--danger` red tint came off as a false "needs
+// attention" signal rather than a neutral action button — dropped so
+// both buttons share one plain treatment, same as the phone button
+// already had. `tone`/`emoji` props are gone with it, not left dead.
+function SidebarIconButton({ icon: Icon, label, onClick }) {
   return (
     <button
       onClick={onClick}
       title={label}
-      className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-colors ${
-        tone === 'danger'
-          ? 'border-danger/30 bg-danger/5 hover:bg-danger/10'
-          : 'border-line bg-surface text-fg-secondary hover:border-fg-primary/40 hover:text-fg-primary'
-      }`}
+      className="flex h-16 w-16 items-center justify-center rounded-full border border-line bg-surface text-fg-secondary transition-colors hover:border-fg-primary/40 hover:text-fg-primary"
     >
-      {emoji ? <span aria-hidden="true">{emoji}</span> : <Icon size={14} />}
+      <Icon size={28} />
     </button>
   )
 }
@@ -316,13 +313,15 @@ export default function Layout() {
           })}
         </nav>
 
-        {/* Prompt 528 — stacked vertically, bug button closer to the
-            account box (bottom), phone/mobile button above it, per
-            Brayden's explicit ordering. Sits directly above the existing
-            divider line (drawn by AccountPopover's own border-t). */}
-        <div className="flex flex-col items-center gap-2 pb-3">
+        {/* Prompt 531 — moved from stacked (Prompt 528) to opposite ends of
+            this same row, per Brayden's revised spec ("move one to one
+            corner, the other to the other corner"). `px-5` matches the
+            logo block's own edge padding above so both buttons align to
+            the sidebar's real left/right edges. Sits directly above the
+            existing divider line (drawn by AccountPopover's own border-t). */}
+        <div className="flex items-center justify-between px-5 pb-3">
+          <SidebarIconButton icon={Bug} label="Report a Bug" onClick={() => setShowBugReport(true)} />
           <SidebarIconButton icon={Smartphone} label="Add to Home Screen" onClick={() => setShowAddToHome(true)} />
-          <SidebarIconButton emoji="🐛" label="Report a Bug" tone="danger" onClick={() => setShowBugReport(true)} />
         </div>
 
         <AccountPopover profile={profile} onSignOut={signOut} onNavigate={navigate} />
