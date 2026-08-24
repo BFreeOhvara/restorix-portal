@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Zap } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useAllLeadsForStats, statsForUser } from '../hooks/useStats'
@@ -9,23 +9,6 @@ import { useMyAllCalls, computeBadgeProgress, tieredProgress, DIAL_TIERS, BOOKIN
 import { totalCommission } from '../lib/commissions'
 import { zonedDateStr, zonedDayRange, mondayOf } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
-import { TierBadge } from '../components/ui/TierBadge'
-
-// Prompt 518's locked color proposal, given real hex values here for the
-// first time (the scoping doc only named colors — "amber/gold", "purple/
-// violet" — not exact values). Bookings reuses the app's own real
-// accent-blue hex directly. The other three are new to this codebase —
-// picked from Tailwind's own default palette (amber/violet/orange) for
-// values already vetted at reasonable saturation/contrast rather than
-// invented from scratch. Only `special` remains here — Dials/Bookings/
-// Perfect Days/Commission are all on real illustrated PNG art now (see
-// PngBadgeTile below), not the SVG template; their hexes live on in
-// PNG_BADGE_CATEGORIES' glow values below instead. Commission's old
-// purple (`#8b5cf6`) is gone entirely, not just relocated — Brayden
-// changed his mind and put Commission on Dials' own green instead.
-const CATEGORY_COLORS = {
-  special: '#f97316',
-}
 
 // v1 daily target is hardcoded (150 dials / 2 booked = "perfect day"),
 // weekly/monthly are that same target scaled to a 5-day work week and a
@@ -42,11 +25,16 @@ const PERIODS = {
 // SpecialSection's own JSX call) so its `.length` can feed the X/26
 // earned-count total below without a second hardcoded "2" drifting out
 // of sync with the actual row. Icons used to differ per badge (Flame/
-// Trophy) — Prompt 521's rebuild gives Special one shared glyph (Zap)
-// like every other category, real names/descriptions stay as real text.
+// Trophy), then briefly shared one glyph (Zap) across a flat SVG
+// treatment — Prompt 521's final round gives each achievement its own
+// real illustrated PNG art (see SpecialBadgeTile below) via `slug`,
+// same as every tiered category now has; real names/descriptions stay
+// as real text either way. Only these 2 achievements exist anywhere in
+// this codebase — if a future one gets added without matching PNG art,
+// it'll need its own slug + source file before it can render here.
 const SPECIAL_BADGES = [
-  { key: 'backToBack', label: 'Back-to-Back', title: '2 bookings in a row, no other outcome logged in between' },
-  { key: 'hatTrick', label: 'Hat Trick', title: '3 bookings in the same day' },
+  { key: 'backToBack', slug: 'backtoback', label: 'Back-to-Back', title: '2 bookings in a row, no other outcome logged in between' },
+  { key: 'hatTrick', slug: 'hattrick', label: 'Hat Trick', title: '3 bookings in the same day' },
 ]
 
 // Prompt 458: "today"/"this week"/"this month" now follow the viewing
@@ -84,10 +72,11 @@ function ProgressTile({ label, value, target }) {
 
 // Prompt 521 — real per-tier illustrated PNG art for tiered categories
 // (`badge-{category}-tier1..N`, escalating ornamentation baked into each
-// image) rather than the shared SVG template the other categories use.
-// Dials shipped first, then Bookings, then Perfect Days, then Commission
-// — all four driven by this one `PngBadgeTile`/`PngBadgeSection` pair
-// keyed off `category` rather than near-duplicate components each, since
+// image), replacing what used to be one shared SVG shield template for
+// every category. Dials shipped first, then Bookings, then Perfect Days,
+// then Commission — all four driven by this one `PngBadgeTile`/
+// `PngBadgeSection` pair keyed off `category` rather than near-duplicate
+// components each, since
 // the only real per-category differences are the image path, the glow
 // tint, the value formatter (plain numbers vs. Commission's `$` amounts
 // — also drives the tile label unless `tileLabel` overrides it, like
@@ -120,8 +109,8 @@ function ProgressTile({ label, value, target }) {
 // Glow colors are literal Tailwind arbitrary-value strings per category
 // (not built from a runtime hex) so the JIT scanner can find them as
 // plain text in this file — a dynamically-interpolated class name
-// wouldn't be scannable, same reasoning `BadgeTile` below already notes
-// for why the SVG-shield categories use inline `style` instead.
+// wouldn't be scannable. `SpecialBadgeTile` below uses the same pattern
+// via its own `SPECIAL_GLOW` constant, since Special's PNG art round.
 const PNG_BADGE_CATEGORIES = {
   dials: {
     title: 'Dials',
@@ -204,53 +193,45 @@ function PngBadgeSection({ category, value, thresholds, first }) {
   )
 }
 
-// Prompt 452 established the locked/unlocked philosophy (grayscale
-// silhouette vs. color+glow, no separate lock icon). Prompt 521's rebuild
-// (2026-08-24) replaced the flat icon+label pill with one shared
-// `TierBadge` SVG shield, driven by a runtime `color` — since the color
-// varies per category/tier, the glow/border/gradient chrome around it
-// has to be inline `style`, not a Tailwind arbitrary-value class (those
-// need a static string for the build-time JIT scanner, which a runtime
-// hex can't provide). Dials, Bookings, Perfect Days, and Commission have
-// since moved off this template onto real PNG art (see PngBadgeTile
-// above) as each category's own art got made; only Special remains here,
-// via `SpecialBadgeRow` below (the standalone `TierBadgeRow` that used
-// to drive the other categories through this component is gone — its
-// last consumer, Commission, left with this round).
-function BadgeTile({ icon, tier, maxTier, label, sub, color, unlocked }) {
+// Special is the last category off the SVG shield template (Prompt 452's
+// original `BadgeTile`/`TierBadge`-driven component is gone entirely now
+// — Dials, Bookings, Perfect Days, and Commission each migrated to real
+// PNG art in turn, and Special's own migration removed its last
+// consumer). Special is structurally different from every tiered
+// category above: Back-to-Back/Hat Trick aren't a threshold ladder,
+// they're two independent named achievements, each either earned or
+// not — no "locked tier 1 vs. unlocked tier 6" escalation, just one
+// image per achievement at its own full "maxed out" ornamentation
+// (crown, wings, wreath, stars, gems — the same finish every other
+// category's own top tier uses). That shape doesn't fit
+// `PngBadgeTile`/`PngBadgeSection`'s tier+threshold signature, so this
+// is a small dedicated pair instead of forcing Special into the tiered
+// abstraction — same visual language (140px height, shrink-wrap tile
+// width, grayscale/opacity-35 locked vs. drop-shadow-glow unlocked) as
+// every PNG category, just keyed by achievement `slug` instead of tier
+// number. Purple was picked specifically not to collide with Dials'
+// red or Commission's green.
+const SPECIAL_GLOW = 'drop-shadow-[0_0_10px_rgba(124,58,237,0.6)]'
+
+function SpecialBadgeTile({ slug, label, title, unlocked }) {
   return (
-    <div
-      title={sub ? `${label} — ${sub}` : label}
-      className={clsx(
-        'flex w-40 flex-col items-center gap-2 rounded-card border p-3 text-center transition-all',
-        !unlocked && 'border-line bg-surface'
-      )}
-      style={
-        unlocked
-          ? {
-              borderColor: `${color}4D`,
-              backgroundImage: `linear-gradient(to bottom, ${color}1A, transparent)`,
-              boxShadow: `0 0 16px ${color}4D`,
-            }
-          : undefined
-      }
-    >
-      <TierBadge icon={icon} tier={tier} maxTier={maxTier} color={color} unlocked={unlocked} size={88} />
+    <div title={`${label} — ${title}`} className="flex flex-col items-center gap-2 text-center">
+      <img
+        src={`/badges/badge-special-${slug}.png`}
+        alt={`${label} badge`}
+        className={clsx('h-[140px] w-auto', unlocked ? SPECIAL_GLOW : 'grayscale opacity-35')}
+      />
       <div>
-        <p className={clsx('font-sans text-xs font-semibold', unlocked ? 'text-fg-primary' : 'text-fg-faint')}>{label}</p>
-        {sub && <p className="font-sans text-[11px] text-fg-faint">{sub}</p>}
+        <p className={clsx('font-sans text-sm font-semibold', unlocked ? 'text-fg-primary' : 'text-fg-faint')}>
+          {label}
+        </p>
+        <p className="font-sans text-xs text-fg-faint">{title}</p>
       </div>
     </div>
   )
 }
 
-// Special: Back-to-Back + Hat Trick aren't a shared numeric threshold like
-// the other 4 categories — each is its own independent boolean condition —
-// but the prompt's own "Special (2 tiers, lightning-bolt icon)" framing
-// asked for the same shield treatment, so each badge is treated as its own
-// "tier" of a 2-tier category sharing one icon/color, real names kept as
-// real text instead of forcing them into "Tier 1"/"Tier 2".
-function SpecialBadgeRow({ icon, color, items }) {
+function SpecialBadgeRow({ items }) {
   const earnedCount = items.filter((i) => i.unlocked).length
   return (
     <div className="border-t border-line py-5">
@@ -258,18 +239,9 @@ function SpecialBadgeRow({ icon, color, items }) {
         <p className="eyebrow">Special</p>
         <p className="font-sans text-xs text-fg-faint">{earnedCount}/{items.length} earned</p>
       </div>
-      <div className="mt-3 flex flex-wrap gap-3">
-        {items.map((item, i) => (
-          <BadgeTile
-            key={item.key}
-            icon={icon}
-            tier={i + 1}
-            maxTier={items.length}
-            label={item.label}
-            sub={item.title}
-            color={color}
-            unlocked={item.unlocked}
-          />
+      <div className="mt-3 flex flex-nowrap gap-2">
+        {items.map((item) => (
+          <SpecialBadgeTile key={item.key} slug={item.slug} label={item.label} title={item.title} unlocked={item.unlocked} />
         ))}
       </div>
     </div>
@@ -372,11 +344,7 @@ export default function MyGoals() {
             <PngBadgeSection category="bookings" value={badgeProgress.bookings} thresholds={BOOKING_TIERS} />
             <PngBadgeSection category="perfectDays" value={badgeProgress.perfectDays} thresholds={PERFECT_DAY_TIERS} />
             <PngBadgeSection category="commission" value={myCommission} thresholds={COMMISSION_TIERS} />
-            <SpecialBadgeRow
-              icon={Zap}
-              color={CATEGORY_COLORS.special}
-              items={SPECIAL_BADGES.map((b) => ({ ...b, unlocked: badgeProgress[b.key] }))}
-            />
+            <SpecialBadgeRow items={SPECIAL_BADGES.map((b) => ({ ...b, unlocked: badgeProgress[b.key] }))} />
           </div>
 
           <Link
