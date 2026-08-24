@@ -110,7 +110,7 @@ function BadgeTile({ icon, tier, maxTier, label, sub, color, unlocked }) {
           : undefined
       }
     >
-      <TierBadge icon={icon} tier={tier} maxTier={maxTier} color={color} unlocked={unlocked} size={72} />
+      <TierBadge icon={icon} tier={tier} maxTier={maxTier} color={color} unlocked={unlocked} size={88} />
       <div>
         <p className={clsx('font-sans text-xs font-semibold', unlocked ? 'text-fg-primary' : 'text-fg-faint')}>{label}</p>
         {sub && <p className="font-sans text-[11px] text-fg-faint">{sub}</p>}

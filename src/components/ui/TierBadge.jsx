@@ -1,26 +1,26 @@
 import clsx from 'clsx'
 
-// Prompt 521 (rebuilt 2026-08-24) — a single parametrized SVG shield
-// template shared across all 5 badge categories, replacing the
-// AI-generated per-tier PNG art this same prompt shipped a session ago.
-// Brayden liked that art's visual language (shield, centered icon,
-// escalating laurel/wings/crown by tier) but doesn't want to keep
-// generating 26 individual images for it — this recreates the same
-// concept as code, matching Prompt 518's own original recommendation
-// ("a shared SVG template... parameterized by category color + tier",
-// not 26 illustrated assets). One shape, one ornament system, recolored
-// and escalated per category/tier via props instead of per-image art.
+// Prompt 521 (rebuilt 2026-08-24, ornaments redrawn same day) — a single
+// parametrized SVG shield template shared across all 5 badge categories,
+// replacing the AI-generated per-tier PNG art. Brayden's first live look
+// at the rebuild (real screenshot, not just structural DOM checks) found
+// the laurel/wings/crown were technically present but functionally
+// invisible — thin single-pixel strokes that read as scratches, not
+// ornaments, at this render size. Redrawn as bold FILLED shapes (teardrop
+// leaves/feathers instead of ellipses/hairline strokes) specifically to
+// survive being rendered at ~70px — thin linework doesn't.
 
-const SHIELD_OUTER = 'M70,18 L104,33 L104,66 C104,97 70,116 70,116 C70,116 36,97 36,66 L36,33 Z'
-const SHIELD_INNER = 'M70,27 L96,39 L96,65 C96,89 70,105 70,105 C70,105 44,89 44,65 L44,39 Z'
-const GOLD = '#d4af37'
+const SHIELD_OUTER = 'M85,20 L119,35 L119,68 C119,100 85,120 85,120 C85,120 51,100 51,68 L51,35 Z'
+const SHIELD_INNER = 'M85,29 L111,41 L111,67 C111,92 85,108 85,108 C85,108 59,92 59,67 L59,41 Z'
+const GOLD = '#e0b23a'
+const GOLD_DEEP = '#a8791f'
 
 // Escalation scales to each category's OWN tier count rather than
 // hardcoding "tier 3/5/6" — Special (2 tiers) and Commission (7) need
-// genuinely different cutoffs than Dials/Bookings' shared 6. Dials'
-// own explicit fix (laurel from tier 3, wings from tier 5, crown only
-// at the top tier) falls out of this formula for maxTier=6 rather than
-// being a special case: laurelAt = ceil(6*0.5) = 3, wingsAt = ceil(6*0.8) = 5.
+// genuinely different cutoffs than Dials/Bookings' shared 6. Dials' own
+// explicit ask (laurel from tier 3, wings from tier 5, crown only at the
+// top tier) falls out of this formula for maxTier=6 rather than being a
+// special case: laurelAt = ceil(6*0.5) = 3, wingsAt = ceil(6*0.8) = 5.
 export function ornamentStage(tier, maxTier) {
   const laurelAt = Math.max(2, Math.ceil(maxTier * 0.5))
   const wingsAt = Math.max(laurelAt + 1, Math.ceil(maxTier * 0.8))
@@ -31,69 +31,96 @@ export function ornamentStage(tier, maxTier) {
   }
 }
 
+// A leaf is a filled almond/teardrop, not a thin ellipse — reads clearly
+// as foliage at small sizes where a hairline stroke disappears.
+function Leaf({ x, y, angle, size = 12 }) {
+  const h = size * 0.42
+  return (
+    <path
+      d={`M0,0 Q${size * 0.5},${-h} ${size},0 Q${size * 0.5},${h} 0,0 Z`}
+      fill={GOLD}
+      stroke={GOLD_DEEP}
+      strokeWidth="0.5"
+      transform={`translate(${x},${y}) rotate(${angle})`}
+    />
+  )
+}
+
 function Laurel({ side }) {
   const flip = side === 'right'
   const leaves = [
-    { x: 30, y: 100, a: 100 },
-    { x: 24, y: 88, a: 80 },
-    { x: 20, y: 75, a: 60 },
-    { x: 18, y: 62, a: 40 },
+    { x: 30, y: 111, angle: 110, size: 17 },
+    { x: 21, y: 96, angle: 82, size: 17 },
+    { x: 16, y: 79, angle: 52, size: 16 },
+    { x: 16, y: 61, angle: 24, size: 15 },
   ]
   return (
-    <g transform={flip ? 'translate(140,0) scale(-1,1)' : undefined}>
-      <path d="M30,108 C22,95 16,78 16,58" fill="none" stroke={GOLD} strokeWidth="2" strokeLinecap="round" />
+    <g transform={flip ? 'translate(170,0) scale(-1,1)' : undefined}>
+      <path d="M32,116 C17,98 11,76 14,48" fill="none" stroke={GOLD_DEEP} strokeWidth="3.2" strokeLinecap="round" />
       {leaves.map((l, i) => (
-        <ellipse key={i} cx={l.x} cy={l.y} rx="7" ry="3.2" fill={GOLD} transform={`rotate(${l.a} ${l.x} ${l.y})`} />
+        <Leaf key={i} {...l} />
       ))}
     </g>
   )
 }
 
+// One bold filled silhouette per side (not a fan of small separate
+// feathers, which read as a spiky starburst at tile scale) — a smooth
+// leading edge sweeping up and out to a tip, a scalloped trailing edge
+// with 3 notches suggesting individual feathers on the way back to the
+// shoulder. Reads as "wing" at a glance instead of needing to resolve
+// several tiny separate shapes.
+const WING_PATH =
+  'M0,0 Q20,-24 46,-20 Q40,-10 46,-6 Q34,-4 36,4 Q24,2 24,10 Q14,8 12,15 Q4,10 0,0 Z'
+
 function Wings() {
-  const feathers = [0, 1, 2, 3].map((i) => {
-    const spread = 14 + i * 10
-    const lift = 6 - i * 4
-    return `M104,${40 + i * 4} C${118 + spread},${34 + i * 6 - lift} ${128 + spread},${44 + i * 8} ${132 + spread},${52 + i * 9}`
-  })
   return (
     <>
-      {feathers.map((d, i) => (
-        <path key={`r${i}`} d={d} fill="none" stroke={GOLD} strokeWidth="3.4" strokeLinecap="round" opacity={1 - i * 0.15} />
-      ))}
-      <g transform="translate(140,0) scale(-1,1)">
-        {feathers.map((d, i) => (
-          <path key={`l${i}`} d={d} fill="none" stroke={GOLD} strokeWidth="3.4" strokeLinecap="round" opacity={1 - i * 0.15} />
-        ))}
-      </g>
+      <path d={WING_PATH} fill={GOLD} stroke={GOLD_DEEP} strokeWidth="1" strokeLinejoin="round" transform="translate(119,42)" />
+      <path
+        d={WING_PATH}
+        fill={GOLD}
+        stroke={GOLD_DEEP}
+        strokeWidth="1"
+        strokeLinejoin="round"
+        transform="translate(51,42) scale(-1,1)"
+      />
     </>
   )
 }
 
 function Crown() {
   return (
-    <g transform="translate(70,8)">
-      <path d="M-18,10 L-18,0 L-10,7 L0,-8 L10,7 L18,0 L18,10 Z" fill={GOLD} />
-      <rect x="-18" y="10" width="36" height="4" fill={GOLD} />
-      <circle cx="-10" cy="2" r="2" fill="#fff" opacity="0.85" />
-      <circle cx="0" cy="-4" r="2.2" fill="#fff" opacity="0.85" />
-      <circle cx="10" cy="2" r="2" fill="#fff" opacity="0.85" />
+    <g transform="translate(85,12)">
+      <path
+        d="M-24,16 L-24,3 L-13,11 L0,-11 L13,11 L24,3 L24,16 Z"
+        fill={GOLD}
+        stroke={GOLD_DEEP}
+        strokeWidth="1"
+        strokeLinejoin="round"
+      />
+      <rect x="-25" y="15" width="50" height="7" rx="1.5" fill={GOLD} stroke={GOLD_DEEP} strokeWidth="1" />
+      <circle cx="-13" cy="4" r="3.2" fill="#fff" opacity="0.92" />
+      <circle cx="0" cy="-7" r="3.8" fill="#fff" opacity="0.92" />
+      <circle cx="13" cy="4" r="3.2" fill="#fff" opacity="0.92" />
     </g>
   )
 }
 
 // `color` is a plain hex string, not a Tailwind token — these badges are
-// self-contained brand-identity art (same category as BadgePill's own
-// pre-existing hardcoded green), not systemic UI-state color, and the
-// color varies per category/tier at runtime so a Tailwind arbitrary-value
-// class (which needs a static string for the JIT scanner) can't express it.
+// self-contained brand-identity art (same category as the app's own
+// pre-existing hardcoded badge greens), not systemic UI-state color, and
+// the color varies per category/tier at runtime so a Tailwind arbitrary-
+// value class (which needs a static string for the JIT scanner) can't
+// express it.
 export function TierBadge({ icon: Icon, tier, maxTier, color, unlocked, size = 72 }) {
   const stage = ornamentStage(tier, maxTier)
   return (
     <div
       className={clsx('relative', !unlocked && 'grayscale opacity-40')}
-      style={{ width: size, height: Math.round((size * 130) / 140) }}
+      style={{ width: size, height: Math.round((size * 138) / 170) }}
     >
-      <svg viewBox="0 0 140 130" width="100%" height="100%" className="overflow-visible">
+      <svg viewBox="0 0 170 138" width="100%" height="100%" className="overflow-visible">
         {stage.wings && <Wings />}
         {stage.laurel && (
           <>
@@ -106,7 +133,7 @@ export function TierBadge({ icon: Icon, tier, maxTier, color, unlocked, size = 7
         <path d={SHIELD_INNER} fill="#12181a" />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <Icon size={Math.round(size * 0.32)} color={color} strokeWidth={2.4} />
+        <Icon size={Math.round(size * 0.3)} color={color} strokeWidth={2.4} />
       </div>
     </div>
   )
