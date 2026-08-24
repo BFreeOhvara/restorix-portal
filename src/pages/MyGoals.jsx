@@ -84,33 +84,35 @@ function ProgressTile({ label, value, target }) {
 // Prompt 521 — Dials' own tile, using real per-tier illustrated art
 // (`badge-dials-tier1..6`, escalating ornamentation baked into each
 // image) rather than the shared SVG template the other 4 categories use.
-// Brayden tried the SVG shield for Dials too (twice — a first pass, then
-// a redrawn-ornaments pass verified via real screenshot) and, after
-// seeing both live, decided he wants the original illustrated PNG look
-// back specifically for Dials — a final call, not another round of SVG
-// tweaks. Restored verbatim from commit `231a34f`, the last version he
-// confirmed he liked. Keeps `BadgePill`'s locked/unlocked philosophy
-// (Prompt 452: grayscale silhouette vs. color+glow) applied to the image
-// instead of an icon glyph, and reuses the exact green the rest of the
-// original badge system used (`#26b37a`/`#1f8a5f`). No named tier scheme
-// exists anywhere in this codebase or the art-generation docs, so tier
-// names are the plain ordinal the asset filenames themselves already use.
+// No card/box wrapper — no border, background, or shadow on the outer
+// div — just the badge floating free with its label; the "lights up
+// when unlocked" effect is a `drop-shadow` glow on the image itself
+// (Brayden's own explicit ask after seeing the boxed version live: the
+// box was competing with the art instead of framing it). Locked state
+// keeps the same grayscale/opacity-35 silhouette treatment (Prompt 452's
+// philosophy) applied to the image directly. No named tier scheme exists
+// anywhere in this codebase or the art-generation docs, so tier names
+// are the plain ordinal the asset filenames themselves already use.
+// Source PNGs are no longer a uniform canvas size — each tier's own
+// width/height ratio is deliberately different (wider canvases for
+// tiers whose wings/crown extend the artwork) specifically so scaling
+// to a fixed CSS height (`h-14 w-auto`) renders every tier's shield at
+// the same pixel size, rather than the shield shrinking on tiers with
+// more surrounding ornamentation.
 function DialBadgeTile({ tier, threshold, value }) {
   const unlocked = value >= threshold
   return (
     <div
       title={`Tier ${tier} — ${threshold.toLocaleString()} total dials`}
-      className={clsx(
-        'flex w-28 flex-col items-center gap-2 rounded-card border p-3 text-center transition-all',
-        unlocked
-          ? 'border-[#1f8a5f]/30 bg-gradient-to-b from-[#1f8a5f]/10 to-transparent shadow-[0_0_16px_rgba(31,138,95,0.3)]'
-          : 'border-line bg-surface'
-      )}
+      className="flex w-28 flex-col items-center gap-2 text-center"
     >
       <img
         src={`/badges/badge-dials-tier${tier}.png`}
         alt={`Dials Tier ${tier} badge`}
-        className={clsx('h-14 w-auto', !unlocked && 'grayscale opacity-35')}
+        className={clsx(
+          'h-14 w-auto',
+          unlocked ? 'drop-shadow-[0_0_10px_rgba(31,138,95,0.6)]' : 'grayscale opacity-35'
+        )}
       />
       <div>
         <p className={clsx('font-sans text-xs font-semibold', unlocked ? 'text-fg-primary' : 'text-fg-faint')}>
