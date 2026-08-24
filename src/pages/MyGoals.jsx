@@ -100,17 +100,21 @@ function ProgressTile({ label, value, target }) {
 // size, rather than the shield shrinking on tiers with more surrounding
 // ornamentation. Badge height bumped ~2.5x (56px -> 140px, Brayden's own
 // explicit ask after seeing them live — they read too small) — `w-auto`
-// stays so each tier keeps its own aspect ratio; the outer tile widened
-// to `w-64` to comfortably fit tier 6 at its widest (~1.70:1 * 140px
-// ≈ 238px) without clipping. Label text bumped one step too (xs->sm,
-// [11px]->xs) to stay roughly proportional to the much bigger badge —
-// not explicitly asked for, a judgment call flagged as such.
+// stays so each tier keeps its own aspect ratio. Label text bumped one
+// step too (xs->sm, [11px]->xs) to stay roughly proportional to the much
+// bigger badge — not explicitly asked for, a judgment call flagged as
+// such. Prompt 521's 11th reopen (2026-08-24): removed the fixed `w-64`
+// outer-tile width (was sized to fit tier 6, wasting space on narrower
+// tiers and pushing the row over one line) so each tile shrink-wraps to
+// its own image's rendered width instead; row gap dropped from `gap-8`
+// to `gap-2` and the row forced to `flex-nowrap` so all 6 tiers stay on
+// one line at normal desktop width, badge size unchanged.
 function DialBadgeTile({ tier, threshold, value }) {
   const unlocked = value >= threshold
   return (
     <div
       title={`Tier ${tier} — ${threshold.toLocaleString()} total dials`}
-      className="flex w-64 flex-col items-center gap-2 text-center"
+      className="flex flex-col items-center gap-2 text-center"
     >
       <img
         src={`/badges/badge-dials-tier${tier}.png`}
@@ -140,7 +144,7 @@ function DialsBadgeSection({ value, thresholds, first }) {
           {value.toLocaleString()} all-time{next != null ? ` · ${(next - value).toLocaleString()} to next` : ' · all tiers earned'}
         </p>
       </div>
-      <div className="mt-3 flex flex-wrap gap-8">
+      <div className="mt-3 flex flex-nowrap gap-2">
         {thresholds.map((t, i) => (
           <DialBadgeTile key={t} tier={i + 1} threshold={t} value={value} />
         ))}
