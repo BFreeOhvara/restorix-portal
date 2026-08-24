@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, CalendarCheck, Sun, DollarSign, Flame, Trophy } from 'lucide-react'
+import { ArrowRight, PhoneCall, CalendarCheck, Sun, DollarSign, Zap } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useAllLeadsForStats, statsForUser } from '../hooks/useStats'
@@ -9,6 +9,23 @@ import { useMyAllCalls, computeBadgeProgress, tieredProgress, DIAL_TIERS, BOOKIN
 import { totalCommission } from '../lib/commissions'
 import { zonedDateStr, zonedDayRange, mondayOf } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
+import { TierBadge } from '../components/ui/TierBadge'
+
+// Prompt 518's locked color proposal, given real hex values here for the
+// first time (the scoping doc only named colors — "amber/gold", "purple/
+// violet" — not exact values). Dials gets a distinct emerald rather than
+// reusing --success (already means "positive outcome" elsewhere); Bookings
+// reuses the app's own real accent-blue hex directly. The other three are
+// new to this codebase — picked from Tailwind's own default palette
+// (emerald/amber/violet/orange) for values already vetted at reasonable
+// saturation/contrast rather than invented from scratch.
+const CATEGORY_COLORS = {
+  dials: '#10b981',
+  bookings: '#3a63d6',
+  perfectDays: '#f59e0b',
+  commission: '#8b5cf6',
+  special: '#f97316',
+}
 
 // v1 daily target is hardcoded (150 dials / 2 booked = "perfect day"),
 // weekly/monthly are that same target scaled to a 5-day work week and a
@@ -24,10 +41,12 @@ const PERIODS = {
 // Prompt 517 — named constant (was an inline array literal inside
 // SpecialSection's own JSX call) so its `.length` can feed the X/26
 // earned-count total below without a second hardcoded "2" drifting out
-// of sync with the actual row.
+// of sync with the actual row. Icons used to differ per badge (Flame/
+// Trophy) — Prompt 521's rebuild gives Special one shared glyph (Zap)
+// like every other category, real names/descriptions stay as real text.
 const SPECIAL_BADGES = [
-  { key: 'backToBack', icon: Flame, label: 'Back-to-Back', title: '2 bookings in a row, no other outcome logged in between' },
-  { key: 'hatTrick', icon: Trophy, label: 'Hat Trick', title: '3 bookings in the same day' },
+  { key: 'backToBack', label: 'Back-to-Back', title: '2 bookings in a row, no other outcome logged in between' },
+  { key: 'hatTrick', label: 'Hat Trick', title: '3 bookings in the same day' },
 ]
 
 // Prompt 458: "today"/"this week"/"this month" now follow the viewing
@@ -63,90 +82,49 @@ function ProgressTile({ label, value, target }) {
   )
 }
 
-// Prompt 452: consolidated from 4 separate cards + 2 floating description
-// cards into one box with labeled rows, achievement-panel styling — the
-// badge itself (real icon, not a generic Award glyph) carries the
-// unlocked/locked state via color/glow vs. grayscale, rather than a
-// separate lock icon doing all the work. Locked pills keep the same real
-// icon desaturated (how console achievement panels show a locked trophy —
-// a silhouette of the real thing, not a padlock standing in for it).
-function BadgePill({ icon: Icon, label, unlocked, title }) {
-  return (
-    <span
-      title={title}
-      className={clsx(
-        'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-sans text-xs font-semibold transition-all',
-        unlocked
-          ? 'bg-gradient-to-br from-[#26b37a] to-[#1f8a5f] text-white shadow-[0_0_0_1px_rgba(31,138,95,0.35),0_3px_10px_rgba(31,138,95,0.45)]'
-          : 'bg-surface text-fg-faint grayscale'
-      )}
-    >
-      <Icon size={13} />
-      {label}
-    </span>
-  )
-}
-
-// Prompt 521 — Dials' own tile, replacing BadgePill's icon+label chip for
-// this category now that real per-tier art exists (`badge-dials-tier1..6`,
-// escalating ornamentation baked into each image — see Prompt 521's scope
-// change from the original shared-icon + programmatic overlay plan). No
-// ring/numeral is drawn on top; each image already IS the tier's full look.
-// Keeps BadgePill's own locked/unlocked philosophy (Prompt 452: grayscale
-// silhouette vs. color+glow) applied to the image instead of an icon glyph,
-// and reuses the exact green BadgePill's unlocked gradient already uses
-// (#26b37a/#1f8a5f) rather than inventing a second "success" color for the
-// same badge system. No named tier scheme exists anywhere in this codebase
-// or the art-generation docs, so tier names are the plain ordinal the
-// asset filenames themselves already use ("Tier 1"..."Tier 6"), not
-// invented lore — flag to Brayden if he had specific names in mind.
-function DialBadgeTile({ tier, threshold, value }) {
-  const unlocked = value >= threshold
+// Prompt 452 established the locked/unlocked philosophy (grayscale
+// silhouette vs. color+glow, no separate lock icon). Prompt 521's rebuild
+// (2026-08-24) replaced the flat icon+label pill AND the illustrated
+// per-tier PNG art with one shared `TierBadge` SVG shield, driven by a
+// runtime `color` — since the color varies per category/tier, the glow/
+// border/gradient chrome around it has to be inline `style`, not a
+// Tailwind arbitrary-value class (those need a static string for the
+// build-time JIT scanner, which a runtime hex can't provide). `w-40`
+// (was `w-28` on the old pill/PNG tiles) per Brayden's own "too narrow"
+// feedback on the live PNG version.
+function BadgeTile({ icon, tier, maxTier, label, sub, color, unlocked }) {
   return (
     <div
-      title={`Tier ${tier} — ${threshold.toLocaleString()} total dials`}
+      title={sub ? `${label} — ${sub}` : label}
       className={clsx(
-        'flex w-28 flex-col items-center gap-2 rounded-card border p-3 text-center transition-all',
-        unlocked
-          ? 'border-[#1f8a5f]/30 bg-gradient-to-b from-[#1f8a5f]/10 to-transparent shadow-[0_0_16px_rgba(31,138,95,0.3)]'
-          : 'border-line bg-surface'
+        'flex w-40 flex-col items-center gap-2 rounded-card border p-3 text-center transition-all',
+        !unlocked && 'border-line bg-surface'
       )}
+      style={
+        unlocked
+          ? {
+              borderColor: `${color}4D`,
+              backgroundImage: `linear-gradient(to bottom, ${color}1A, transparent)`,
+              boxShadow: `0 0 16px ${color}4D`,
+            }
+          : undefined
+      }
     >
-      <img
-        src={`/badges/badge-dials-tier${tier}.png`}
-        alt={`Dials Tier ${tier} badge`}
-        className={clsx('h-14 w-auto', !unlocked && 'grayscale opacity-35')}
-      />
+      <TierBadge icon={icon} tier={tier} maxTier={maxTier} color={color} unlocked={unlocked} size={72} />
       <div>
-        <p className={clsx('font-sans text-xs font-semibold', unlocked ? 'text-fg-primary' : 'text-fg-faint')}>
-          Tier {tier}
-        </p>
-        <p className="font-sans text-[11px] text-fg-faint">{threshold.toLocaleString()} dials</p>
+        <p className={clsx('font-sans text-xs font-semibold', unlocked ? 'text-fg-primary' : 'text-fg-faint')}>{label}</p>
+        {sub && <p className="font-sans text-[11px] text-fg-faint">{sub}</p>}
       </div>
     </div>
   )
 }
 
-function DialsBadgeSection({ value, thresholds, first }) {
-  const { next } = tieredProgress(value, thresholds)
-  return (
-    <div className={clsx('py-5', !first && 'border-t border-line')}>
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="eyebrow">Dials</p>
-        <p className="font-sans text-xs text-fg-faint">
-          {value.toLocaleString()} all-time{next != null ? ` · ${(next - value).toLocaleString()} to next` : ' · all tiers earned'}
-        </p>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-3">
-        {thresholds.map((t, i) => (
-          <DialBadgeTile key={t} tier={i + 1} threshold={t} value={value} />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function BadgeSection({ icon: Icon, title, sub, value, thresholds, format = (n) => n.toLocaleString(), first }) {
+// One row per tiered category (Dials/Bookings/Perfect Days/Commission) —
+// same shield template, same escalation logic, just a different icon/
+// color/tier array per category. Tier "names" are the plain ordinal
+// ("Tier 1"..."Tier N") since no named scheme (Bronze/Silver/etc.) exists
+// anywhere in this codebase or the earlier art-generation docs.
+function TierBadgeRow({ icon, title, sub, color, value, thresholds, format = (n) => n.toLocaleString(), first }) {
   const { next } = tieredProgress(value, thresholds)
   return (
     <div className={clsx('py-5', !first && 'border-t border-line')}>
@@ -157,21 +135,31 @@ function BadgeSection({ icon: Icon, title, sub, value, thresholds, format = (n) 
         </p>
       </div>
       {sub && <p className="mt-1 font-sans text-xs text-fg-faint">{sub}</p>}
-      <div className="mt-3 flex flex-wrap gap-2">
-        {thresholds.map((t) => (
-          <BadgePill key={t} icon={Icon} label={format(t)} unlocked={value >= t} />
+      <div className="mt-3 flex flex-wrap gap-3">
+        {thresholds.map((t, i) => (
+          <BadgeTile
+            key={t}
+            icon={icon}
+            tier={i + 1}
+            maxTier={thresholds.length}
+            label={`Tier ${i + 1}`}
+            sub={format(t)}
+            color={color}
+            unlocked={value >= t}
+          />
         ))}
       </div>
     </div>
   )
 }
 
-// Special: Back-to-Back + Hat Trick, previously two standalone
-// card-with-description blocks floating outside any box — now a row
-// inside the same box, same in-box pill treatment as every other
-// category. Each pill's own condition moves to a hover title instead of
-// a permanent description line, to actually match the other rows' density.
-function SpecialSection({ items }) {
+// Special: Back-to-Back + Hat Trick aren't a shared numeric threshold like
+// the other 4 categories — each is its own independent boolean condition —
+// but the prompt's own "Special (2 tiers, lightning-bolt icon)" framing
+// asked for the same shield treatment, so each badge is treated as its own
+// "tier" of a 2-tier category sharing one icon/color, real names kept as
+// real text instead of forcing them into "Tier 1"/"Tier 2".
+function SpecialBadgeRow({ icon, color, items }) {
   const earnedCount = items.filter((i) => i.unlocked).length
   return (
     <div className="border-t border-line py-5">
@@ -179,9 +167,18 @@ function SpecialSection({ items }) {
         <p className="eyebrow">Special</p>
         <p className="font-sans text-xs text-fg-faint">{earnedCount}/{items.length} earned</p>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {items.map((item) => (
-          <BadgePill key={item.label} icon={item.icon} label={item.label} unlocked={item.unlocked} title={item.title} />
+      <div className="mt-3 flex flex-wrap gap-3">
+        {items.map((item, i) => (
+          <BadgeTile
+            key={item.key}
+            icon={icon}
+            tier={i + 1}
+            maxTier={items.length}
+            label={item.label}
+            sub={item.title}
+            color={color}
+            unlocked={item.unlocked}
+          />
         ))}
       </div>
     </div>
@@ -280,24 +277,28 @@ export default function MyGoals() {
           </div>
 
           <div className="mt-3 rounded-card border border-line bg-elevated px-5">
-            <DialsBadgeSection value={badgeProgress.dials} thresholds={DIAL_TIERS} first />
-            <BadgeSection icon={CalendarCheck} title="Bookings" value={badgeProgress.bookings} thresholds={BOOKING_TIERS} />
-            <BadgeSection
+            <TierBadgeRow icon={PhoneCall} title="Dials" color={CATEGORY_COLORS.dials} value={badgeProgress.dials} thresholds={DIAL_TIERS} first />
+            <TierBadgeRow icon={CalendarCheck} title="Bookings" color={CATEGORY_COLORS.bookings} value={badgeProgress.bookings} thresholds={BOOKING_TIERS} />
+            <TierBadgeRow
               icon={Sun}
               title="Perfect Days"
               sub="150 dials + 2 bookings in the same day"
+              color={CATEGORY_COLORS.perfectDays}
               value={badgeProgress.perfectDays}
               thresholds={PERFECT_DAY_TIERS}
             />
-            <BadgeSection
+            <TierBadgeRow
               icon={DollarSign}
               title="Commission"
               sub="15% of setup fee + first month, paid once a deal you booked reaches Closed"
+              color={CATEGORY_COLORS.commission}
               value={myCommission}
               thresholds={COMMISSION_TIERS}
               format={(n) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
             />
-            <SpecialSection
+            <SpecialBadgeRow
+              icon={Zap}
+              color={CATEGORY_COLORS.special}
               items={SPECIAL_BADGES.map((b) => ({ ...b, unlocked: badgeProgress[b.key] }))}
             />
           </div>
