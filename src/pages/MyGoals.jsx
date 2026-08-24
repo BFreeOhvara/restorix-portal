@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, PhoneCall, CalendarCheck, Sun, DollarSign, Flame, Trophy } from 'lucide-react'
+import { ArrowRight, CalendarCheck, Sun, DollarSign, Flame, Trophy } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useAllLeadsForStats, statsForUser } from '../hooks/useStats'
@@ -84,6 +84,65 @@ function BadgePill({ icon: Icon, label, unlocked, title }) {
       <Icon size={13} />
       {label}
     </span>
+  )
+}
+
+// Prompt 521 — Dials' own tile, replacing BadgePill's icon+label chip for
+// this category now that real per-tier art exists (`badge-dials-tier1..6`,
+// escalating ornamentation baked into each image — see Prompt 521's scope
+// change from the original shared-icon + programmatic overlay plan). No
+// ring/numeral is drawn on top; each image already IS the tier's full look.
+// Keeps BadgePill's own locked/unlocked philosophy (Prompt 452: grayscale
+// silhouette vs. color+glow) applied to the image instead of an icon glyph,
+// and reuses the exact green BadgePill's unlocked gradient already uses
+// (#26b37a/#1f8a5f) rather than inventing a second "success" color for the
+// same badge system. No named tier scheme exists anywhere in this codebase
+// or the art-generation docs, so tier names are the plain ordinal the
+// asset filenames themselves already use ("Tier 1"..."Tier 6"), not
+// invented lore — flag to Brayden if he had specific names in mind.
+function DialBadgeTile({ tier, threshold, value }) {
+  const unlocked = value >= threshold
+  return (
+    <div
+      title={`Tier ${tier} — ${threshold.toLocaleString()} total dials`}
+      className={clsx(
+        'flex w-28 flex-col items-center gap-2 rounded-card border p-3 text-center transition-all',
+        unlocked
+          ? 'border-[#1f8a5f]/30 bg-gradient-to-b from-[#1f8a5f]/10 to-transparent shadow-[0_0_16px_rgba(31,138,95,0.3)]'
+          : 'border-line bg-surface'
+      )}
+    >
+      <img
+        src={`/badges/badge-dials-tier${tier}.png`}
+        alt={`Dials Tier ${tier} badge`}
+        className={clsx('h-14 w-auto', !unlocked && 'grayscale opacity-35')}
+      />
+      <div>
+        <p className={clsx('font-sans text-xs font-semibold', unlocked ? 'text-fg-primary' : 'text-fg-faint')}>
+          Tier {tier}
+        </p>
+        <p className="font-sans text-[11px] text-fg-faint">{threshold.toLocaleString()} dials</p>
+      </div>
+    </div>
+  )
+}
+
+function DialsBadgeSection({ value, thresholds, first }) {
+  const { next } = tieredProgress(value, thresholds)
+  return (
+    <div className={clsx('py-5', !first && 'border-t border-line')}>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="eyebrow">Dials</p>
+        <p className="font-sans text-xs text-fg-faint">
+          {value.toLocaleString()} all-time{next != null ? ` · ${(next - value).toLocaleString()} to next` : ' · all tiers earned'}
+        </p>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-3">
+        {thresholds.map((t, i) => (
+          <DialBadgeTile key={t} tier={i + 1} threshold={t} value={value} />
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -221,7 +280,7 @@ export default function MyGoals() {
           </div>
 
           <div className="mt-3 rounded-card border border-line bg-elevated px-5">
-            <BadgeSection icon={PhoneCall} title="Dials" value={badgeProgress.dials} thresholds={DIAL_TIERS} first />
+            <DialsBadgeSection value={badgeProgress.dials} thresholds={DIAL_TIERS} first />
             <BadgeSection icon={CalendarCheck} title="Bookings" value={badgeProgress.bookings} thresholds={BOOKING_TIERS} />
             <BadgeSection
               icon={Sun}
