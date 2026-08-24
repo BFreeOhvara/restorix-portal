@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, CalendarCheck, Sun, DollarSign, Zap } from 'lucide-react'
+import { ArrowRight, Sun, DollarSign, Zap } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useAllLeadsForStats, statsForUser } from '../hooks/useStats'
@@ -17,10 +17,11 @@ import { TierBadge } from '../components/ui/TierBadge'
 // accent-blue hex directly. The other three are new to this codebase —
 // picked from Tailwind's own default palette (amber/violet/orange) for
 // values already vetted at reasonable saturation/contrast rather than
-// invented from scratch. No `dials` entry — Dials went back to real
-// illustrated PNG art (see DialBadgeTile below), not the SVG template.
+// invented from scratch. No `dials`/`bookings` entries — both are on
+// real illustrated PNG art now (see PngBadgeTile below), not the SVG
+// template; `bookings`'s hex lives on in PNG_BADGE_CATEGORIES' glow
+// value below instead.
 const CATEGORY_COLORS = {
-  bookings: '#3a63d6',
   perfectDays: '#f59e0b',
   commission: '#8b5cf6',
   special: '#f97316',
@@ -81,72 +82,89 @@ function ProgressTile({ label, value, target }) {
   )
 }
 
-// Prompt 521 — Dials' own tile, using real per-tier illustrated art
-// (`badge-dials-tier1..6`, escalating ornamentation baked into each
-// image) rather than the shared SVG template the other 4 categories use.
-// No card/box wrapper — no border, background, or shadow on the outer
-// div — just the badge floating free with its label; the "lights up
-// when unlocked" effect is a `drop-shadow` glow on the image itself
-// (Brayden's own explicit ask after seeing the boxed version live: the
-// box was competing with the art instead of framing it). Locked state
-// keeps the same grayscale/opacity-35 silhouette treatment (Prompt 452's
+// Prompt 521 — real per-tier illustrated PNG art for tiered categories
+// (`badge-{category}-tier1..6`, escalating ornamentation baked into each
+// image) rather than the shared SVG template the other categories use.
+// Dials shipped first; extended to Bookings this round — both driven by
+// this one `PngBadgeTile`/`PngBadgeSection` pair keyed off `category`
+// rather than two near-duplicate components, since the only real
+// per-category differences are the image path, the glow tint, and
+// whether the tile label says "dials" or just a bare number. No card/box
+// wrapper — no border, background, or shadow on the outer div — just the
+// badge floating free with its label; the "lights up when unlocked"
+// effect is a `drop-shadow` glow on the image itself (Brayden's own
+// explicit ask after seeing the boxed version live: the box was
+// competing with the art instead of framing it). Locked state keeps the
+// same grayscale/opacity-35 silhouette treatment (Prompt 452's
 // philosophy) applied to the image directly. No named tier scheme exists
 // anywhere in this codebase or the art-generation docs, so tier names
 // are the plain ordinal the asset filenames themselves already use.
-// Source PNGs are no longer a uniform canvas size — each tier's own
+// Source PNGs are not a uniform canvas size — each tier's own
 // width/height ratio is deliberately different (wider canvases for
 // tiers whose wings/crown extend the artwork) specifically so scaling
 // to a fixed CSS height renders every tier's shield at the same pixel
 // size, rather than the shield shrinking on tiers with more surrounding
-// ornamentation. Badge height bumped ~2.5x (56px -> 140px, Brayden's own
-// explicit ask after seeing them live — they read too small) — `w-auto`
-// stays so each tier keeps its own aspect ratio. Label text bumped one
-// step too (xs->sm, [11px]->xs) to stay roughly proportional to the much
-// bigger badge — not explicitly asked for, a judgment call flagged as
-// such. Prompt 521's 11th reopen (2026-08-24): removed the fixed `w-64`
-// outer-tile width (was sized to fit tier 6, wasting space on narrower
-// tiers and pushing the row over one line) so each tile shrink-wraps to
-// its own image's rendered width instead; row gap dropped from `gap-8`
-// to `gap-2` and the row forced to `flex-nowrap` so all 6 tiers stay on
-// one line at normal desktop width, badge size unchanged.
-function DialBadgeTile({ tier, threshold, value }) {
+// ornamentation. Badge height 140px, `w-auto` so each tier keeps its own
+// aspect ratio. Tile container shrink-wraps to each image's own rendered
+// width (no fixed `w-*`, Prompt 521's 11th-reopen fix) with a tight
+// `gap-2` and `flex-nowrap` so all 6 tiers stay on one row, never
+// wrapping, regardless of category.
+//
+// Glow colors are literal Tailwind arbitrary-value strings per category
+// (not built from a runtime hex) so the JIT scanner can find them as
+// plain text in this file — a dynamically-interpolated class name
+// wouldn't be scannable, same reasoning `BadgeTile` below already notes
+// for why the SVG-shield categories use inline `style` instead.
+const PNG_BADGE_CATEGORIES = {
+  dials: {
+    title: 'Dials',
+    glow: 'drop-shadow-[0_0_10px_rgba(31,138,95,0.6)]',
+    tileLabel: (n) => `${n.toLocaleString()} dials`,
+  },
+  bookings: {
+    title: 'Bookings',
+    glow: 'drop-shadow-[0_0_10px_rgba(58,99,214,0.6)]',
+    tileLabel: (n) => n.toLocaleString(),
+  },
+}
+
+function PngBadgeTile({ category, tier, threshold, value }) {
+  const meta = PNG_BADGE_CATEGORIES[category]
   const unlocked = value >= threshold
   return (
     <div
-      title={`Tier ${tier} — ${threshold.toLocaleString()} total dials`}
+      title={`Tier ${tier} — ${meta.tileLabel(threshold)}`}
       className="flex flex-col items-center gap-2 text-center"
     >
       <img
-        src={`/badges/badge-dials-tier${tier}.png`}
-        alt={`Dials Tier ${tier} badge`}
-        className={clsx(
-          'h-[140px] w-auto',
-          unlocked ? 'drop-shadow-[0_0_10px_rgba(31,138,95,0.6)]' : 'grayscale opacity-35'
-        )}
+        src={`/badges/badge-${category}-tier${tier}.png`}
+        alt={`${meta.title} Tier ${tier} badge`}
+        className={clsx('h-[140px] w-auto', unlocked ? meta.glow : 'grayscale opacity-35')}
       />
       <div>
         <p className={clsx('font-sans text-sm font-semibold', unlocked ? 'text-fg-primary' : 'text-fg-faint')}>
           Tier {tier}
         </p>
-        <p className="font-sans text-xs text-fg-faint">{threshold.toLocaleString()} dials</p>
+        <p className="font-sans text-xs text-fg-faint">{meta.tileLabel(threshold)}</p>
       </div>
     </div>
   )
 }
 
-function DialsBadgeSection({ value, thresholds, first }) {
+function PngBadgeSection({ category, value, thresholds, first }) {
+  const meta = PNG_BADGE_CATEGORIES[category]
   const { next } = tieredProgress(value, thresholds)
   return (
     <div className={clsx('py-5', !first && 'border-t border-line')}>
       <div className="flex items-baseline justify-between gap-3">
-        <p className="eyebrow">Dials</p>
+        <p className="eyebrow">{meta.title}</p>
         <p className="font-sans text-xs text-fg-faint">
           {value.toLocaleString()} all-time{next != null ? ` · ${(next - value).toLocaleString()} to next` : ' · all tiers earned'}
         </p>
       </div>
       <div className="mt-3 flex flex-nowrap gap-2">
         {thresholds.map((t, i) => (
-          <DialBadgeTile key={t} tier={i + 1} threshold={t} value={value} />
+          <PngBadgeTile key={t} category={category} tier={i + 1} threshold={t} value={value} />
         ))}
       </div>
     </div>
@@ -347,8 +365,8 @@ export default function MyGoals() {
           </div>
 
           <div className="mt-3 rounded-card border border-line bg-elevated px-5">
-            <DialsBadgeSection value={badgeProgress.dials} thresholds={DIAL_TIERS} first />
-            <TierBadgeRow icon={CalendarCheck} title="Bookings" color={CATEGORY_COLORS.bookings} value={badgeProgress.bookings} thresholds={BOOKING_TIERS} />
+            <PngBadgeSection category="dials" value={badgeProgress.dials} thresholds={DIAL_TIERS} first />
+            <PngBadgeSection category="bookings" value={badgeProgress.bookings} thresholds={BOOKING_TIERS} />
             <TierBadgeRow
               icon={Sun}
               title="Perfect Days"
