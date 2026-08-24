@@ -96,29 +96,35 @@ function ProgressTile({ label, value, target }) {
 // Source PNGs are no longer a uniform canvas size — each tier's own
 // width/height ratio is deliberately different (wider canvases for
 // tiers whose wings/crown extend the artwork) specifically so scaling
-// to a fixed CSS height (`h-14 w-auto`) renders every tier's shield at
-// the same pixel size, rather than the shield shrinking on tiers with
-// more surrounding ornamentation.
+// to a fixed CSS height renders every tier's shield at the same pixel
+// size, rather than the shield shrinking on tiers with more surrounding
+// ornamentation. Badge height bumped ~2.5x (56px -> 140px, Brayden's own
+// explicit ask after seeing them live — they read too small) — `w-auto`
+// stays so each tier keeps its own aspect ratio; the outer tile widened
+// to `w-64` to comfortably fit tier 6 at its widest (~1.70:1 * 140px
+// ≈ 238px) without clipping. Label text bumped one step too (xs->sm,
+// [11px]->xs) to stay roughly proportional to the much bigger badge —
+// not explicitly asked for, a judgment call flagged as such.
 function DialBadgeTile({ tier, threshold, value }) {
   const unlocked = value >= threshold
   return (
     <div
       title={`Tier ${tier} — ${threshold.toLocaleString()} total dials`}
-      className="flex w-28 flex-col items-center gap-2 text-center"
+      className="flex w-64 flex-col items-center gap-2 text-center"
     >
       <img
         src={`/badges/badge-dials-tier${tier}.png`}
         alt={`Dials Tier ${tier} badge`}
         className={clsx(
-          'h-14 w-auto',
+          'h-[140px] w-auto',
           unlocked ? 'drop-shadow-[0_0_10px_rgba(31,138,95,0.6)]' : 'grayscale opacity-35'
         )}
       />
       <div>
-        <p className={clsx('font-sans text-xs font-semibold', unlocked ? 'text-fg-primary' : 'text-fg-faint')}>
+        <p className={clsx('font-sans text-sm font-semibold', unlocked ? 'text-fg-primary' : 'text-fg-faint')}>
           Tier {tier}
         </p>
-        <p className="font-sans text-[11px] text-fg-faint">{threshold.toLocaleString()} dials</p>
+        <p className="font-sans text-xs text-fg-faint">{threshold.toLocaleString()} dials</p>
       </div>
     </div>
   )
@@ -134,7 +140,7 @@ function DialsBadgeSection({ value, thresholds, first }) {
           {value.toLocaleString()} all-time{next != null ? ` · ${(next - value).toLocaleString()} to next` : ' · all tiers earned'}
         </p>
       </div>
-      <div className="mt-3 flex flex-wrap gap-3">
+      <div className="mt-3 flex flex-wrap gap-8">
         {thresholds.map((t, i) => (
           <DialBadgeTile key={t} tier={i + 1} threshold={t} value={value} />
         ))}
