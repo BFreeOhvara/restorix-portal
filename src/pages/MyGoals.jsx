@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, PhoneCall, CalendarCheck, Sun, DollarSign, Zap } from 'lucide-react'
+import { ArrowRight, CalendarCheck, Sun, DollarSign, Zap } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useAllLeadsForStats, statsForUser } from '../hooks/useStats'
@@ -13,14 +13,13 @@ import { TierBadge } from '../components/ui/TierBadge'
 
 // Prompt 518's locked color proposal, given real hex values here for the
 // first time (the scoping doc only named colors — "amber/gold", "purple/
-// violet" — not exact values). Dials gets a distinct emerald rather than
-// reusing --success (already means "positive outcome" elsewhere); Bookings
-// reuses the app's own real accent-blue hex directly. The other three are
-// new to this codebase — picked from Tailwind's own default palette
-// (emerald/amber/violet/orange) for values already vetted at reasonable
-// saturation/contrast rather than invented from scratch.
+// violet" — not exact values). Bookings reuses the app's own real
+// accent-blue hex directly. The other three are new to this codebase —
+// picked from Tailwind's own default palette (amber/violet/orange) for
+// values already vetted at reasonable saturation/contrast rather than
+// invented from scratch. No `dials` entry — Dials went back to real
+// illustrated PNG art (see DialBadgeTile below), not the SVG template.
 const CATEGORY_COLORS = {
-  dials: '#10b981',
   bookings: '#3a63d6',
   perfectDays: '#f59e0b',
   commission: '#8b5cf6',
@@ -82,16 +81,75 @@ function ProgressTile({ label, value, target }) {
   )
 }
 
+// Prompt 521 — Dials' own tile, using real per-tier illustrated art
+// (`badge-dials-tier1..6`, escalating ornamentation baked into each
+// image) rather than the shared SVG template the other 4 categories use.
+// Brayden tried the SVG shield for Dials too (twice — a first pass, then
+// a redrawn-ornaments pass verified via real screenshot) and, after
+// seeing both live, decided he wants the original illustrated PNG look
+// back specifically for Dials — a final call, not another round of SVG
+// tweaks. Restored verbatim from commit `231a34f`, the last version he
+// confirmed he liked. Keeps `BadgePill`'s locked/unlocked philosophy
+// (Prompt 452: grayscale silhouette vs. color+glow) applied to the image
+// instead of an icon glyph, and reuses the exact green the rest of the
+// original badge system used (`#26b37a`/`#1f8a5f`). No named tier scheme
+// exists anywhere in this codebase or the art-generation docs, so tier
+// names are the plain ordinal the asset filenames themselves already use.
+function DialBadgeTile({ tier, threshold, value }) {
+  const unlocked = value >= threshold
+  return (
+    <div
+      title={`Tier ${tier} — ${threshold.toLocaleString()} total dials`}
+      className={clsx(
+        'flex w-28 flex-col items-center gap-2 rounded-card border p-3 text-center transition-all',
+        unlocked
+          ? 'border-[#1f8a5f]/30 bg-gradient-to-b from-[#1f8a5f]/10 to-transparent shadow-[0_0_16px_rgba(31,138,95,0.3)]'
+          : 'border-line bg-surface'
+      )}
+    >
+      <img
+        src={`/badges/badge-dials-tier${tier}.png`}
+        alt={`Dials Tier ${tier} badge`}
+        className={clsx('h-14 w-auto', !unlocked && 'grayscale opacity-35')}
+      />
+      <div>
+        <p className={clsx('font-sans text-xs font-semibold', unlocked ? 'text-fg-primary' : 'text-fg-faint')}>
+          Tier {tier}
+        </p>
+        <p className="font-sans text-[11px] text-fg-faint">{threshold.toLocaleString()} dials</p>
+      </div>
+    </div>
+  )
+}
+
+function DialsBadgeSection({ value, thresholds, first }) {
+  const { next } = tieredProgress(value, thresholds)
+  return (
+    <div className={clsx('py-5', !first && 'border-t border-line')}>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="eyebrow">Dials</p>
+        <p className="font-sans text-xs text-fg-faint">
+          {value.toLocaleString()} all-time{next != null ? ` · ${(next - value).toLocaleString()} to next` : ' · all tiers earned'}
+        </p>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-3">
+        {thresholds.map((t, i) => (
+          <DialBadgeTile key={t} tier={i + 1} threshold={t} value={value} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // Prompt 452 established the locked/unlocked philosophy (grayscale
 // silhouette vs. color+glow, no separate lock icon). Prompt 521's rebuild
-// (2026-08-24) replaced the flat icon+label pill AND the illustrated
-// per-tier PNG art with one shared `TierBadge` SVG shield, driven by a
-// runtime `color` — since the color varies per category/tier, the glow/
-// border/gradient chrome around it has to be inline `style`, not a
-// Tailwind arbitrary-value class (those need a static string for the
-// build-time JIT scanner, which a runtime hex can't provide). `w-40`
-// (was `w-28` on the old pill/PNG tiles) per Brayden's own "too narrow"
-// feedback on the live PNG version.
+// (2026-08-24) replaced the flat icon+label pill with one shared
+// `TierBadge` SVG shield for Bookings/Perfect Days/Commission/Special
+// (Dials reverted to real PNG art above), driven by a runtime `color` —
+// since the color varies per category/tier, the glow/border/gradient
+// chrome around it has to be inline `style`, not a Tailwind arbitrary-
+// value class (those need a static string for the build-time JIT
+// scanner, which a runtime hex can't provide).
 function BadgeTile({ icon, tier, maxTier, label, sub, color, unlocked }) {
   return (
     <div
@@ -277,7 +335,7 @@ export default function MyGoals() {
           </div>
 
           <div className="mt-3 rounded-card border border-line bg-elevated px-5">
-            <TierBadgeRow icon={PhoneCall} title="Dials" color={CATEGORY_COLORS.dials} value={badgeProgress.dials} thresholds={DIAL_TIERS} first />
+            <DialsBadgeSection value={badgeProgress.dials} thresholds={DIAL_TIERS} first />
             <TierBadgeRow icon={CalendarCheck} title="Bookings" color={CATEGORY_COLORS.bookings} value={badgeProgress.bookings} thresholds={BOOKING_TIERS} />
             <TierBadgeRow
               icon={Sun}
