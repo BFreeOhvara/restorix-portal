@@ -125,7 +125,11 @@ function ProgressTile({ label, value, target }) {
 const PNG_BADGE_CATEGORIES = {
   dials: {
     title: 'Dials',
-    glow: 'drop-shadow-[0_0_10px_rgba(31,138,95,0.6)]',
+    // Recolored 2026-08-24: Dials' original green got reassigned to
+    // Commission, so Dials moved to red (sampled from the new source
+    // art) to stay visually distinct from it — asset swap + this one
+    // color constant, no structural change.
+    glow: 'drop-shadow-[0_0_10px_rgba(220,43,36,0.6)]',
     format: (n) => n.toLocaleString(),
     tileLabel: (n) => `${n.toLocaleString()} dials`,
   },
@@ -148,8 +152,10 @@ const PNG_BADGE_CATEGORIES = {
   commission: {
     slug: 'commission',
     title: 'Commission',
-    // Same green Dials' glow uses, not a distinct hue — Brayden put
-    // Commission on this green before this round's art got generated.
+    // Was described as "the same green Dials uses" when this entry
+    // was added — that's now historical only: Dials moved to red the
+    // same day, so this hex (still `rgba(31,138,95,0.6)`) is Commission's
+    // own green rather than a shared one, unchanged by Dials' recolor.
     glow: 'drop-shadow-[0_0_10px_rgba(31,138,95,0.6)]',
     format: (n) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
     sectionSub: '15% of setup fee + first month, paid once a deal you booked reaches Closed',
