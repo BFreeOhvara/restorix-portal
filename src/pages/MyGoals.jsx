@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Sun, DollarSign, Zap } from 'lucide-react'
+import { ArrowRight, DollarSign, Zap } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useAllLeadsForStats, statsForUser } from '../hooks/useStats'
@@ -17,12 +17,11 @@ import { TierBadge } from '../components/ui/TierBadge'
 // accent-blue hex directly. The other three are new to this codebase —
 // picked from Tailwind's own default palette (amber/violet/orange) for
 // values already vetted at reasonable saturation/contrast rather than
-// invented from scratch. No `dials`/`bookings` entries — both are on
-// real illustrated PNG art now (see PngBadgeTile below), not the SVG
-// template; `bookings`'s hex lives on in PNG_BADGE_CATEGORIES' glow
-// value below instead.
+// invented from scratch. No `dials`/`bookings`/`perfectDays` entries —
+// all three are on real illustrated PNG art now (see PngBadgeTile
+// below), not the SVG template; their hexes live on in
+// PNG_BADGE_CATEGORIES' glow values below instead.
 const CATEGORY_COLORS = {
-  perfectDays: '#f59e0b',
   commission: '#8b5cf6',
   special: '#f97316',
 }
@@ -83,14 +82,19 @@ function ProgressTile({ label, value, target }) {
 }
 
 // Prompt 521 — real per-tier illustrated PNG art for tiered categories
-// (`badge-{category}-tier1..6`, escalating ornamentation baked into each
+// (`badge-{category}-tier1..N`, escalating ornamentation baked into each
 // image) rather than the shared SVG template the other categories use.
-// Dials shipped first; extended to Bookings this round — both driven by
-// this one `PngBadgeTile`/`PngBadgeSection` pair keyed off `category`
-// rather than two near-duplicate components, since the only real
-// per-category differences are the image path, the glow tint, and
-// whether the tile label says "dials" or just a bare number. No card/box
-// wrapper — no border, background, or shadow on the outer div — just the
+// Dials shipped first, then Bookings, then Perfect Days — all three
+// driven by this one `PngBadgeTile`/`PngBadgeSection` pair keyed off
+// `category` rather than near-duplicate components each, since the only
+// real per-category differences are the image path, the glow tint,
+// whether the tile label says "dials" or just a bare number, the tier
+// count (Perfect Days has 5, not 6 — the map below drives `.map()`
+// directly off each category's own `thresholds` array, nothing hardcodes
+// 6), and an optional section-level sub-line (Perfect Days' "150 dials +
+// 2 bookings in the same day" description, same text `TierBadgeRow` used
+// to render for it). No card/box wrapper — no border, background, or
+// shadow on the outer div — just the
 // badge floating free with its label; the "lights up when unlocked"
 // effect is a `drop-shadow` glow on the image itself (Brayden's own
 // explicit ask after seeing the boxed version live: the box was
@@ -126,6 +130,17 @@ const PNG_BADGE_CATEGORIES = {
     glow: 'drop-shadow-[0_0_10px_rgba(58,99,214,0.6)]',
     tileLabel: (n) => n.toLocaleString(),
   },
+  perfectDays: {
+    // `slug` drives the asset filename (`badge-perfect-days-tier{N}.png`,
+    // hyphenated to match the vault's own naming) — separate from the
+    // object key since `category` prop values elsewhere in this file are
+    // the camelCase keys `badgeProgress`/`tieredProgress` already use.
+    slug: 'perfect-days',
+    title: 'Perfect Days',
+    glow: 'drop-shadow-[0_0_10px_rgba(245,158,11,0.6)]',
+    tileLabel: (n) => n.toLocaleString(),
+    sectionSub: '150 dials + 2 bookings in the same day',
+  },
 }
 
 function PngBadgeTile({ category, tier, threshold, value }) {
@@ -137,7 +152,7 @@ function PngBadgeTile({ category, tier, threshold, value }) {
       className="flex flex-col items-center gap-2 text-center"
     >
       <img
-        src={`/badges/badge-${category}-tier${tier}.png`}
+        src={`/badges/badge-${meta.slug || category}-tier${tier}.png`}
         alt={`${meta.title} Tier ${tier} badge`}
         className={clsx('h-[140px] w-auto', unlocked ? meta.glow : 'grayscale opacity-35')}
       />
@@ -162,6 +177,7 @@ function PngBadgeSection({ category, value, thresholds, first }) {
           {value.toLocaleString()} all-time{next != null ? ` · ${(next - value).toLocaleString()} to next` : ' · all tiers earned'}
         </p>
       </div>
+      {meta.sectionSub && <p className="mt-1 font-sans text-xs text-fg-faint">{meta.sectionSub}</p>}
       <div className="mt-3 flex flex-nowrap gap-2">
         {thresholds.map((t, i) => (
           <PngBadgeTile key={t} category={category} tier={i + 1} threshold={t} value={value} />
@@ -174,12 +190,13 @@ function PngBadgeSection({ category, value, thresholds, first }) {
 // Prompt 452 established the locked/unlocked philosophy (grayscale
 // silhouette vs. color+glow, no separate lock icon). Prompt 521's rebuild
 // (2026-08-24) replaced the flat icon+label pill with one shared
-// `TierBadge` SVG shield for Bookings/Perfect Days/Commission/Special
-// (Dials reverted to real PNG art above), driven by a runtime `color` —
-// since the color varies per category/tier, the glow/border/gradient
-// chrome around it has to be inline `style`, not a Tailwind arbitrary-
-// value class (those need a static string for the build-time JIT
-// scanner, which a runtime hex can't provide).
+// `TierBadge` SVG shield, driven by a runtime `color` — since the color
+// varies per category/tier, the glow/border/gradient chrome around it
+// has to be inline `style`, not a Tailwind arbitrary-value class (those
+// need a static string for the build-time JIT scanner, which a runtime
+// hex can't provide). Dials, Bookings, and Perfect Days have since moved
+// off this template onto real PNG art (see PngBadgeTile above) as each
+// category's own art got made; only Commission/Special remain here.
 function BadgeTile({ icon, tier, maxTier, label, sub, color, unlocked }) {
   return (
     <div
@@ -207,10 +224,11 @@ function BadgeTile({ icon, tier, maxTier, label, sub, color, unlocked }) {
   )
 }
 
-// One row per tiered category (Dials/Bookings/Perfect Days/Commission) —
-// same shield template, same escalation logic, just a different icon/
-// color/tier array per category. Tier "names" are the plain ordinal
-// ("Tier 1"..."Tier N") since no named scheme (Bronze/Silver/etc.) exists
+// One row per SVG-shield tiered category (now just Commission — Dials/
+// Bookings/Perfect Days moved to PngBadgeSection above) — same shield
+// template, same escalation logic, just a different icon/color/tier
+// array per category. Tier "names" are the plain ordinal ("Tier
+// 1"..."Tier N") since no named scheme (Bronze/Silver/etc.) exists
 // anywhere in this codebase or the earlier art-generation docs.
 function TierBadgeRow({ icon, title, sub, color, value, thresholds, format = (n) => n.toLocaleString(), first }) {
   const { next } = tieredProgress(value, thresholds)
@@ -367,14 +385,7 @@ export default function MyGoals() {
           <div className="mt-3 rounded-card border border-line bg-elevated px-5">
             <PngBadgeSection category="dials" value={badgeProgress.dials} thresholds={DIAL_TIERS} first />
             <PngBadgeSection category="bookings" value={badgeProgress.bookings} thresholds={BOOKING_TIERS} />
-            <TierBadgeRow
-              icon={Sun}
-              title="Perfect Days"
-              sub="150 dials + 2 bookings in the same day"
-              color={CATEGORY_COLORS.perfectDays}
-              value={badgeProgress.perfectDays}
-              thresholds={PERFECT_DAY_TIERS}
-            />
+            <PngBadgeSection category="perfectDays" value={badgeProgress.perfectDays} thresholds={PERFECT_DAY_TIERS} />
             <TierBadgeRow
               icon={DollarSign}
               title="Commission"
