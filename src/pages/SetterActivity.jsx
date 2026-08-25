@@ -1,12 +1,75 @@
 import { useMemo, useState } from 'react'
+import { Send } from 'lucide-react'
 import { useAllLeadsForStats, useReps, statsForUser } from '../hooks/useStats'
+import { useSendSetterInviteSms } from '../hooks/useInvites'
 import { Field, inputClass } from '../components/ui/Field'
+import { Button } from '../components/ui/Button'
+import Modal from '../components/ui/Modal'
+
+// Prompt 533 reopen — moved off Settings onto this page (where a closer
+// already looks at their setters), top-right button same visual weight as
+// admin's own "Invite" button on Users.jsx. useSendSetterInviteSms and the
+// send-invite-sms edge function are unchanged from the original round —
+// this is a placement/UI move only.
+function InviteSetterModal({ onClose }) {
+  const [phone, setPhone] = useState('')
+  const [sentTo, setSentTo] = useState('')
+  const sendInvite = useSendSetterInviteSms()
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    try {
+      const { phone: normalized } = await sendInvite.mutateAsync({ phone })
+      setSentTo(normalized)
+      setPhone('')
+    } catch {
+      // error surfaced below via sendInvite.error
+    }
+  }
+
+  return (
+    <Modal title="Invite a setter" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <p className="font-sans text-sm text-fg-secondary">
+          Text a new setter a link to set up their own account. Expires in 7 days, one-time use.
+        </p>
+
+        <Field label="Phone number">
+          <input
+            type="tel"
+            className={inputClass()}
+            value={phone}
+            onChange={(e) => { setPhone(e.target.value); setSentTo('') }}
+            placeholder="(555) 123-4567"
+            required
+          />
+        </Field>
+
+        {sendInvite.error && <p className="font-sans text-sm text-danger">{sendInvite.error.message}</p>}
+        {sentTo && !sendInvite.isPending && (
+          <p className="font-sans text-sm text-success">Invite sent to {sentTo}.</p>
+        )}
+
+        <div className="flex justify-end gap-3 pt-2">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Close
+          </Button>
+          <Button type="submit" disabled={sendInvite.isPending}>
+            <Send size={15} />
+            {sendInvite.isPending ? 'Sending…' : 'Send invite'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
 
 export default function SetterActivity() {
   const { data: leads, isLoading } = useAllLeadsForStats()
   const { data: reps } = useReps()
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
+  const [showInvite, setShowInvite] = useState(false)
 
   const setters = useMemo(() => {
     if (!leads || !reps) return []
@@ -17,8 +80,15 @@ export default function SetterActivity() {
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-medium text-fg-primary">Setter Activity</h1>
-      <p className="mt-1 font-sans text-sm text-fg-secondary">See who's feeding your pipeline</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="font-display text-2xl font-medium text-fg-primary">Setter Activity</h1>
+          <p className="mt-1 font-sans text-sm text-fg-secondary">See who's feeding your pipeline</p>
+        </div>
+        <Button variant="secondary" onClick={() => setShowInvite(true)}>
+          <Send size={15} /> Invite Setter
+        </Button>
+      </div>
 
       <div className="mt-6 flex flex-wrap items-end gap-3">
         <Field label="From">
@@ -71,6 +141,8 @@ export default function SetterActivity() {
           </table>
         )}
       </div>
+
+      {showInvite && <InviteSetterModal onClose={() => setShowInvite(false)} />}
     </div>
   )
 }

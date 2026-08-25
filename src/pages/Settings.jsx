@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Moon, Sun, SunMoon, Video, CheckCircle2, Send } from 'lucide-react'
+import { Moon, Sun, SunMoon, Video, CheckCircle2 } from 'lucide-react'
 import clsx from 'clsx'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { useZoomConnection, useConnectZoom } from '../hooks/useZoom'
-import { useSendSetterInviteSms } from '../hooks/useInvites'
 import { Field, inputClass } from '../components/ui/Field'
 import { Button } from '../components/ui/Button'
 import { SELECTABLE_TIMEZONES, DEFAULT_TIMEZONE } from '../lib/timezones'
@@ -41,69 +40,7 @@ export default function Settings() {
           <ZoomForm profile={profile} />
         </div>
       )}
-
-      {profile.role === 'closer' && (
-        <div className="mt-6 rounded-card border border-line bg-elevated p-6">
-          <InviteSetterForm />
-        </div>
-      )}
     </div>
-  )
-}
-
-// Prompt 533 — closer's own invite-send flow, SMS only (email deferred to
-// a future prompt once Brayden has a provider picked). Same per-setting-card
-// pattern as ZoomForm/ThemeForm. The invite row itself is created via the
-// same useCreateInvite-style insert admin's InviteModal uses (see
-// useSendSetterInviteSms in useInvites.js) — this form only adds the phone
-// number and SMS delivery on top, since closers have no /users access to
-// reuse InviteModal directly.
-function InviteSetterForm() {
-  const [phone, setPhone] = useState('')
-  const [sentTo, setSentTo] = useState('')
-  const sendInvite = useSendSetterInviteSms()
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    try {
-      const { phone: normalized } = await sendInvite.mutateAsync({ phone })
-      setSentTo(normalized)
-      setPhone('')
-    } catch {
-      // error surfaced below via sendInvite.error
-    }
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <p className="font-sans text-sm font-semibold text-fg-primary">Invite a setter</p>
-        <p className="mt-1 font-sans text-xs text-fg-secondary">
-          Text a new setter a link to set up their own account. Expires in 7 days, one-time use.
-        </p>
-      </div>
-
-      <Field label="Phone number">
-        <input
-          type="tel"
-          className={inputClass()}
-          value={phone}
-          onChange={(e) => { setPhone(e.target.value); setSentTo('') }}
-          placeholder="(555) 123-4567"
-          required
-        />
-      </Field>
-
-      {sendInvite.error && <p className="font-sans text-sm text-danger">{sendInvite.error.message}</p>}
-      {sentTo && !sendInvite.isPending && (
-        <p className="font-sans text-sm text-success">Invite sent to {sentTo}.</p>
-      )}
-
-      <Button type="submit" disabled={sendInvite.isPending}>
-        <Send size={15} />
-        {sendInvite.isPending ? 'Sending…' : 'Send invite'}
-      </Button>
-    </form>
   )
 }
 
