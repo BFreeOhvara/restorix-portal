@@ -186,14 +186,16 @@ function PngBadgeTile({ category, tier, threshold, value }) {
 
 function PngBadgeSection({ category, value, thresholds, first }) {
   const meta = PNG_BADGE_CATEGORIES[category]
-  const { next } = tieredProgress(value, thresholds)
+  // Prompt 521 — right-side stat matched to Special's own "X/N earned"
+  // format instead of the old "X all-time · Y to next" text, applied
+  // identically here for all 4 tiered PNG categories. `thresholds.length`
+  // is each category's own real tier count (6/6/5/7) — never hardcoded.
+  const { earned } = tieredProgress(value, thresholds)
   return (
     <div className={clsx('py-5', !first && 'border-t border-line')}>
       <div className="flex items-baseline justify-between gap-3">
         <p className="eyebrow">{meta.title}</p>
-        <p className="font-sans text-xs text-fg-faint">
-          {meta.format(value)} all-time{next != null ? ` · ${meta.format(next - value)} to next` : ' · all tiers earned'}
-        </p>
+        <p className="font-sans text-xs text-fg-faint">{earned.length}/{thresholds.length} earned</p>
       </div>
       {meta.sectionSub && <p className="mt-1 font-sans text-xs text-fg-faint">{meta.sectionSub}</p>}
       <div className="mt-3 flex flex-nowrap gap-2">
@@ -270,6 +272,15 @@ export default function MyGoals() {
   const isLoading = leadsLoading || callsLoading
   const tz = profile?.timezone || DEFAULT_TIMEZONE
 
+  // Prompt 521 — same UI-only mock pattern Prompt 516 established for
+  // `test_setter`'s Stats page: scoped by username (never role, so it can
+  // never accidentally apply to a real setter), never a database write,
+  // just an override of the computed value this one account renders. Here
+  // it unlocks every tier of every badge category rather than generating
+  // believable partial numbers, since the ask is to show the fully-earned
+  // art for every category on this one demo account.
+  const isMockAccount = profile?.username === 'test_setter'
+
   const periodStats = useMemo(() => {
     if (!leads) return { logged: 0, booked: 0 }
     const { start, end } = rangeForPeriod(period, tz)
@@ -277,16 +288,26 @@ export default function MyGoals() {
   }, [leads, profile?.id, period, tz])
 
   const badgeProgress = useMemo(() => {
+    if (isMockAccount) {
+      return {
+        dials: Math.max(...DIAL_TIERS),
+        bookings: Math.max(...BOOKING_TIERS),
+        perfectDays: Math.max(...PERFECT_DAY_TIERS),
+        backToBack: true,
+        hatTrick: true,
+      }
+    }
     if (!calls) return { dials: 0, bookings: 0, perfectDays: 0, backToBack: false, hatTrick: false }
     return computeBadgeProgress(calls, tz)
-  }, [calls, tz])
+  }, [calls, tz, isMockAccount])
 
   // Prompt 468: real commission total now that a comp structure exists —
   // was hardcoded to 0 with an "honest placeholder" note before this.
   const myCommission = useMemo(() => {
+    if (isMockAccount) return Math.max(...COMMISSION_TIERS)
     if (!commissionLeads || !profile?.id) return 0
     return totalCommission(commissionLeads.filter((l) => l.last_action_by === profile.id))
-  }, [commissionLeads, profile?.id])
+  }, [commissionLeads, profile?.id, isMockAccount])
 
   // Prompt 517 — X/26 earned-count next to the Badges heading. Driven by
   // the exact same tier arrays and threshold logic (`tieredProgress`) the
@@ -348,7 +369,15 @@ export default function MyGoals() {
 
           <div className="mt-6 flex items-baseline justify-between gap-3">
             <p className="eyebrow">Badges — all-time, not affected by the toggle above</p>
-            <p className="font-sans text-sm font-semibold text-accent">{badgeTotals.earned}/{badgeTotals.total}</p>
+            {/* Prompt 521 — color + letter-spacing matched to the label's own
+                `.eyebrow` treatment (text-accent-deep, tracking-[0.14em] is
+                that class's exact 0.14em, not the closest Tailwind preset)
+                rather than the previous unrelated text-accent/no-tracking
+                combo; font-family/size/weight deliberately left as-is, only
+                color+tracking were asked to match. */}
+            <p className="font-sans text-sm font-semibold text-accent-deep tracking-[0.14em]">
+              {badgeTotals.earned}/{badgeTotals.total}
+            </p>
           </div>
 
           <div className="mt-3 rounded-card border border-line bg-elevated px-5">
