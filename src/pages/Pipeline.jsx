@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Plus, Upload, Phone, ClipboardEdit } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Plus, Upload, Search } from 'lucide-react'
 import clsx from 'clsx'
 import {
   usePipelineUnassignedLeads,
@@ -15,8 +15,6 @@ import StatusBadge, { STATUS_LABELS, STATUS_SOLID, STATUS_TINT } from '../compon
 import OutcomeBadge, { OUTCOME_LABELS, OUTCOME_SOLID, OUTCOME_TINT } from '../components/ui/OutcomeBadge'
 import AddLeadModal from '../components/AddLeadModal'
 import CsvImportModal from '../components/CsvImportModal'
-import LogCallModal from '../components/LogCallModal'
-import LogOutcomeModal from '../components/LogOutcomeModal'
 
 function fmt(dt) {
   if (!dt) return '—'
@@ -25,7 +23,79 @@ function fmt(dt) {
   })
 }
 
-const OUTCOME_FILTERS = ['all', 'pending', 'needs_reschedule', 'lost', 'closed']
+// Prompt 535 reopen — shared client-side search for every lead table on
+// this page. Facility + phone only (Contact was removed from these tables
+// this same round, so there's no contact name left to search).
+function filterLeads(leads, query) {
+  const q = query.trim().toLowerCase()
+  if (!q) return leads || []
+  return (leads || []).filter((lead) =>
+    lead.facility_name?.toLowerCase().includes(q) ||
+    lead.phone?.toLowerCase().includes(q)
+  )
+}
+
+// Prompt 535 reopen — full-width search bar, reused across every tab/sub-tab
+// on this page rather than four near-identical copies. Matches Overview's
+// own search input styling (SetterOverview) so the pattern reads the same
+// everywhere in the app.
+function SearchBar({ value, onChange, placeholder = 'Search facility or phone…' }) {
+  return (
+    <div className="relative mt-4">
+      <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-secondary" />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-lg border-2 border-line bg-elevated py-2 pl-9 pr-3 font-sans text-sm text-fg-primary shadow-sm outline-none focus:border-accent"
+      />
+    </div>
+  )
+}
+
+// Prompt 535 reopen — live countdown to a Follow-up lead's scheduled
+// callback, ticking every second (same interval pattern as LiveClock)
+// rather than a static "in X hours" computed once at render and left to
+// go stale while the row sits on screen.
+function timeRemainingLabel(diffMs) {
+  const totalSeconds = Math.floor(diffMs / 1000)
+  const days = Math.floor(totalSeconds / 86400)
+  const hours = Math.floor((totalSeconds % 86400) / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  if (days > 0) return `${days}d ${hours}h`
+  if (hours > 0) return `${hours}h ${minutes}m`
+  return `${minutes}m ${seconds}s`
+}
+
+function FollowUpCountdown({ target }) {
+  const [nowMs, setNowMs] = useState(() => Date.now())
+
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  if (!target) return <span className="text-fg-secondary">—</span>
+
+  const diffMs = new Date(target).getTime() - nowMs
+  if (diffMs <= 0) {
+    return (
+      <span className="font-mono text-xs font-semibold text-danger [font-variant-numeric:tabular-nums]">
+        Due now
+      </span>
+    )
+  }
+
+  return (
+    <span className="font-mono text-xs text-fg-primary [font-variant-numeric:tabular-nums]">
+      {timeRemainingLabel(diffMs)}
+    </span>
+  )
+}
+
+const OUTCOME_FILTERS = ['pending', 'needs_reschedule', 'lost', 'closed']
 
 // Prompt 465 — the raw backlog still sitting in the pool before day-end
 // distributes it into an actual setter/closer's working queue
@@ -36,10 +106,17 @@ const OUTCOME_FILTERS = ['all', 'pending', 'needs_reschedule', 'lost', 'closed']
 // override, not the raw status's own "New" text — every row here is
 // status='new' by construction (usePipelineUnassignedLeads' own query
 // filter), so this is a fixed, not per-row, label.
+// Prompt 535 reopen — Contact column dropped (was always "—"), search bar
+// added under the count/actions row (no sub-tab row beneath this one), and
+// the row list moved into a bounded scrollable box matching Overview's own
+// pattern instead of a full-page table.
 function UnassignedTab() {
   const { data: leads, isLoading } = usePipelineUnassignedLeads()
   const [showAdd, setShowAdd] = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const [search, setSearch] = useState('')
+
+  const filtered = useMemo(() => filterLeads(leads, search), [leads, search])
 
   return (
     <div>
@@ -57,38 +134,40 @@ function UnassignedTab() {
         </div>
       </div>
 
+      <SearchBar value={search} onChange={setSearch} />
+
       <div className="mt-4 overflow-hidden rounded-card border border-line bg-elevated">
         {isLoading ? (
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
-        ) : !leads?.length ? (
+        ) : !filtered.length ? (
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">
-            No unassigned leads — the pool is empty or everything has been distributed.
+            {leads?.length ? 'No leads match this search.' : 'No unassigned leads — the pool is empty or everything has been distributed.'}
           </p>
         ) : (
-          <table className="w-full text-left">
-            <thead className="eyebrow bg-surface">
-              <tr>
-                <th className="px-5 py-3">Facility</th>
-                <th className="px-5 py-3">Contact</th>
-                <th className="px-5 py-3">Phone</th>
-                <th className="px-5 py-3">Status</th>
-                <th className="px-5 py-3">Added</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leads.map((lead) => (
-                <tr key={lead.id} className="border-t border-line font-sans text-sm hover:bg-surface">
-                  <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
-                  <td className="px-5 py-4 text-fg-secondary">{lead.contact_name || '—'}</td>
-                  <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
-                  <td className="px-5 py-4">
-                    <StatusBadge status={lead.status} label="Unassigned" />
-                  </td>
-                  <td className="px-5 py-4 text-fg-secondary">{fmt(lead.created_at)}</td>
+          <div className="max-h-[65vh] overflow-y-auto">
+            <table className="w-full text-left">
+              <thead className="eyebrow sticky top-0 z-10 bg-surface">
+                <tr>
+                  <th className="px-5 py-3">Facility</th>
+                  <th className="px-5 py-3">Phone</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">Added</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map((lead) => (
+                  <tr key={lead.id} className="border-t border-line font-sans text-sm hover:bg-surface">
+                    <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
+                    <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
+                    <td className="px-5 py-4">
+                      <StatusBadge status={lead.status} label="Unassigned" />
+                    </td>
+                    <td className="px-5 py-4 text-fg-secondary">{fmt(lead.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -99,39 +178,44 @@ function UnassignedTab() {
 }
 
 // Prompt 535 — New/No Answer sub-tabs of Setter, unchanged in shape from
-// the old top-level Setter tab (assigned_setter-scoped, Log Call action) —
-// these two statuses are the only ones where assigned_setter stays set,
-// so this is the only pair that can use this query shape at all.
-function AssignedSetterLeadsTable({ statusFilter, setterNames }) {
+// the old top-level Setter tab (assigned_setter-scoped) — these two
+// statuses are the only ones where assigned_setter stays set, so this is
+// the only pair that can use this query shape at all.
+// Prompt 535 reopen — Contact column dropped, Log Call action removed
+// entirely (admin views this list read-only now — logging happens on the
+// setter's own Overview page, not from here), row list moved into the
+// shared scrollable box, and `search` (owned by the parent SetterTab, one
+// input above whichever sub-tab is active) now filters this table's own
+// fetch result.
+function AssignedSetterLeadsTable({ statusFilter, setterNames, search }) {
   const { data: leads, isLoading } = usePipelineSetterLeads(statusFilter)
-  const [callLead, setCallLead] = useState(null)
+  const filtered = useMemo(() => filterLeads(leads, search), [leads, search])
 
   return (
-    <>
-      <div className="mt-4 overflow-hidden rounded-card border border-line bg-elevated">
-        {isLoading ? (
-          <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
-        ) : !leads?.length ? (
-          <p className="p-8 text-center font-sans text-sm text-fg-secondary">
-            No {STATUS_LABELS[statusFilter]?.toLowerCase()} leads right now.
-          </p>
-        ) : (
+    <div className="mt-4 overflow-hidden rounded-card border border-line bg-elevated">
+      {isLoading ? (
+        <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
+      ) : !filtered.length ? (
+        <p className="p-8 text-center font-sans text-sm text-fg-secondary">
+          {leads?.length
+            ? 'No leads match this search.'
+            : `No ${STATUS_LABELS[statusFilter]?.toLowerCase()} leads right now.`}
+        </p>
+      ) : (
+        <div className="max-h-[65vh] overflow-y-auto">
           <table className="w-full text-left">
-            <thead className="eyebrow bg-surface">
+            <thead className="eyebrow sticky top-0 z-10 bg-surface">
               <tr>
                 <th className="px-5 py-3">Facility</th>
-                <th className="px-5 py-3">Contact</th>
                 <th className="px-5 py-3">Phone</th>
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3">Assigned Setter</th>
-                <th className="px-5 py-3"></th>
               </tr>
             </thead>
             <tbody>
-              {leads.map((lead) => (
+              {filtered.map((lead) => (
                 <tr key={lead.id} className="border-t border-line font-sans text-sm hover:bg-surface">
                   <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
-                  <td className="px-5 py-4 text-fg-secondary">{lead.contact_name || '—'}</td>
                   <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
                   <td className="px-5 py-4">
                     <StatusBadge status={lead.status} />
@@ -139,20 +223,13 @@ function AssignedSetterLeadsTable({ statusFilter, setterNames }) {
                   <td className="px-5 py-4 text-fg-secondary">
                     {lead.assigned_setter ? setterNames.get(lead.assigned_setter) || '—' : '—'}
                   </td>
-                  <td className="px-5 py-4 text-right">
-                    <Button variant="secondary" className="!px-3 !py-1.5" onClick={() => setCallLead(lead)}>
-                      <Phone size={13} /> Log call
-                    </Button>
-                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </div>
-
-      {callLead && <LogCallModal lead={callLead} onClose={() => setCallLead(null)} />}
-    </>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -161,7 +238,12 @@ function AssignedSetterLeadsTable({ statusFilter, setterNames }) {
 // both by design, per handle_lead_pipeline), informational only, no
 // per-row action — matches the pre-existing Not Interested tab's own
 // convention rather than inventing a new interactive pattern.
-function LastActionLeadsTable({ leads, isLoading, emptyText, dateHeader, dateValue, setterNames }) {
+// Prompt 535 reopen — Contact column dropped, row list moved into the
+// shared scrollable box, and an optional live countdown column (Follow-up
+// sub-tab only, via `showCountdown`) added alongside the existing due-date
+// column rather than replacing it — the date is still useful context next
+// to "how long until then."
+function LastActionLeadsTable({ leads, isLoading, emptyText, dateHeader, dateValue, setterNames, showCountdown }) {
   return (
     <div className="mt-4 overflow-hidden rounded-card border border-line bg-elevated">
       {isLoading ? (
@@ -169,30 +251,36 @@ function LastActionLeadsTable({ leads, isLoading, emptyText, dateHeader, dateVal
       ) : !leads?.length ? (
         <p className="p-8 text-center font-sans text-sm text-fg-secondary">{emptyText}</p>
       ) : (
-        <table className="w-full text-left">
-          <thead className="eyebrow bg-surface">
-            <tr>
-              <th className="px-5 py-3">Facility</th>
-              <th className="px-5 py-3">Contact</th>
-              <th className="px-5 py-3">Phone</th>
-              <th className="px-5 py-3">Logged By</th>
-              <th className="px-5 py-3">{dateHeader}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {leads.map((lead) => (
-              <tr key={lead.id} className="border-t border-line font-sans text-sm">
-                <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
-                <td className="px-5 py-4 text-fg-secondary">{lead.contact_name || '—'}</td>
-                <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
-                <td className="px-5 py-4 text-fg-secondary">
-                  {lead.last_action_by ? setterNames.get(lead.last_action_by) || '—' : '—'}
-                </td>
-                <td className="px-5 py-4 text-fg-secondary">{fmt(dateValue(lead))}</td>
+        <div className="max-h-[65vh] overflow-y-auto">
+          <table className="w-full text-left">
+            <thead className="eyebrow sticky top-0 z-10 bg-surface">
+              <tr>
+                <th className="px-5 py-3">Facility</th>
+                <th className="px-5 py-3">Phone</th>
+                <th className="px-5 py-3">Logged By</th>
+                <th className="px-5 py-3">{dateHeader}</th>
+                {showCountdown && <th className="px-5 py-3">Time Left</th>}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {leads.map((lead) => (
+                <tr key={lead.id} className="border-t border-line font-sans text-sm">
+                  <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
+                  <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
+                  <td className="px-5 py-4 text-fg-secondary">
+                    {lead.last_action_by ? setterNames.get(lead.last_action_by) || '—' : '—'}
+                  </td>
+                  <td className="px-5 py-4 text-fg-secondary">{fmt(dateValue(lead))}</td>
+                  {showCountdown && (
+                    <td className="px-5 py-4">
+                      <FollowUpCountdown target={lead.follow_up_at} />
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   )
@@ -214,8 +302,15 @@ const SUB_TABS = [
   { key: 'follow_up', label: 'Follow-up' },
 ]
 
+// Prompt 535 reopen — one search input, positioned under the sub-tab chip
+// row, filters whichever sub-tab is currently active (client-side for
+// Not Interested/Follow-up since those two are already fully fetched here;
+// server-fetched-then-filtered for New/No Answer inside
+// AssignedSetterLeadsTable itself, same `search` value passed straight
+// through).
 function SetterTab() {
   const [subTab, setSubTab] = useState('new')
+  const [search, setSearch] = useState('')
   const { data: counts } = usePipelineSetterStatusCounts()
   const { data: notInterested, isLoading: notInterestedLoading } = usePipelineNotInterestedLeads()
   const { data: followUps, isLoading: followUpsLoading } = usePipelineFollowUpLeads()
@@ -226,6 +321,9 @@ function SetterTab() {
     ;(reps || []).forEach((r) => map.set(r.id, r.full_name))
     return map
   }, [reps])
+
+  const filteredNotInterested = useMemo(() => filterLeads(notInterested, search), [notInterested, search])
+  const filteredFollowUps = useMemo(() => filterLeads(followUps, search), [followUps, search])
 
   const subCounts = {
     new: counts?.new ?? 0,
@@ -251,13 +349,15 @@ function SetterTab() {
         ))}
       </div>
 
-      {subTab === 'new' && <AssignedSetterLeadsTable statusFilter="new" setterNames={setterNames} />}
-      {subTab === 'no_answer' && <AssignedSetterLeadsTable statusFilter="no_answer" setterNames={setterNames} />}
+      <SearchBar value={search} onChange={setSearch} />
+
+      {subTab === 'new' && <AssignedSetterLeadsTable statusFilter="new" setterNames={setterNames} search={search} />}
+      {subTab === 'no_answer' && <AssignedSetterLeadsTable statusFilter="no_answer" setterNames={setterNames} search={search} />}
       {subTab === 'not_interested' && (
         <LastActionLeadsTable
-          leads={notInterested}
+          leads={filteredNotInterested}
           isLoading={notInterestedLoading}
-          emptyText="No not-interested leads yet."
+          emptyText={notInterested?.length ? 'No leads match this search.' : 'No not-interested leads yet.'}
           dateHeader="Date"
           dateValue={(lead) => lead.last_action_at}
           setterNames={setterNames}
@@ -265,23 +365,31 @@ function SetterTab() {
       )}
       {subTab === 'follow_up' && (
         <LastActionLeadsTable
-          leads={followUps}
+          leads={filteredFollowUps}
           isLoading={followUpsLoading}
-          emptyText="No follow-ups scheduled."
+          emptyText={followUps?.length ? 'No leads match this search.' : 'No follow-ups scheduled.'}
           dateHeader="Follow-up Date"
           dateValue={(lead) => lead.follow_up_at}
           setterNames={setterNames}
+          showCountdown
         />
       )}
     </div>
   )
 }
 
+// Prompt 535 reopen — "All" outcome filter dropped (same removal as
+// Setter's own "All" sub-tab in the original Prompt 535 build), default
+// filter now the first remaining chip (Pending) instead of All. Contact
+// column dropped, Log Outcome action removed entirely (admin views this
+// list read-only — outcomes are logged by the closer on their own My
+// Leads/Overview page, not from here), row list moved into the shared
+// scrollable box, and a search bar added under the outcome filter row.
 function CloserTab() {
   const { data: leads, isLoading } = usePipelineCloserLeads()
   const { data: reps } = useReps()
-  const [outcomeFilter, setOutcomeFilter] = useState('all')
-  const [outcomeLead, setOutcomeLead] = useState(null)
+  const [outcomeFilter, setOutcomeFilter] = useState('pending')
+  const [search, setSearch] = useState('')
 
   const closerNames = useMemo(() => {
     const map = new Map()
@@ -290,7 +398,7 @@ function CloserTab() {
   }, [reps])
 
   const counts = useMemo(() => {
-    const c = { all: leads?.length ?? 0, pending: 0, needs_reschedule: 0, lost: 0, closed: 0 }
+    const c = { pending: 0, needs_reschedule: 0, lost: 0, closed: 0 }
     for (const lead of leads || []) {
       const key = lead.closer_outcome || 'pending'
       c[key] = (c[key] || 0) + 1
@@ -298,11 +406,12 @@ function CloserTab() {
     return c
   }, [leads])
 
-  const filtered = useMemo(() => {
+  const outcomeFiltered = useMemo(() => {
     if (!leads) return []
-    if (outcomeFilter === 'all') return leads
     return leads.filter((l) => (l.closer_outcome || 'pending') === outcomeFilter)
   }, [leads, outcomeFilter])
+
+  const filtered = useMemo(() => filterLeads(outcomeFiltered, search), [outcomeFiltered, search])
 
   return (
     <div>
@@ -319,62 +428,54 @@ function CloserTab() {
             onClick={() => setOutcomeFilter(key)}
             className={clsx(
               'eyebrow rounded-full px-3.5 py-2 transition-colors hover:opacity-85',
-              outcomeFilter === key
-                ? key === 'all' ? 'bg-accent !text-white' : OUTCOME_SOLID[key]
-                : key === 'all' ? 'bg-muted !text-fg-secondary' : OUTCOME_TINT[key]
+              outcomeFilter === key ? OUTCOME_SOLID[key] : OUTCOME_TINT[key]
             )}
           >
-            {key === 'all' ? 'All' : OUTCOME_LABELS[key]} ({counts[key] || 0})
+            {OUTCOME_LABELS[key]} ({counts[key] || 0})
           </button>
         ))}
       </div>
+
+      <SearchBar value={search} onChange={setSearch} />
 
       <div className="mt-4 overflow-hidden rounded-card border border-line bg-elevated">
         {isLoading ? (
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
         ) : !filtered.length ? (
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">
-            {leads?.length ? 'No booked leads match this filter.' : 'No booked leads yet.'}
+            {outcomeFiltered.length ? 'No leads match this search.' : leads?.length ? 'No booked leads match this filter.' : 'No booked leads yet.'}
           </p>
         ) : (
-          <table className="w-full text-left">
-            <thead className="eyebrow bg-surface">
-              <tr>
-                <th className="px-5 py-3">Facility</th>
-                <th className="px-5 py-3">Contact</th>
-                <th className="px-5 py-3">Phone</th>
-                <th className="px-5 py-3">Assigned Closer</th>
-                <th className="px-5 py-3">Outcome</th>
-                <th className="px-5 py-3">Next Action</th>
-                <th className="px-5 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((lead) => (
-                <tr key={lead.id} className="border-t border-line font-sans text-sm hover:bg-surface">
-                  <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
-                  <td className="px-5 py-4 text-fg-secondary">{lead.contact_name || '—'}</td>
-                  <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
-                  <td className="px-5 py-4 text-fg-secondary">
-                    {lead.assigned_closer ? closerNames.get(lead.assigned_closer) || '—' : '—'}
-                  </td>
-                  <td className="px-5 py-4">
-                    <OutcomeBadge outcome={lead.closer_outcome} />
-                  </td>
-                  <td className="px-5 py-4 text-fg-secondary">{fmt(lead.strategy_call_at)}</td>
-                  <td className="px-5 py-4 text-right">
-                    <Button variant="secondary" className="!px-3 !py-1.5" onClick={() => setOutcomeLead(lead)}>
-                      <ClipboardEdit size={13} /> Log outcome
-                    </Button>
-                  </td>
+          <div className="max-h-[65vh] overflow-y-auto">
+            <table className="w-full text-left">
+              <thead className="eyebrow sticky top-0 z-10 bg-surface">
+                <tr>
+                  <th className="px-5 py-3">Facility</th>
+                  <th className="px-5 py-3">Phone</th>
+                  <th className="px-5 py-3">Assigned Closer</th>
+                  <th className="px-5 py-3">Outcome</th>
+                  <th className="px-5 py-3">Next Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map((lead) => (
+                  <tr key={lead.id} className="border-t border-line font-sans text-sm hover:bg-surface">
+                    <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
+                    <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
+                    <td className="px-5 py-4 text-fg-secondary">
+                      {lead.assigned_closer ? closerNames.get(lead.assigned_closer) || '—' : '—'}
+                    </td>
+                    <td className="px-5 py-4">
+                      <OutcomeBadge outcome={lead.closer_outcome} />
+                    </td>
+                    <td className="px-5 py-4 text-fg-secondary">{fmt(lead.strategy_call_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
-
-      {outcomeLead && <LogOutcomeModal lead={outcomeLead} onClose={() => setOutcomeLead(null)} />}
     </div>
   )
 }
@@ -383,8 +484,7 @@ function CloserTab() {
 // Prompt 515 Part 3 added a 4th top-level "Not Interested" tab.
 // Prompt 535 — Not Interested moved back OUT of top-level, into a Setter
 // sub-tab instead (Brayden's explicit call) — back to exactly 3 top-level
-// tabs. Closer tab is completely untouched by this prompt, per Brayden's
-// own explicit "leave it exactly as-is" instruction.
+// tabs.
 const TABS = [
   { key: 'unassigned', label: 'Unassigned' },
   { key: 'setter', label: 'Setter' },
