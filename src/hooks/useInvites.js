@@ -51,3 +51,37 @@ export function useRevokeInvite() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['invites'] }),
   })
 }
+
+// Prompt 533 — closer invite-send flow. US-only normalization (10 digits ->
+// +1XXXXXXXXXX, 11 starting with 1 -> +1XXXXXXXXXX) matches the phone
+// format Twilio's own `To` param expects everywhere else in this codebase
+// (send-appointment-reminders passes leads.phone straight through, and
+// every lead phone in this project is a US number).
+export function normalizePhoneE164(raw) {
+  const digits = (raw || '').replace(/\D/g, '')
+  if (digits.length === 10) return `+1${digits}`
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
+  return null
+}
+
+export function useSendSetterInviteSms() {
+  return useMutation({
+    mutationFn: async ({ phone }) => {
+      const normalized = normalizePhoneE164(phone)
+      if (!normalized) throw new Error('Enter a valid 10-digit US phone number')
+
+      const { data: userData } = await supabase.auth.getUser()
+      const token = generateToken()
+      const { error: insertError } = await supabase
+        .from('invites')
+        .insert({ token, role: 'setter', created_by: userData.user.id })
+      if (insertError) throw insertError
+
+      const { data, error } = await supabase.functions.invoke('send-invite-sms', {
+        body: { token, phone: normalized },
+      })
+      if (error || data?.error) throw new Error(data?.error || error.message)
+      return { token, phone: normalized }
+    },
+  })
+}
