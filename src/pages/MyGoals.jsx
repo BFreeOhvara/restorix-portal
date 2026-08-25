@@ -288,18 +288,18 @@ export default function MyGoals() {
   // Prompt 521 — same UI-only mock pattern Prompt 516 established for
   // `test_setter`'s Stats page: scoped by username (never role, so it can
   // never accidentally apply to a real setter), never a database write,
-  // just an override of the computed value this one account renders. Here
-  // it unlocks every tier of every badge category rather than generating
-  // believable partial numbers, since the ask is to show the fully-earned
-  // art for every category on this one demo account.
+  // just an override of the computed value this one account renders.
   //
-  // Prompt 521 reopen — Dials is the one deliberate exception: Brayden
-  // needed the next-tier progress line visible for real on this account,
-  // not provable only via a non-persisted DOM preview, so Dials gets a
-  // real partial value (his own example: ~1,500 dials, Tier 3 earned,
-  // Tier 4 at 2,500 the next locked tier) instead of maxed out. Every
-  // other category stays fully unlocked — this account's whole point is
-  // showing every category's fully-earned art.
+  // Prompt 521 reopen (round 3) — every tiered category (Dials/Bookings/
+  // Perfect Days/Commission) now mocks a realistic partial value instead
+  // of maxed out, so the earned-count line and the next-tier progress
+  // line are both checkable live across the whole badges section, not
+  // just Dials. Each value is picked to land 3 tiers in (earned) with the
+  // 4th tier as the next locked-with-progress one, same shape as Dials'
+  // original 1,500/2,500 example, just scaled to each category's own real
+  // unit (dials/bookings/perfect-days/dollars) rather than reusing one
+  // number everywhere. Special goes to one earned, one not (Brayden's own
+  // "either is fine" — arbitrary pick, not a specific ask).
   const isMockAccount = profile?.username === 'test_setter'
 
   const periodStats = useMemo(() => {
@@ -311,11 +311,11 @@ export default function MyGoals() {
   const badgeProgress = useMemo(() => {
     if (isMockAccount) {
       return {
-        dials: 1500,
-        bookings: Math.max(...BOOKING_TIERS),
-        perfectDays: Math.max(...PERFECT_DAY_TIERS),
+        dials: 1500, // Tier 1-3 earned (150/500/1,000), Tier 4 (2,500) next
+        bookings: 30, // Tier 1-3 earned (5/15/25), Tier 4 (50) next
+        perfectDays: 15, // Tier 1-3 earned (1/5/10), Tier 4 (25) next
         backToBack: true,
-        hatTrick: true,
+        hatTrick: false,
       }
     }
     if (!calls) return { dials: 0, bookings: 0, perfectDays: 0, backToBack: false, hatTrick: false }
@@ -325,7 +325,7 @@ export default function MyGoals() {
   // Prompt 468: real commission total now that a comp structure exists —
   // was hardcoded to 0 with an "honest placeholder" note before this.
   const myCommission = useMemo(() => {
-    if (isMockAccount) return Math.max(...COMMISSION_TIERS)
+    if (isMockAccount) return 750 // Tier 1-3 earned ($100/$250/$500), Tier 4 ($1,000) next
     if (!commissionLeads || !profile?.id) return 0
     return totalCommission(commissionLeads.filter((l) => l.last_action_by === profile.id))
   }, [commissionLeads, profile?.id, isMockAccount])
