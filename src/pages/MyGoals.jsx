@@ -163,7 +163,7 @@ const PNG_BADGE_CATEGORIES = {
   },
 }
 
-function PngBadgeTile({ category, tier, threshold, value }) {
+function PngBadgeTile({ category, tier, threshold, value, isNextTier }) {
   const meta = PNG_BADGE_CATEGORIES[category]
   const label = (meta.tileLabel || meta.format)(threshold)
   const unlocked = value >= threshold
@@ -174,6 +174,16 @@ function PngBadgeTile({ category, tier, threshold, value }) {
         alt={`${meta.title} Tier ${tier} badge`}
         className={clsx('h-[115px] w-auto', unlocked ? meta.glow : 'grayscale opacity-35')}
       />
+      {/* Prompt 521 — "progress to next tier" line, shown only on the
+          single next tier a setter hasn't reached yet (every earlier tier
+          is already earned, every later tier is further away and doesn't
+          need it). Same blue as the sidebar's active "My Goals" nav item
+          (`text-accent`, confirmed in Layout.jsx rather than guessed). */}
+      {isNextTier && (
+        <p className="font-sans text-xs font-semibold text-accent">
+          {meta.format(value)}/{meta.format(threshold)}
+        </p>
+      )}
       <div>
         <p className={clsx('font-sans text-sm font-semibold', unlocked ? 'text-fg-primary' : 'text-fg-faint')}>
           Tier {tier}
@@ -190,7 +200,7 @@ function PngBadgeSection({ category, value, thresholds, first }) {
   // format instead of the old "X all-time · Y to next" text, applied
   // identically here for all 4 tiered PNG categories. `thresholds.length`
   // is each category's own real tier count (6/6/5/7) — never hardcoded.
-  const { earned } = tieredProgress(value, thresholds)
+  const { earned, next } = tieredProgress(value, thresholds)
   return (
     <div className={clsx('py-5', !first && 'border-t border-line')}>
       <div className="flex items-baseline justify-between gap-3">
@@ -200,7 +210,7 @@ function PngBadgeSection({ category, value, thresholds, first }) {
       {meta.sectionSub && <p className="mt-1 font-sans text-xs text-fg-faint">{meta.sectionSub}</p>}
       <div className="mt-3 flex flex-nowrap gap-2">
         {thresholds.map((t, i) => (
-          <PngBadgeTile key={t} category={category} tier={i + 1} threshold={t} value={value} />
+          <PngBadgeTile key={t} category={category} tier={i + 1} threshold={t} value={value} isNextTier={t === next} />
         ))}
       </div>
     </div>
