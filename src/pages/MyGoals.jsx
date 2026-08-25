@@ -168,7 +168,7 @@ function PngBadgeTile({ category, tier, threshold, value, isNextTier }) {
   const label = (meta.tileLabel || meta.format)(threshold)
   const unlocked = value >= threshold
   return (
-    <div title={`Tier ${tier} — ${label}`} className="flex shrink-0 flex-col items-center gap-2 text-center">
+    <div title={`Tier ${tier} — ${label}`} className="flex shrink-0 flex-col items-center gap-0 text-center">
       <img
         src={`/badges/badge-${meta.slug || category}-tier${tier}.png`}
         alt={`${meta.title} Tier ${tier} badge`}
