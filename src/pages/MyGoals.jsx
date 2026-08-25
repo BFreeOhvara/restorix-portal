@@ -370,12 +370,15 @@ export default function MyGoals() {
           <div className="mt-6 flex items-baseline justify-between gap-3">
             <p className="eyebrow">Badges — all-time, not affected by the toggle above</p>
             {/* Prompt 521 — color + letter-spacing matched to the label's own
-                `.eyebrow` treatment (text-accent-deep, tracking-[0.14em] is
-                that class's exact 0.14em, not the closest Tailwind preset)
-                rather than the previous unrelated text-accent/no-tracking
-                combo; font-family/size/weight deliberately left as-is, only
-                color+tracking were asked to match. */}
-            <p className="font-sans text-sm font-semibold text-accent-deep tracking-[0.14em]">
+                `.eyebrow` treatment (text-accent-deep for color). Letter-
+                spacing uses the literal rendered pixel value (1.68px =
+                .eyebrow's 0.14em at its own 0.75rem font-size), not the same
+                0.14em class — this count keeps a larger text-sm size than
+                the label, and em-based tracking scales with font-size, so
+                reusing 0.14em verbatim would've landed at 1.96px here, a
+                real (if small) mismatch confirmed via computed-style
+                comparison rather than assumed close enough. */}
+            <p className="font-sans text-sm font-semibold text-accent-deep tracking-[1.68px]">
               {badgeTotals.earned}/{badgeTotals.total}
             </p>
           </div>
