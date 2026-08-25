@@ -148,6 +148,15 @@ const PNG_BADGE_CATEGORIES = {
     glow: 'drop-shadow-[0_0_10px_rgba(31,138,95,0.6)]',
     format: (n) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
     sectionSub: '15% of setup fee + first month, paid once a deal you booked reaches Closed',
+    // Commission's 7 tiles are the one case whose combined natural width
+    // (~1385px at 140px tall) can exceed the row's available width on a
+    // real desktop viewport (~1238px) — confirmed 2026-08-24 via pixel
+    // measurement, not assumed. Every other category's tile count fits
+    // comfortably. `wrap: true` lets tiles that don't fit drop to a
+    // second row at full size, rather than the row silently squishing
+    // them narrower (see `shrink-0` on the tile below for the other half
+    // of that fix).
+    wrap: true,
   },
 }
 
@@ -156,7 +165,7 @@ function PngBadgeTile({ category, tier, threshold, value }) {
   const label = (meta.tileLabel || meta.format)(threshold)
   const unlocked = value >= threshold
   return (
-    <div title={`Tier ${tier} — ${label}`} className="flex flex-col items-center gap-2 text-center">
+    <div title={`Tier ${tier} — ${label}`} className="flex shrink-0 flex-col items-center gap-2 text-center">
       <img
         src={`/badges/badge-${meta.slug || category}-tier${tier}.png`}
         alt={`${meta.title} Tier ${tier} badge`}
@@ -184,7 +193,7 @@ function PngBadgeSection({ category, value, thresholds, first }) {
         </p>
       </div>
       {meta.sectionSub && <p className="mt-1 font-sans text-xs text-fg-faint">{meta.sectionSub}</p>}
-      <div className="mt-3 flex flex-nowrap gap-2">
+      <div className={clsx('mt-3 flex gap-2', meta.wrap ? 'flex-wrap' : 'flex-nowrap')}>
         {thresholds.map((t, i) => (
           <PngBadgeTile key={t} category={category} tier={i + 1} threshold={t} value={value} />
         ))}
@@ -215,7 +224,7 @@ const SPECIAL_GLOW = 'drop-shadow-[0_0_10px_rgba(124,58,237,0.6)]'
 
 function SpecialBadgeTile({ slug, label, title, unlocked }) {
   return (
-    <div title={`${label} — ${title}`} className="flex flex-col items-center gap-2 text-center">
+    <div title={`${label} — ${title}`} className="flex shrink-0 flex-col items-center gap-2 text-center">
       <img
         src={`/badges/badge-special-${slug}.png`}
         alt={`${label} badge`}
