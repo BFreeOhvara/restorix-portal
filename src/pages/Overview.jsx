@@ -93,6 +93,15 @@ const STATUS_TABS = [
 // Prompt 515 Part 3 — the "Finish Day" action, shown once the New tab
 // hits zero (lets a fast setter skip waiting for local midnight; see the
 // design doc for why this and the passive cron produce identical state).
+// Prompt 535 — the "moved to 24h hold" copy below still describes the
+// CURRENT live behavior (no_answer_queue + redistribute_no_answers).
+// Prompt 535's own migration (_rotate_no_answer_to_pool, replacing that
+// two-stage handoff with an immediate return to the unassigned pool) is
+// blocked by this session's DDL classifier — see [[Restorix LIVE_STATE]]
+// for the ready-to-run SQL. Update this copy to "returned to the
+// unassigned pool" in the SAME change that ships that SQL, not before —
+// shipping the text ahead of the behavior would describe a mechanism
+// that isn't live yet.
 function FinishDayCard() {
   const finishDay = useFinishDay()
   const [result, setResult] = useState(null)
@@ -114,7 +123,7 @@ function FinishDayCard() {
       </Button>
       {result && (
         <span className="w-full font-sans text-xs text-fg-secondary">
-          {result.no_answer_rolled} no-answer{result.no_answer_rolled === 1 ? '' : 's'} returned to the unassigned pool ·{' '}
+          {result.no_answer_rolled} no-answer{result.no_answer_rolled === 1 ? '' : 's'} moved to 24h hold ·{' '}
           {result.refilled} new lead{result.refilled === 1 ? '' : 's'} pulled in for tomorrow.
         </span>
       )}
