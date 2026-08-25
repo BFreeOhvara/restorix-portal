@@ -63,10 +63,14 @@ const STATUS_BADGE = {
   new: 'bg-[#e3e9ff] !text-accent-deep dark:bg-[#1f2c4d]',
 }
 
-export default function StatusBadge({ status }) {
+// Prompt 535 — optional `label` override (e.g. admin Pipeline's Unassigned
+// tab wants the same blue "new" styling but reading "Unassigned" instead
+// of "New", since every row there is status='new' by construction). Every
+// other call site passes no `label` and renders exactly as before.
+export default function StatusBadge({ status, label }) {
   return (
     <span className={clsx('eyebrow inline-flex rounded-full px-2.5 py-1', STATUS_BADGE[status] || STATUS_BADGE.new)}>
-      {STATUS_LABELS[status] || status}
+      {label || STATUS_LABELS[status] || status}
     </span>
   )
 }

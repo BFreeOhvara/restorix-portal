@@ -24,6 +24,13 @@ export function useLeads(statusFilter) {
 // Partitions the New-and-not-yet-booked population against
 // usePipelineSetterLeads below — assigned_setter IS NULL here, IS NOT NULL
 // there — so the two tabs never overlap.
+// Prompt 535 — added an explicit status = 'new' filter. Follow-up and Not
+// Interested both null out assigned_setter by design (see
+// handle_lead_pipeline), so without this filter they were leaking into
+// this "Unassigned" tab's results too (confirmed live: 1 follow_up + 4
+// not_interested rows were showing up here alongside genuinely-unassigned
+// leads before this fix) — this tab means "fresh pool inventory," not
+// "anything with a null assigned_setter."
 export function usePipelineUnassignedLeads() {
   return useQuery({
     queryKey: ['pipeline-unassigned-leads'],
@@ -32,7 +39,7 @@ export function usePipelineUnassignedLeads() {
         .from('leads')
         .select('*')
         .is('assigned_setter', null)
-        .neq('status', 'appointment_booked')
+        .eq('status', 'new')
         .order('created_at', { ascending: false })
       if (error) throw error
       return data
@@ -44,8 +51,12 @@ export function usePipelineUnassignedLeads() {
 // Prompt 515 Part 3: 'not_interested' dropped from this list — that
 // status's `assigned_setter` is null by design, so a chip driven by this
 // assigned_setter-based count query could only ever show 0. It now has
-// its own dedicated admin tab (usePipelineNotInterestedLeads, Pipeline.jsx).
-const SETTER_LEAD_STATUSES = ['new', 'no_answer', 'follow_up']
+// its own dedicated admin sub-tab (usePipelineNotInterestedLeads, Pipeline.jsx).
+// Prompt 535: 'follow_up' dropped too, for the identical reason — the same
+// handle_lead_pipeline branch that nulls assigned_setter for not_interested
+// does it for follow_up as well (confirmed live: this chip always read 0).
+// It now has its own sub-tab too (usePipelineFollowUpLeads).
+const SETTER_LEAD_STATUSES = ['new', 'no_answer']
 
 // Prompt 464: admin Pipeline's Setter tab — a real server-side filter
 // excluding Appointment Booked (verified via direct query, not a client-side
@@ -326,6 +337,31 @@ export function usePipelineNotInterestedLeads() {
         .select('*')
         .eq('status', 'not_interested')
         .order('last_action_at', { ascending: false })
+      if (error) throw error
+      return data
+    },
+    refetchInterval: 15000,
+  })
+}
+
+// Prompt 535 — admin Pipeline's Follow-up sub-tab (now living under
+// Setter, not its own top-level tab). Same shape as
+// usePipelineNotInterestedLeads, not usePipelineSetterLeads('follow_up') —
+// follow_up also nulls assigned_setter (same handle_lead_pipeline trigger
+// branch that nulls it for not_interested), so the assigned_setter-scoped
+// query would structurally always return zero rows here, exactly the bug
+// that got not_interested its own dedicated query back in Prompt 515 Part
+// 3. This was a real, confirmed gap (verified live: the existing 'follow_up'
+// chip under the old Setter tab always showed 0), not just a relocation.
+export function usePipelineFollowUpLeads() {
+  return useQuery({
+    queryKey: ['pipeline-follow-up-leads'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('status', 'follow_up')
+        .order('follow_up_at', { ascending: true })
       if (error) throw error
       return data
     },

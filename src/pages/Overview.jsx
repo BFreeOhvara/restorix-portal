@@ -114,7 +114,7 @@ function FinishDayCard() {
       </Button>
       {result && (
         <span className="w-full font-sans text-xs text-fg-secondary">
-          {result.no_answer_rolled} no-answer{result.no_answer_rolled === 1 ? '' : 's'} moved to 24h hold ·{' '}
+          {result.no_answer_rolled} no-answer{result.no_answer_rolled === 1 ? '' : 's'} returned to the unassigned pool ·{' '}
           {result.refilled} new lead{result.refilled === 1 ? '' : 's'} pulled in for tomorrow.
         </span>
       )}
