@@ -100,11 +100,23 @@ function ProgressTile({ label, value, target }) {
 // tiers whose wings/crown extend the artwork) specifically so scaling
 // to a fixed CSS height renders every tier's shield at the same pixel
 // size, rather than the shield shrinking on tiers with more surrounding
-// ornamentation. Badge height 140px, `w-auto` so each tier keeps its own
-// aspect ratio. Tile container shrink-wraps to each image's own rendered
-// width (no fixed `w-*`, Prompt 521's 11th-reopen fix) with a tight
-// `gap-2` and `flex-nowrap` so every tier stays on one row regardless of
-// count, never wrapping, regardless of category.
+// ornamentation. Badge height 115px (was 140px through Commission's
+// launch — Brayden's own explicit call 2026-08-24 to shrink every
+// category uniformly rather than let Commission's 7 tiles wrap to a
+// second row; 115px was computed, not guessed, from Commission's own
+// 7-tile natural width at candidate heights against the row's real
+// ~1238px available width, landing on the largest height that still
+// clears it with a real margin (~52px) at `gap-2` unchanged — no source
+// art or per-tier scale touched, pure CSS), `w-auto` so each tier keeps
+// its own aspect ratio. Tile container shrink-wraps to each image's own
+// rendered width (no fixed `w-*`, Prompt 521's 11th-reopen fix) plus a
+// `shrink-0` guard (added when Commission's squish bug was first found
+// and fixed via wrapping; that wrap approach is gone now that the
+// shared height reduction alone keeps every category on one row, but
+// `shrink-0` stays as a harmless standing guard against the same
+// squish mechanism ever resurfacing) with a tight `gap-2` and
+// `flex-nowrap` so every tier stays on one row regardless of count,
+// never wrapping, for every category including Commission again.
 //
 // Glow colors are literal Tailwind arbitrary-value strings per category
 // (not built from a runtime hex) so the JIT scanner can find them as
@@ -148,15 +160,6 @@ const PNG_BADGE_CATEGORIES = {
     glow: 'drop-shadow-[0_0_10px_rgba(31,138,95,0.6)]',
     format: (n) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
     sectionSub: '15% of setup fee + first month, paid once a deal you booked reaches Closed',
-    // Commission's 7 tiles are the one case whose combined natural width
-    // (~1385px at 140px tall) can exceed the row's available width on a
-    // real desktop viewport (~1238px) — confirmed 2026-08-24 via pixel
-    // measurement, not assumed. Every other category's tile count fits
-    // comfortably. `wrap: true` lets tiles that don't fit drop to a
-    // second row at full size, rather than the row silently squishing
-    // them narrower (see `shrink-0` on the tile below for the other half
-    // of that fix).
-    wrap: true,
   },
 }
 
@@ -169,7 +172,7 @@ function PngBadgeTile({ category, tier, threshold, value }) {
       <img
         src={`/badges/badge-${meta.slug || category}-tier${tier}.png`}
         alt={`${meta.title} Tier ${tier} badge`}
-        className={clsx('h-[140px] w-auto', unlocked ? meta.glow : 'grayscale opacity-35')}
+        className={clsx('h-[115px] w-auto', unlocked ? meta.glow : 'grayscale opacity-35')}
       />
       <div>
         <p className={clsx('font-sans text-sm font-semibold', unlocked ? 'text-fg-primary' : 'text-fg-faint')}>
@@ -193,7 +196,7 @@ function PngBadgeSection({ category, value, thresholds, first }) {
         </p>
       </div>
       {meta.sectionSub && <p className="mt-1 font-sans text-xs text-fg-faint">{meta.sectionSub}</p>}
-      <div className={clsx('mt-3 flex gap-2', meta.wrap ? 'flex-wrap' : 'flex-nowrap')}>
+      <div className="mt-3 flex flex-nowrap gap-2">
         {thresholds.map((t, i) => (
           <PngBadgeTile key={t} category={category} tier={i + 1} threshold={t} value={value} />
         ))}
@@ -215,11 +218,11 @@ function PngBadgeSection({ category, value, thresholds, first }) {
 // category's own top tier uses). That shape doesn't fit
 // `PngBadgeTile`/`PngBadgeSection`'s tier+threshold signature, so this
 // is a small dedicated pair instead of forcing Special into the tiered
-// abstraction — same visual language (140px height, shrink-wrap tile
-// width, grayscale/opacity-35 locked vs. drop-shadow-glow unlocked) as
-// every PNG category, just keyed by achievement `slug` instead of tier
-// number. Purple was picked specifically not to collide with Dials'
-// red or Commission's green.
+// abstraction — same visual language (shared 115px height, shrink-wrap
+// tile width, grayscale/opacity-35 locked vs. drop-shadow-glow
+// unlocked) as every PNG category, just keyed by achievement `slug`
+// instead of tier number. Purple was picked specifically not to
+// collide with Dials' red or Commission's green.
 const SPECIAL_GLOW = 'drop-shadow-[0_0_10px_rgba(124,58,237,0.6)]'
 
 function SpecialBadgeTile({ slug, label, title, unlocked }) {
@@ -228,7 +231,7 @@ function SpecialBadgeTile({ slug, label, title, unlocked }) {
       <img
         src={`/badges/badge-special-${slug}.png`}
         alt={`${label} badge`}
-        className={clsx('h-[140px] w-auto', unlocked ? SPECIAL_GLOW : 'grayscale opacity-35')}
+        className={clsx('h-[115px] w-auto', unlocked ? SPECIAL_GLOW : 'grayscale opacity-35')}
       />
       <div>
         <p className={clsx('font-sans text-sm font-semibold', unlocked ? 'text-fg-primary' : 'text-fg-faint')}>
