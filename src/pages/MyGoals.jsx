@@ -178,12 +178,15 @@ function PngBadgeTile({ category, tier, threshold, value, isNextTier }) {
           single next tier a setter hasn't reached yet (every earlier tier
           is already earned, every later tier is further away and doesn't
           need it). Same blue as the sidebar's active "My Goals" nav item
-          (`text-accent`, confirmed in Layout.jsx rather than guessed). */}
-      {isNextTier && (
-        <p className="font-sans text-xs font-semibold text-accent">
-          {meta.format(value)}/{meta.format(threshold)}
-        </p>
-      )}
+          (`text-accent`, confirmed in Layout.jsx rather than guessed).
+          Always rendered (just `invisible` when not the next tier) so
+          every tile in a row reserves the same one-line slot for it —
+          otherwise "Tier N" only shifts down on the one tile that has a
+          progress line, out of alignment with its row neighbors (Prompt
+          521 reopen's layout bug). */}
+      <p className={clsx('font-sans text-xs font-semibold text-accent', !isNextTier && 'invisible')}>
+        {isNextTier ? `${meta.format(value)}/${meta.format(threshold)}` : ' '}
+      </p>
       <div>
         <p className={clsx('font-sans text-sm font-semibold', unlocked ? 'text-fg-primary' : 'text-fg-faint')}>
           Tier {tier}
@@ -289,6 +292,14 @@ export default function MyGoals() {
   // it unlocks every tier of every badge category rather than generating
   // believable partial numbers, since the ask is to show the fully-earned
   // art for every category on this one demo account.
+  //
+  // Prompt 521 reopen — Dials is the one deliberate exception: Brayden
+  // needed the next-tier progress line visible for real on this account,
+  // not provable only via a non-persisted DOM preview, so Dials gets a
+  // real partial value (his own example: ~1,500 dials, Tier 3 earned,
+  // Tier 4 at 2,500 the next locked tier) instead of maxed out. Every
+  // other category stays fully unlocked — this account's whole point is
+  // showing every category's fully-earned art.
   const isMockAccount = profile?.username === 'test_setter'
 
   const periodStats = useMemo(() => {
@@ -300,7 +311,7 @@ export default function MyGoals() {
   const badgeProgress = useMemo(() => {
     if (isMockAccount) {
       return {
-        dials: Math.max(...DIAL_TIERS),
+        dials: 1500,
         bookings: Math.max(...BOOKING_TIERS),
         perfectDays: Math.max(...PERFECT_DAY_TIERS),
         backToBack: true,
