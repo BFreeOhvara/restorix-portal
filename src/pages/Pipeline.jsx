@@ -29,7 +29,12 @@ function fmt(dt) {
 // Prompt 535 reopen — shared client-side search for every lead table on
 // this page. Facility + phone only (Contact was removed from these tables
 // this same round, so there's no contact name left to search).
-function filterLeads(leads, query) {
+// Prompt 542: exported so Overview.jsx's CloserOverview (My Pipeline) can
+// reuse this exact search behavior rather than a second near-identical
+// implementation — same reuse convention this codebase already uses in
+// the other direction (SetterOverview/CloserOverview exported for
+// MyLeads.jsx/MyPipeline.jsx).
+export function filterLeads(leads, query) {
   const q = query.trim().toLowerCase()
   if (!q) return leads || []
   return (leads || []).filter((lead) =>
@@ -41,8 +46,9 @@ function filterLeads(leads, query) {
 // Prompt 535 reopen — full-width search bar, reused across every tab/sub-tab
 // on this page rather than four near-identical copies. Matches Overview's
 // own search input styling (SetterOverview) so the pattern reads the same
-// everywhere in the app.
-function SearchBar({ value, onChange, placeholder = 'Search facility or phone…' }) {
+// everywhere in the app. Prompt 542: exported for the same reason as
+// filterLeads above.
+export function SearchBar({ value, onChange, placeholder = 'Search facility or phone…' }) {
   return (
     <div className="relative mt-4">
       <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-secondary" />

@@ -5,7 +5,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useMyPool, useMyBooked, useMyFollowUps, useMyNotInterested, useFinishDay, usePipelineHealth } from '../hooks/useLeads'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, followUpsDueToday } from '../hooks/useStats'
 import StatusBadge, { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
-import OutcomeBadge, { OUTCOME_LABELS } from '../components/ui/OutcomeBadge'
+import OutcomeBadge, { OUTCOME_LABELS, OUTCOME_TINT, OUTCOME_SOLID } from '../components/ui/OutcomeBadge'
 import { LiveClock } from '../components/ui/LiveClock'
 import { Button } from '../components/ui/Button'
 import { formatPhone } from '../lib/phone'
@@ -14,6 +14,7 @@ import LogCallModal from '../components/LogCallModal'
 import CloserLeadModal from '../components/CloserLeadModal'
 import { zonedDateStr, zonedDayRange } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
+import { SearchBar, filterLeads } from './Pipeline'
 
 function fmt(dt) {
   if (!dt) return '—'
@@ -340,6 +341,8 @@ const CLOSER_OUTCOME_TILES = ['pending', 'no_show', 'lost', 'closed']
 export function CloserOverview({ profile, title = 'Overview' }) {
   const { data: leads, isLoading } = useMyBooked(profile.id)
   const [activeLead, setActiveLead] = useState(null)
+  const [search, setSearch] = useState('')
+  const [outcomeFilter, setOutcomeFilter] = useState('pending')
   const tz = profile.timezone || DEFAULT_TIMEZONE
 
   const counts = useMemo(() => {
@@ -352,6 +355,18 @@ export function CloserOverview({ profile, title = 'Overview' }) {
     return c
   }, [leads])
 
+  // Prompt 542 — restyled to match admin Pipeline's Closer tab: the 4
+  // static Tile counts become clickable OUTCOME_TINT/SOLID filter chips
+  // (same treatment, same displayOutcome-driven counts), plus a search
+  // bar, both reused verbatim from Pipeline.jsx rather than re-implemented
+  // here. No "Assigned Closer" column — unlike admin's rollup, every row
+  // on this page is already this one closer's own lead.
+  const outcomeFiltered = useMemo(
+    () => (leads || []).filter((lead) => displayOutcome(lead) === outcomeFilter),
+    [leads, outcomeFilter]
+  )
+  const filtered = useMemo(() => filterLeads(outcomeFiltered, search), [outcomeFiltered, search])
+
   return (
     <div>
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -362,18 +377,33 @@ export function CloserOverview({ profile, title = 'Overview' }) {
         <DateClockRow timezone={tz} />
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-4 flex flex-wrap gap-2">
         {CLOSER_OUTCOME_TILES.map((key) => (
-          <Tile key={key} label={OUTCOME_LABELS[key]} value={isLoading ? '—' : counts[key]} />
+          <button
+            key={key}
+            onClick={() => setOutcomeFilter(key)}
+            className={clsx(
+              'eyebrow rounded-full px-3.5 py-2 transition-colors hover:opacity-85',
+              outcomeFilter === key ? OUTCOME_SOLID[key] : OUTCOME_TINT[key]
+            )}
+          >
+            {OUTCOME_LABELS[key]} ({isLoading ? 0 : counts[key] || 0})
+          </button>
         ))}
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-card border border-line bg-elevated">
+      <SearchBar value={search} onChange={setSearch} />
+
+      <div className="mt-4 overflow-hidden rounded-card border border-line bg-elevated">
         {isLoading ? (
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
-        ) : !leads?.length ? (
+        ) : !filtered.length ? (
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">
-            No booked leads yet — Strategy Calls are assigned to you automatically.
+            {outcomeFiltered.length
+              ? 'No leads match this search.'
+              : leads?.length
+                ? 'No booked leads match this filter.'
+                : 'No booked leads yet — Strategy Calls are assigned to you automatically.'}
           </p>
         ) : (
           <div className="max-h-[65vh] overflow-y-auto">
@@ -388,7 +418,7 @@ export function CloserOverview({ profile, title = 'Overview' }) {
                 </tr>
               </thead>
               <tbody>
-                {leads.map((lead) => (
+                {filtered.map((lead) => (
                   <tr
                     key={lead.id}
                     onClick={() => setActiveLead(lead)}
