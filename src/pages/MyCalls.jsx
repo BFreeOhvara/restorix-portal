@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Play, Loader2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useMyCallsForDay, fetchRecordingUrl } from '../hooks/useCalls'
 import StatusBadge from '../components/ui/StatusBadge'
 import { DayPaginator } from '../components/ui/DayPaginator'
+import Modal from '../components/ui/Modal'
 import { zonedDateStr } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 
@@ -25,40 +26,68 @@ function fmtDuration(seconds) {
 // only on demand — fetching a blob per row eagerly for a list of 100
 // calls would be a lot of wasted Twilio API traffic for recordings
 // nobody ends up listening to.
-function RecordingPlayer({ callId }) {
-  const [state, setState] = useState('idle') // idle | loading | ready | error
+//
+// Prompt 525 — the player itself now lives in a centered Modal instead of
+// inline in the table row (was a full <audio> scrubber taking over the
+// Recording cell). Fetch starts the moment the modal opens rather than
+// waiting for a second click inside it — "Play Recording" is already the
+// explicit play action, a loading state inside the modal is enough
+// feedback. Revokes the blob URL on close/unmount since the modal gives
+// this a real lifecycle to hang cleanup on (the old inline version had no
+// such moment).
+function RecordingModal({ callId, onClose }) {
+  const [state, setState] = useState('loading') // loading | ready | error
   const [blobUrl, setBlobUrl] = useState(null)
   const [error, setError] = useState('')
 
-  async function play() {
-    setState('loading')
-    setError('')
-    try {
-      const url = await fetchRecordingUrl(callId)
-      setBlobUrl(url)
-      setState('ready')
-    } catch (e) {
-      setError(e.message || 'Failed to load recording')
-      setState('error')
-    }
-  }
+  useEffect(() => {
+    let cancelled = false
+    fetchRecordingUrl(callId)
+      .then((url) => {
+        if (cancelled) { URL.revokeObjectURL(url); return }
+        setBlobUrl(url)
+        setState('ready')
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(e.message || 'Failed to load recording')
+          setState('error')
+        }
+      })
+    return () => { cancelled = true }
+  }, [callId])
 
-  if (state === 'ready' && blobUrl) {
-    return <audio controls autoPlay src={blobUrl} className="h-8 w-56" />
-  }
+  useEffect(() => {
+    if (!blobUrl) return
+    return () => URL.revokeObjectURL(blobUrl)
+  }, [blobUrl])
 
   return (
-    <div className="flex items-center gap-2">
+    <Modal title="Call Recording" onClose={onClose}>
+      {state === 'loading' && (
+        <div className="flex items-center justify-center gap-2 py-6 font-sans text-sm text-fg-secondary">
+          <Loader2 size={16} className="animate-spin" /> Loading…
+        </div>
+      )}
+      {state === 'error' && <p className="py-2 font-sans text-sm text-danger">{error}</p>}
+      {state === 'ready' && blobUrl && <audio controls autoPlay src={blobUrl} className="w-full" />}
+    </Modal>
+  )
+}
+
+function RecordingCell({ callId }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
       <button
-        onClick={play}
-        disabled={state === 'loading'}
-        className="flex items-center gap-1.5 rounded-full border border-line bg-elevated px-3 py-1.5 font-sans text-xs font-medium text-fg-primary hover:border-fg-primary/40 disabled:opacity-60"
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1.5 rounded-full border border-line bg-elevated px-3 py-1.5 font-sans text-xs font-medium text-fg-primary hover:border-fg-primary/40"
       >
-        {state === 'loading' ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
-        {state === 'loading' ? 'Loading…' : 'Play'}
+        <Play size={13} /> Play Recording
       </button>
-      {state === 'error' && <span className="font-sans text-xs text-danger">{error}</span>}
-    </div>
+      {open && <RecordingModal callId={callId} onClose={() => setOpen(false)} />}
+    </>
   )
 }
 
@@ -119,7 +148,7 @@ export default function MyCalls() {
                     </td>
                     <td className="px-5 py-4">
                       {c.recording_url ? (
-                        <RecordingPlayer callId={c.id} />
+                        <RecordingCell callId={c.id} />
                       ) : (
                         <span className="font-sans text-xs text-fg-faint">
                           {c.duration_seconds != null ? 'No recording' : 'Processing…'}
