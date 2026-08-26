@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 
 // Plain-text content area — Brayden edits SCRIPT_SECTIONS directly to update
 // call scripts. No generation or CMS, per spec (Prompt 433, relocated here
@@ -46,20 +47,8 @@ export default function Training() {
       <h1 className="font-display text-2xl font-medium text-fg-primary">Training</h1>
       <p className="mt-1 font-sans text-sm text-fg-secondary">Reference materials for the team</p>
 
-      <div className="mt-6 flex gap-2">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`rounded-lg border px-3 py-2 font-sans text-sm transition-colors ${
-              tab === t.key
-                ? 'border-accent bg-accent text-white'
-                : 'border-line bg-base text-fg-secondary hover:border-fg-primary/40'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="mt-6">
+        <SegmentedTabs tabs={TABS} active={tab} onChange={setTab} />
       </div>
 
       <div className="mt-6">

@@ -11,6 +11,7 @@ import {
 } from '../hooks/useLeads'
 import { useReps } from '../hooks/useStats'
 import { Button } from '../components/ui/Button'
+import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 import StatusBadge, { STATUS_LABELS, STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
 import OutcomeBadge, { OUTCOME_LABELS, OUTCOME_SOLID, OUTCOME_TINT } from '../components/ui/OutcomeBadge'
 import AddLeadModal from '../components/AddLeadModal'
@@ -485,6 +486,12 @@ function CloserTab() {
 // Prompt 535 — Not Interested moved back OUT of top-level, into a Setter
 // sub-tab instead (Brayden's explicit call) — back to exactly 3 top-level
 // tabs.
+// Prompt 535 reopen round 3 — restyled to the shared SegmentedTabs
+// component (Training page's rectangular/slightly-rounded look) instead
+// of the full-pill treatment, per Brayden's explicit ask. The New/No
+// Answer/Not Interested/Follow-up sub-tab row below (SUB_TABS, inside
+// SetterTab) is untouched — still the pill-shaped STATUS_TINT/SOLID
+// treatment, deliberately not part of this restyle.
 const TABS = [
   { key: 'unassigned', label: 'Unassigned' },
   { key: 'setter', label: 'Setter' },
@@ -498,19 +505,8 @@ export default function Pipeline() {
     <div>
       <h1 className="font-display text-2xl font-medium text-fg-primary">Pipeline</h1>
 
-      <div className="mt-4 flex gap-2">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={clsx(
-              'eyebrow rounded-full px-4 py-2 transition-colors',
-              tab === t.key ? 'bg-accent !text-white' : 'bg-muted !text-fg-secondary hover:opacity-85'
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="mt-4">
+        <SegmentedTabs tabs={TABS} active={tab} onChange={setTab} />
       </div>
 
       <div className="mt-6">
