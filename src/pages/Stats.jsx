@@ -359,7 +359,12 @@ function CustomDatePicker({ range, onChange, initialMonth }) {
 
   return (
     <div ref={ref} className="relative">
-      <div className="flex items-center rounded-full border border-line bg-elevated py-1.5 pl-4 pr-1.5 transition-colors hover:bg-surface">
+      {/* Prompt 538 — height locked to DayPaginator/MonthPaginator's own
+          real measured height (38px: their `p-1` wrapper + `h-7` buttons +
+          border, not the 36px the padding arithmetic alone suggests)
+          instead of the shorter `py-1.5` this pill previously used, which
+          rendered visibly shorter with the label off-center vertically. */}
+      <div className="flex h-[38px] items-center rounded-full border border-line bg-elevated pl-4 pr-1.5 transition-colors hover:bg-surface">
         <button
           onClick={() => setOpen((v) => !v)}
           className="min-w-[120px] text-center font-sans text-xs font-medium text-fg-primary"
@@ -406,6 +411,17 @@ export default function Stats() {
   const [monthStr, setMonthStr] = useState(() => monthOf(zonedDateStr(Date.now(), tz)))
   const [customRange, setCustomRange] = useState(null)
   const [weekMonday, setWeekMonday] = useState(() => mondayOf(zonedDateStr(Date.now(), tz)))
+
+  // Prompt 538 — the toggle's "All Time" segment surfaces the actually-
+  // picked custom range once one exists (e.g. "Aug 5 – Aug 10"), reusing
+  // CustomDatePicker's own formatRangeLabel rather than a second copy, and
+  // reverts to the base "All Time" label the moment customRange clears
+  // (X button, or never picked at all) — label swap only, PERIOD_TABS'
+  // `key`/underlying behavior is untouched.
+  const periodTabs = useMemo(
+    () => PERIOD_TABS.map((t) => (t.key === 'allTime' && customRange ? { ...t, label: formatRangeLabel(customRange) } : t)),
+    [customRange]
+  )
 
   const isAdmin = profile?.role === 'admin'
   const isCloser = profile?.role === 'closer'
@@ -510,7 +526,7 @@ export default function Stats() {
       </div>
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <PillToggle options={PERIOD_TABS} active={periodTab} onChange={setPeriodTab} />
+        <PillToggle options={periodTabs} active={periodTab} onChange={setPeriodTab} />
         {periodTab === 'daily' && <DayPaginator date={dayDate} onChange={setDayDate} timezone={tz} />}
         {periodTab === 'monthly' && <MonthPaginator month={monthStr} onChange={setMonthStr} timezone={tz} />}
         {periodTab === 'allTime' && (
