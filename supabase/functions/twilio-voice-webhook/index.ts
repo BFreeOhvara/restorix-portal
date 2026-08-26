@@ -84,7 +84,22 @@ Deno.serve(async (req) => {
   // than port Ohvara's silent-recording pattern as-is -- behavioral health
   // calls carry real two-party-consent exposure Ohvara's SMB cold-calling
   // never had to think about.
-  const recordingCallback = `${url.origin}${url.pathname}/recording`
+  //
+  // Prompt 525 reopen round 2: this used to be built from the INBOUND
+  // request's own `url.origin`/`url.pathname` -- confirmed via a direct
+  // simulated POST that Supabase's edge runtime reconstructs `req.url`
+  // internally as `http://avgvmzshujwphneykuvu.supabase.co/twilio-voice-webhook`,
+  // not the real public `https://.../functions/v1/twilio-voice-webhook` --
+  // wrong scheme (http, not https) AND missing the `/functions/v1/` routing
+  // prefix a public request actually needs. Twilio was silently never able
+  // to reach that URL, so `recordingStatusCallback` never fired despite the
+  // `record` value itself being valid (confirmed real recordings existed in
+  // the Twilio Console) -- completely independent of the earlier `-dual-channel`
+  // fix. Hardcoded to the same known-good public URL this file's own header
+  // comment documents, matching how `src/lib/supabase.js` already hardcodes
+  // this project's Supabase URL rather than trusting an env var/request to
+  // reconstruct it correctly.
+  const recordingCallback = 'https://avgvmzshujwphneykuvu.supabase.co/functions/v1/twilio-voice-webhook/recording'
 
   const body =
     '<Response>' +
