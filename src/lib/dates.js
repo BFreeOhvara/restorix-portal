@@ -40,6 +40,29 @@ export function shiftWeek(mondayStr, deltaWeeks) {
   return shiftDay(mondayStr, deltaWeeks * 7)
 }
 
+// Prompt 536 — month-granularity counterpart to mondayOf/shiftWeek above,
+// for Stats' Daily/Monthly/All Time period toggle. 'YYYY-MM' strings, same
+// pure calendar-string-arithmetic flavor as the day/week helpers.
+export function monthOf(dateStr) {
+  return dateStr.slice(0, 7)
+}
+
+export function shiftMonth(monthStr, deltaMonths) {
+  const [y, m] = monthStr.split('-').map(Number)
+  const total = y * 12 + (m - 1) + deltaMonths
+  const newY = Math.floor(total / 12)
+  const newM = ((total % 12) + 12) % 12 + 1
+  return `${newY}-${String(newM).padStart(2, '0')}`
+}
+
+export function firstOfMonth(monthStr) {
+  return `${monthStr}-01`
+}
+
+export function lastOfMonth(monthStr) {
+  return shiftDay(firstOfMonth(shiftMonth(monthStr, 1)), -1)
+}
+
 // Prompt 516 — whether a calendar date string falls on a weekday (Mon–Fri).
 // Same UTC calendar-string-arithmetic flavor as shiftDay/mondayOf above —
 // doesn't care what zone the string came from, only that it was computed

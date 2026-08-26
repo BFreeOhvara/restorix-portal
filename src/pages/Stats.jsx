@@ -2,9 +2,15 @@ import { useMemo, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser } from '../hooks/useStats'
 import { useMyAllCalls, groupCallsByDay, isPerfectDay } from '../hooks/useBadges'
-import { Field, inputClass } from '../components/ui/Field'
 import { WeekPaginator } from '../components/ui/WeekPaginator'
-import { zonedDateStr, zonedDayRange, mondayOf, shiftDay, lastNBusinessDays } from '../lib/dates'
+import { DayPaginator } from '../components/ui/DayPaginator'
+import { MonthPaginator } from '../components/ui/MonthPaginator'
+import { DateRangeCalendar } from '../components/ui/DateRangeCalendar'
+import { PillToggle } from '../components/ui/PillToggle'
+import {
+  zonedDateStr, zonedDayRange, mondayOf, shiftDay, lastNBusinessDays,
+  monthOf, firstOfMonth, lastOfMonth,
+} from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 
 function Tile({ label, value, sub }) {
@@ -17,28 +23,23 @@ function Tile({ label, value, sub }) {
   )
 }
 
-function DateRangeFilter({ start, end, setStart, setEnd }) {
-  return (
-    <div className="flex flex-wrap items-end gap-3">
-      <Field label="From">
-        <input type="date" className={inputClass()} value={start} onChange={(e) => setStart(e.target.value)} />
-      </Field>
-      <Field label="To">
-        <input type="date" className={inputClass()} value={end} onChange={(e) => setEnd(e.target.value)} />
-      </Field>
-      {(start || end) && (
-        <button
-          onClick={() => {
-            setStart('')
-            setEnd('')
-          }}
-          className="pb-2 font-sans text-sm text-fg-secondary underline-offset-2 hover:underline"
-        >
-          Clear
-        </button>
-      )}
-    </div>
-  )
+// Prompt 536 — replaced the old two-native-input FROM/TO range with this
+// three-way toggle. "All Time" doesn't mean unbounded-all-data despite the
+// label — Brayden's own words were "all time just turns into custom date":
+// selecting it reveals a custom date-range calendar (DateRangeCalendar)
+// in the same navigator slot Daily/Monthly use for their day/month
+// paginators, and the three stat cards below filter to whatever's picked.
+const PERIOD_TABS = [
+  { key: 'daily', label: 'Daily' },
+  { key: 'monthly', label: 'Monthly' },
+  { key: 'allTime', label: 'All Time' },
+]
+
+function formatRangeLabel(range) {
+  const short = (d) => new Date(`${d}T00:00:00.000Z`).toLocaleDateString(undefined, {
+    month: 'short', day: 'numeric', timeZone: 'UTC',
+  })
+  return range.start === range.end ? short(range.start) : `${short(range.start)} – ${short(range.end)}`
 }
 
 function weekdayLabel(dateStr) {
@@ -282,9 +283,14 @@ export default function Stats() {
   const { data: leads, isLoading } = useAllLeadsForStats()
   const { data: reps } = useReps()
   const { data: allCalls } = useMyAllCalls(profile?.id)
-  const [start, setStart] = useState('')
-  const [end, setEnd] = useState('')
   const tz = profile?.timezone || DEFAULT_TIMEZONE
+  // Prompt 536 — Daily/Monthly/All Time period toggle, replacing the old
+  // FROM/TO range. Each tab keeps its own independent nav state so
+  // switching tabs doesn't lose where you were in the other two.
+  const [periodTab, setPeriodTab] = useState('daily')
+  const [dayDate, setDayDate] = useState(() => zonedDateStr(Date.now(), tz))
+  const [monthStr, setMonthStr] = useState(() => monthOf(zonedDateStr(Date.now(), tz)))
+  const [customRange, setCustomRange] = useState(null)
   const [weekMonday, setWeekMonday] = useState(() => mondayOf(zonedDateStr(Date.now(), tz)))
 
   const isAdmin = profile?.role === 'admin'
@@ -321,28 +327,44 @@ export default function Stats() {
     return dates.map((date) => ({ date, ...(byDay.get(date) || { dials: 0, bookings: 0 }) }))
   }, [byDay, tz, isMockAccount])
 
+  // Prompt 536 — plain YYYY-MM-DD start/end for whichever period is
+  // currently active, still interpreted as calendar days in a given
+  // timezone downstream (zonedDayRange), same as the old FROM/TO values
+  // were. Daily/Monthly always resolve to a real pair; All Time only
+  // resolves once a range has actually been picked (`customRange` starts
+  // null — see the render below for why that's treated as "no data yet,"
+  // not silently falling through to genuinely unbounded all-time totals).
+  const rawRange = useMemo(() => {
+    if (periodTab === 'monthly') return { rawStart: firstOfMonth(monthStr), rawEnd: lastOfMonth(monthStr) }
+    if (periodTab === 'allTime') return { rawStart: customRange?.start || '', rawEnd: customRange?.end || '' }
+    return { rawStart: dayDate, rawEnd: dayDate }
+  }, [periodTab, dayDate, monthStr, customRange])
+
   // Prompt 458: the date-range picker's plain YYYY-MM-DD values are
   // interpreted as calendar days in the VIEWING user's own timezone
   // before querying — "Aug 17" means Aug 17 where I am, not UTC Aug 17.
   // Empty stays empty (no filter = all-time), same as before.
   const myStats = useMemo(() => {
     if (!leads) return null
-    const zStart = start ? zonedDayRange(start, tz).start : ''
-    const zEnd = end ? zonedDayRange(end, tz).end : ''
+    const { rawStart, rawEnd } = rawRange
+    const zStart = rawStart ? zonedDayRange(rawStart, tz).start : ''
+    const zEnd = rawEnd ? zonedDayRange(rawEnd, tz).end : ''
     return isCloser ? statsForCloser(leads, profile.id, zStart, zEnd) : statsForUser(leads, profile.id, zStart, zEnd)
-  }, [leads, profile, start, end, tz, isCloser])
+  }, [leads, profile, rawRange, tz, isCloser])
 
   // Prompt 458: per Brayden's answer, each rep's row uses THAT rep's own
   // saved timezone to resolve the same picked date range — not the
-  // viewing admin's — so "Aug 17" means Aug 17 in each rep's own zone,
-  // per row, even though every row shares the same nominal date picker.
+  // viewing admin's — so the same period means the same calendar day(s)
+  // in each rep's own zone, per row, even though every row shares the
+  // same nominal period selection.
   const rollup = useMemo(() => {
     if (!leads) return null
     const setters = (reps || []).filter((r) => r.role === 'setter')
     const closers = (reps || []).filter((r) => r.role === 'closer')
+    const { rawStart, rawEnd } = rawRange
     const rangeFor = (repTz) => ({
-      start: start ? zonedDayRange(start, repTz || DEFAULT_TIMEZONE).start : '',
-      end: end ? zonedDayRange(end, repTz || DEFAULT_TIMEZONE).end : '',
+      start: rawStart ? zonedDayRange(rawStart, repTz || DEFAULT_TIMEZONE).start : '',
+      end: rawEnd ? zonedDayRange(rawEnd, repTz || DEFAULT_TIMEZONE).end : '',
     })
     return {
       setters: setters.map((s) => {
@@ -354,34 +376,65 @@ export default function Stats() {
         return { ...c, ...statsForCloser(leads, c.id, r.start, r.end) }
       }),
     }
-  }, [leads, reps, start, end])
+  }, [leads, reps, rawRange])
 
   if (isLoading) {
     return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
   }
 
+  const hasSelectedRange = periodTab !== 'allTime' || !!customRange
+
   return (
     <div>
-      <h1 className="font-display text-2xl font-medium text-fg-primary">Stats</h1>
-      <p className="mt-1 font-sans text-sm text-fg-secondary">
-        {isAdmin ? 'Team performance' : 'Your performance'}
-      </p>
-
-      <div className="mt-6">
-        <DateRangeFilter start={start} end={end} setStart={setStart} setEnd={setEnd} />
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-medium text-fg-primary">Stats</h1>
+          <p className="mt-1 font-sans text-sm text-fg-secondary">
+            {isAdmin ? 'Team performance' : 'Your performance'}
+          </p>
+        </div>
+        <PillToggle options={PERIOD_TABS} active={periodTab} onChange={setPeriodTab} />
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {isCloser ? (
-          <Tile label="Strategy Calls Assigned" value={myStats.assigned} />
-        ) : (
-          <>
-            <Tile label="Calls Logged" value={myStats.logged} />
-            <Tile label="Calls Booked" value={myStats.booked} />
-            <Tile label="Booking Rate" value={`${myStats.bookingPct}%`} />
-          </>
+      <div className="mt-3 flex justify-end">
+        {periodTab === 'daily' && <DayPaginator date={dayDate} onChange={setDayDate} timezone={tz} />}
+        {periodTab === 'monthly' && <MonthPaginator month={monthStr} onChange={setMonthStr} timezone={tz} />}
+        {periodTab === 'allTime' && (
+          <div className="w-full max-w-xs">
+            {customRange && (
+              <p className="mb-2 text-right font-sans text-xs text-fg-secondary">
+                {formatRangeLabel(customRange)}{' '}
+                <button onClick={() => setCustomRange(null)} className="underline-offset-2 hover:underline">
+                  Clear
+                </button>
+              </p>
+            )}
+            <DateRangeCalendar
+              range={customRange}
+              onChange={setCustomRange}
+              initialMonth={monthOf(customRange?.start || dayDate)}
+            />
+          </div>
         )}
       </div>
+
+      {!hasSelectedRange ? (
+        <p className="mt-6 font-sans text-sm text-fg-secondary">
+          Pick a start and end date above to see stats for that range.
+        </p>
+      ) : (
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {isCloser ? (
+            <Tile label="Strategy Calls Assigned" value={myStats.assigned} />
+          ) : (
+            <>
+              <Tile label="Calls Logged" value={myStats.logged} />
+              <Tile label="Calls Booked" value={myStats.booked} />
+              <Tile label="Booking Rate" value={`${myStats.bookingPct}%`} />
+            </>
+          )}
+        </div>
+      )}
 
       {!isCloser && (
         <div className="mt-8 space-y-6">
