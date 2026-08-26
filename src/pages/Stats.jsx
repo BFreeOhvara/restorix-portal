@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { X } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser } from '../hooks/useStats'
 import { useMyAllCalls, groupCallsByDay, isPerfectDay } from '../hooks/useBadges'
@@ -117,6 +118,18 @@ function niceTicks(max, targetIntervals = 6) {
 // 44 → 64 specifically to make room for a real gap between the two
 // columns' widest realistic labels (Dials up to 3 digits, Bookings always
 // 1) — Bookings' anchor is now 24px left of Dials' own, not 16.
+//
+// Prompt 536 reopen round 3 — Brayden asked for the left-to-right order of
+// the three elements to swap: was Bookings-number, Dials-number, dash
+// (dash rightmost, physically touching the axis edge); now Dials-number,
+// dash, Bookings-number (dash in the middle, Bookings rightmost/closest to
+// the axis). Colors are unchanged (Dials stays fill-accent, Bookings stays
+// fill-success, dash stays neutral stroke-line) — only position moved. The
+// per-scale tick line that used to double as each series' own "dash" is
+// dropped down to a single shared dash per row (dials and bookings ticks
+// already coincide vertically since bookingsAxisMax=6 lines up with
+// niceTicks(maxDials)'s 6 intervals — see round 2 notes above) since two
+// dashes are no longer needed once only one sits in the middle.
 function WeeklyBarChart({ days }) {
   const W = 600
   const H = 200
@@ -141,20 +154,19 @@ function WeeklyBarChart({ days }) {
       <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full">
         {/* Left axis (Dials) drives the full-width gridlines — a second
             set from Bookings would draw non-aligned lines and read as
-            noise. Bookings gets its own tick-mark dashes only, sharing
-            the same neutral color and left-edge dash position as Dials. */}
+            noise. The single dash per row (round 3) is Dials' own tick
+            mark, now sitting between the Dials and Bookings numbers
+            instead of at the axis edge — Bookings no longer needs its
+            own dash since only one belongs in the middle. */}
         {dialsTicks.map((t) => (
           <g key={`dials-tick-${t}`}>
             <line x1={padXLeft} y1={yForDials(t)} x2={W - padXRight} y2={yForDials(t)} className="stroke-line" strokeWidth="1" opacity={t === 0 ? 1 : 0.5} />
-            <line x1={padXLeft - tickLen} y1={yForDials(t)} x2={padXLeft} y2={yForDials(t)} className="stroke-line" strokeWidth="1" />
-            <text x={padXLeft - tickLen - 4} y={yForDials(t)} dy="3.5" textAnchor="end" fontSize="10" className="fill-accent">{t}</text>
+            <line x1={padXLeft - 24} y1={yForDials(t)} x2={padXLeft - 20} y2={yForDials(t)} className="stroke-line" strokeWidth="1" />
+            <text x={padXLeft - 30} y={yForDials(t)} dy="3.5" textAnchor="end" fontSize="10" className="fill-accent">{t}</text>
           </g>
         ))}
         {bookingsTicks.map((t) => (
-          <g key={`bookings-tick-${t}`}>
-            <line x1={padXLeft - tickLen} y1={yForBookings(t)} x2={padXLeft} y2={yForBookings(t)} className="stroke-line" strokeWidth="1" />
-            <text x={padXLeft - tickLen - 28} y={yForBookings(t)} dy="3.5" textAnchor="end" fontSize="10" className="fill-success">{t}</text>
-          </g>
+          <text key={`bookings-tick-${t}`} x={padXLeft - tickLen} y={yForBookings(t)} dy="3.5" textAnchor="end" fontSize="10" className="fill-success">{t}</text>
         ))}
         {days.map((d, i) => {
           const groupX = padXLeft + i * groupWidth
@@ -306,9 +318,27 @@ function mockDays(dateList) {
 // instead of shifting layout. Completing a real selection (a full
 // start/end pair from the calendar, not just the first pending click)
 // closes the popover automatically; Clear inside it also closes it.
+//
+// Prompt 536 reopen round 3 — three fixes: (1) default label reads "All
+// Time" (matching the tab it lives under) instead of "Custom Date",
+// since with no range picked this now genuinely shows the true all-time
+// totals rather than an empty prompt state — see Stats() below. (2) an
+// "X" button resets straight back to that All Time default without
+// opening the popover. (3) the label's width now animates instead of
+// snapping — width is measured off the actual rendered label text
+// (`labelRef`/`labelWidth`) and applied as an explicit inline style so
+// `transition-[width]` has real numbers to interpolate between; CSS
+// can't animate a plain 'auto'-to-'auto' width change, which is why
+// Daily→Monthly's own toggle (PillToggle) only ever looked "subtle" by
+// accident (Daily/Monthly happen to be similar text widths) rather than
+// by any real animation — this pill needed the real fix since All
+// Time → a picked date range is a much bigger width swing.
 function CustomDatePicker({ range, onChange, initialMonth }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
+  const labelRef = useRef(null)
+  const [labelWidth, setLabelWidth] = useState(undefined)
+  const label = range ? formatRangeLabel(range) : 'All Time'
 
   useEffect(() => {
     function handleClick(e) {
@@ -318,14 +348,30 @@ function CustomDatePicker({ range, onChange, initialMonth }) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
+  useLayoutEffect(() => {
+    if (labelRef.current) setLabelWidth(labelRef.current.scrollWidth)
+  }, [label])
+
   return (
     <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="rounded-full border border-line bg-elevated px-4 py-1.5 font-sans text-xs font-medium text-fg-primary transition-colors hover:bg-surface"
-      >
-        {range ? formatRangeLabel(range) : 'Custom Date'}
-      </button>
+      <div className="flex items-center rounded-full border border-line bg-elevated py-1.5 pl-4 pr-1.5 transition-colors hover:bg-surface">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="overflow-hidden whitespace-nowrap font-sans text-xs font-medium text-fg-primary transition-[width] duration-200 ease-out"
+          style={{ width: labelWidth }}
+        >
+          <span ref={labelRef} className="inline-block">{label}</span>
+        </button>
+        {range && (
+          <button
+            onClick={() => onChange(null)}
+            aria-label="Reset to All Time"
+            className="ml-1 shrink-0 rounded-full p-1 text-fg-faint transition-colors hover:bg-elevated hover:text-fg-primary"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+      </div>
       {open && (
         <div className="absolute right-0 top-full z-20 mt-2 w-72 shadow-lg">
           <DateRangeCalendar
@@ -333,16 +379,6 @@ function CustomDatePicker({ range, onChange, initialMonth }) {
             onChange={(r) => { onChange(r); setOpen(false) }}
             initialMonth={initialMonth}
           />
-          {range && (
-            <div className="mt-2 flex justify-end">
-              <button
-                onClick={() => { onChange(null); setOpen(false) }}
-                className="font-sans text-xs text-fg-secondary underline-offset-2 hover:underline"
-              >
-                Clear
-              </button>
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -401,10 +437,14 @@ export default function Stats() {
   // Prompt 536 — plain YYYY-MM-DD start/end for whichever period is
   // currently active, still interpreted as calendar days in a given
   // timezone downstream (zonedDayRange), same as the old FROM/TO values
-  // were. Daily/Monthly always resolve to a real pair; All Time only
-  // resolves once a range has actually been picked (`customRange` starts
-  // null — see the render below for why that's treated as "no data yet,"
-  // not silently falling through to genuinely unbounded all-time totals).
+  // were. Daily/Monthly always resolve to a real pair.
+  //
+  // Prompt 536 reopen round 3 — All Time with no `customRange` picked now
+  // deliberately falls through to empty rawStart/rawEnd, which
+  // inRange()/statsForUser()/statsForCloser() already treat as "no filter
+  // = all time" (see useStats.js) — this is what makes All Time default
+  // to the true earliest-through-now range with zero clicks, per
+  // Brayden's ask, rather than the old empty "pick a date" prompt state.
   const rawRange = useMemo(() => {
     if (periodTab === 'monthly') return { rawStart: firstOfMonth(monthStr), rawEnd: lastOfMonth(monthStr) }
     if (periodTab === 'allTime') return { rawStart: customRange?.start || '', rawEnd: customRange?.end || '' }
@@ -453,8 +493,6 @@ export default function Stats() {
     return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
   }
 
-  const hasSelectedRange = periodTab !== 'allTime' || !!customRange
-
   return (
     <div>
       <div>
@@ -477,23 +515,17 @@ export default function Stats() {
         )}
       </div>
 
-      {!hasSelectedRange ? (
-        <p className="mt-3 font-sans text-sm text-fg-secondary">
-          Pick a start and end date above to see stats for that range.
-        </p>
-      ) : (
-        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {isCloser ? (
-            <Tile label="Strategy Calls Assigned" value={myStats.assigned} />
-          ) : (
-            <>
-              <Tile label="Calls Logged" value={myStats.logged} />
-              <Tile label="Calls Booked" value={myStats.booked} />
-              <Tile label="Booking Rate" value={`${myStats.bookingPct}%`} />
-            </>
-          )}
-        </div>
-      )}
+      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {isCloser ? (
+          <Tile label="Strategy Calls Assigned" value={myStats.assigned} />
+        ) : (
+          <>
+            <Tile label="Calls Logged" value={myStats.logged} />
+            <Tile label="Calls Booked" value={myStats.booked} />
+            <Tile label="Booking Rate" value={`${myStats.bookingPct}%`} />
+          </>
+        )}
+      </div>
 
       {!isCloser && (
         <div className="mt-8 space-y-6">
