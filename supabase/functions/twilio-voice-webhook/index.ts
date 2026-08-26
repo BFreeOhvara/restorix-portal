@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
     '<Say>This call may be recorded for quality and training purposes.</Say>' +
     '<Dial' +
     (callerId ? ` callerId="${callerId}"` : '') +
-    ` record="record-from-answer-dual-channel" recordingStatusCallback="${recordingCallback}"` +
+    ` record="record-from-answer-dual" recordingStatusCallback="${recordingCallback}"` +
     '>' +
     `<Number>${safeTo}</Number>` +
     '</Dial>' +
