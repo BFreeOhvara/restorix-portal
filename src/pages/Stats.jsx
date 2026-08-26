@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser } from '../hooks/useStats'
 import { useMyAllCalls, groupCallsByDay, isPerfectDay } from '../hooks/useBadges'
@@ -108,10 +108,19 @@ function niceTicks(max, targetIntervals = 6) {
 // the two scales apart; the little tick-mark dash next to each number is
 // a shared neutral (stroke-line) color for both, no longer colored per
 // series.
+//
+// Prompt 536 reopen round 2 — the first left-axis attempt shipped with a
+// real bug Brayden caught live: both label sets rendered close enough
+// (only a 16px anchor offset) that a 3-digit Dials number ("150") and a
+// 1-digit Bookings number ("6") visually ran together into one string
+// ("6150") instead of reading as two separate columns. `padXLeft` bumped
+// 44 → 64 specifically to make room for a real gap between the two
+// columns' widest realistic labels (Dials up to 3 digits, Bookings always
+// 1) — Bookings' anchor is now 24px left of Dials' own, not 16.
 function WeeklyBarChart({ days }) {
   const W = 600
   const H = 200
-  const padXLeft = 44
+  const padXLeft = 64
   const padXRight = 40
   const padY = 24
   const tickLen = 4
@@ -144,7 +153,7 @@ function WeeklyBarChart({ days }) {
         {bookingsTicks.map((t) => (
           <g key={`bookings-tick-${t}`}>
             <line x1={padXLeft - tickLen} y1={yForBookings(t)} x2={padXLeft} y2={yForBookings(t)} className="stroke-line" strokeWidth="1" />
-            <text x={padXLeft - tickLen - 20} y={yForBookings(t)} dy="3.5" textAnchor="end" fontSize="10" className="fill-success">{t}</text>
+            <text x={padXLeft - tickLen - 28} y={yForBookings(t)} dy="3.5" textAnchor="end" fontSize="10" className="fill-success">{t}</text>
           </g>
         ))}
         {days.map((d, i) => {
@@ -286,6 +295,60 @@ function mockDays(dateList) {
   return dateList.map((date) => ({ date, ...mockDayStats(date) }))
 }
 
+// Prompt 536 reopen round 2 — All Time no longer shows the calendar
+// inline the moment the tab is picked (that pushed every card/section
+// below it down the page). Now a "Custom Date" pill trigger sits in the
+// same navigator slot Daily/Monthly's paginators use; clicking it opens
+// the real DateRangeCalendar as a floating popover (same
+// relative-wrapper + absolute-panel + click-outside-to-close pattern
+// Layout.jsx's own NotificationBell already established — reused
+// verbatim, not reinvented) so it floats over whatever's beneath it
+// instead of shifting layout. Completing a real selection (a full
+// start/end pair from the calendar, not just the first pending click)
+// closes the popover automatically; Clear inside it also closes it.
+function CustomDatePicker({ range, onChange, initialMonth }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="rounded-full border border-line bg-elevated px-4 py-1.5 font-sans text-xs font-medium text-fg-primary transition-colors hover:bg-surface"
+      >
+        {range ? formatRangeLabel(range) : 'Custom Date'}
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-20 mt-2 w-72 shadow-lg">
+          <DateRangeCalendar
+            range={range}
+            onChange={(r) => { onChange(r); setOpen(false) }}
+            initialMonth={initialMonth}
+          />
+          {range && (
+            <div className="mt-2 flex justify-end">
+              <button
+                onClick={() => { onChange(null); setOpen(false) }}
+                className="font-sans text-xs text-fg-secondary underline-offset-2 hover:underline"
+              >
+                Clear
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Stats() {
   const { profile } = useAuth()
   const { data: leads, isLoading } = useAllLeadsForStats()
@@ -394,40 +457,28 @@ export default function Stats() {
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-2xl font-medium text-fg-primary">Stats</h1>
-          <p className="mt-1 font-sans text-sm text-fg-secondary">
-            {isAdmin ? 'Team performance' : 'Your performance'}
-          </p>
-        </div>
-        <PillToggle options={PERIOD_TABS} active={periodTab} onChange={setPeriodTab} />
+      <div>
+        <h1 className="font-display text-2xl font-medium text-fg-primary">Stats</h1>
+        <p className="mt-1 font-sans text-sm text-fg-secondary">
+          {isAdmin ? 'Team performance' : 'Your performance'}
+        </p>
       </div>
 
-      <div className="mt-2 flex justify-end">
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <PillToggle options={PERIOD_TABS} active={periodTab} onChange={setPeriodTab} />
         {periodTab === 'daily' && <DayPaginator date={dayDate} onChange={setDayDate} timezone={tz} />}
         {periodTab === 'monthly' && <MonthPaginator month={monthStr} onChange={setMonthStr} timezone={tz} />}
         {periodTab === 'allTime' && (
-          <div className="w-full max-w-xs">
-            {customRange && (
-              <p className="mb-2 text-right font-sans text-xs text-fg-secondary">
-                {formatRangeLabel(customRange)}{' '}
-                <button onClick={() => setCustomRange(null)} className="underline-offset-2 hover:underline">
-                  Clear
-                </button>
-              </p>
-            )}
-            <DateRangeCalendar
-              range={customRange}
-              onChange={setCustomRange}
-              initialMonth={monthOf(customRange?.start || dayDate)}
-            />
-          </div>
+          <CustomDatePicker
+            range={customRange}
+            onChange={setCustomRange}
+            initialMonth={monthOf(customRange?.start || dayDate)}
+          />
         )}
       </div>
 
       {!hasSelectedRange ? (
-        <p className="mt-6 font-sans text-sm text-fg-secondary">
+        <p className="mt-3 font-sans text-sm text-fg-secondary">
           Pick a start and end date above to see stats for that range.
         </p>
       ) : (
