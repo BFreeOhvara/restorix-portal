@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Modal from './ui/Modal'
 import { Button } from './ui/Button'
 import { useAddLeads } from '../hooks/useLeads'
+import { formatPhone } from '../lib/phone'
 
 function parseCsv(text) {
   const lines = text.trim().split(/\r?\n/).filter(Boolean)
@@ -81,7 +82,7 @@ export default function CsvImportModal({ onClose }) {
                   <tr key={i} className="border-t border-line">
                     <td className="px-3 py-2">{r.facility_name}</td>
                     <td className="px-3 py-2 text-fg-secondary">{r.contact_name || '—'}</td>
-                    <td className="px-3 py-2 text-fg-secondary">{r.phone || '—'}</td>
+                    <td className="px-3 py-2 text-fg-secondary">{formatPhone(r.phone) || '—'}</td>
                   </tr>
                 ))}
               </tbody>

@@ -9,6 +9,7 @@ import { useLogCall } from '../hooks/useLeads'
 import { useCreateCall, useUpdateCall } from '../hooks/useCalls'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
+import { formatPhone } from '../lib/phone'
 
 const OUTCOMES = [
   { value: 'no_answer', label: 'No Answer' },
@@ -319,7 +320,7 @@ function CallSection({ lead, onAttempt, onCallSid, onCallConcluded }) {
     return (
       <div>
         <Button type="button" className="w-full" onClick={startCall}>
-          <Phone size={14} /> Call {lead.phone}
+          <Phone size={14} /> Call {formatPhone(lead.phone)}
         </Button>
         {callState === 'error' && (
           <p className="mt-1.5 text-center font-sans text-xs text-danger">
@@ -344,7 +345,7 @@ function CallSection({ lead, onAttempt, onCallSid, onCallConcluded }) {
       onClick={() => { onAttempt(); onCallConcluded?.() }}
       className="flex h-11 items-center justify-center gap-2 rounded-full bg-accent font-sans text-sm font-semibold text-white"
     >
-      <Phone size={14} /> Call {lead.phone}
+      <Phone size={14} /> Call {formatPhone(lead.phone)}
     </a>
   )
 }

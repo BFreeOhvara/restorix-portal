@@ -170,14 +170,18 @@ function NotificationBell() {
 // attention" signal rather than a neutral action button — dropped so
 // both buttons share one plain treatment, same as the phone button
 // already had. `tone`/`emoji` props are gone with it, not left dead.
+// Prompt 537 — shrunk from h-16/w-16 (64px) + size-28 icon: too large
+// relative to the rest of the sidebar (17px nav icons, the account card
+// below). 44px + size-20 keeps both circular and equal to each other, just
+// noticeably smaller.
 function SidebarIconButton({ icon: Icon, label, onClick }) {
   return (
     <button
       onClick={onClick}
       title={label}
-      className="flex h-16 w-16 items-center justify-center rounded-full border border-line bg-surface text-fg-secondary transition-colors hover:border-fg-primary/40 hover:text-fg-primary"
+      className="flex h-11 w-11 items-center justify-center rounded-full border border-line bg-surface text-fg-secondary transition-colors hover:border-fg-primary/40 hover:text-fg-primary"
     >
-      <Icon size={28} />
+      <Icon size={20} />
     </button>
   )
 }

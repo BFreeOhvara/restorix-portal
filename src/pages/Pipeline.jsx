@@ -16,6 +16,7 @@ import StatusBadge, { STATUS_LABELS, STATUS_SOLID, STATUS_TINT } from '../compon
 import OutcomeBadge, { OUTCOME_LABELS, OUTCOME_SOLID, OUTCOME_TINT } from '../components/ui/OutcomeBadge'
 import AddLeadModal from '../components/AddLeadModal'
 import CsvImportModal from '../components/CsvImportModal'
+import { formatPhone } from '../lib/phone'
 
 function fmt(dt) {
   if (!dt) return '—'
@@ -159,7 +160,7 @@ function UnassignedTab() {
                 {filtered.map((lead) => (
                   <tr key={lead.id} className="border-t border-line font-sans text-sm hover:bg-surface">
                     <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
-                    <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
+                    <td className="px-5 py-4 text-fg-secondary">{formatPhone(lead.phone) || '—'}</td>
                     <td className="px-5 py-4">
                       <StatusBadge status={lead.status} label="Unassigned" />
                     </td>
@@ -217,7 +218,7 @@ function AssignedSetterLeadsTable({ statusFilter, setterNames, search }) {
               {filtered.map((lead) => (
                 <tr key={lead.id} className="border-t border-line font-sans text-sm hover:bg-surface">
                   <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
-                  <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
+                  <td className="px-5 py-4 text-fg-secondary">{formatPhone(lead.phone) || '—'}</td>
                   <td className="px-5 py-4">
                     <StatusBadge status={lead.status} />
                   </td>
@@ -267,7 +268,7 @@ function LastActionLeadsTable({ leads, isLoading, emptyText, dateHeader, dateVal
               {leads.map((lead) => (
                 <tr key={lead.id} className="border-t border-line font-sans text-sm">
                   <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
-                  <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
+                  <td className="px-5 py-4 text-fg-secondary">{formatPhone(lead.phone) || '—'}</td>
                   <td className="px-5 py-4 text-fg-secondary">
                     {lead.last_action_by ? setterNames.get(lead.last_action_by) || '—' : '—'}
                   </td>
@@ -462,7 +463,7 @@ function CloserTab() {
                 {filtered.map((lead) => (
                   <tr key={lead.id} className="border-t border-line font-sans text-sm hover:bg-surface">
                     <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
-                    <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
+                    <td className="px-5 py-4 text-fg-secondary">{formatPhone(lead.phone) || '—'}</td>
                     <td className="px-5 py-4 text-fg-secondary">
                       {lead.assigned_closer ? closerNames.get(lead.assigned_closer) || '—' : '—'}
                     </td>

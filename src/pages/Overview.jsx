@@ -8,6 +8,7 @@ import StatusBadge, { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusB
 import OutcomeBadge, { OUTCOME_LABELS } from '../components/ui/OutcomeBadge'
 import { LiveClock } from '../components/ui/LiveClock'
 import { Button } from '../components/ui/Button'
+import { formatPhone } from '../lib/phone'
 import LogCallModal from '../components/LogCallModal'
 import CloserLeadModal from '../components/CloserLeadModal'
 import { zonedDateStr, zonedDayRange } from '../lib/dates'
@@ -279,7 +280,7 @@ export function SetterOverview({ profile, title = 'Overview' }) {
                     )}
                   >
                     <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
-                    <td className="px-5 py-4 text-fg-secondary">{lead.phone || '—'}</td>
+                    <td className="px-5 py-4 text-fg-secondary">{formatPhone(lead.phone) || '—'}</td>
                     <td className="px-5 py-4">
                       <StatusBadge status={lead.status} />
                     </td>
@@ -392,7 +393,7 @@ export function CloserOverview({ profile, title = 'Overview' }) {
                   >
                     <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
                     <td className="px-5 py-4 text-fg-secondary">
-                      {lead.contact_name || 'No contact name'} · {lead.phone || 'No phone'}
+                      {lead.contact_name || 'No contact name'} · {formatPhone(lead.phone) || 'No phone'}
                     </td>
                     <td className="px-5 py-4 text-fg-secondary">{fmt(lead.strategy_call_at)}</td>
                     <td className="px-5 py-4">
