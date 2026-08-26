@@ -17,6 +17,7 @@ import OutcomeBadge, { OUTCOME_LABELS, OUTCOME_SOLID, OUTCOME_TINT } from '../co
 import AddLeadModal from '../components/AddLeadModal'
 import CsvImportModal from '../components/CsvImportModal'
 import { formatPhone } from '../lib/phone'
+import { displayOutcome } from '../lib/closerOutcome'
 
 function fmt(dt) {
   if (!dt) return '—'
@@ -97,7 +98,12 @@ function FollowUpCountdown({ target }) {
   )
 }
 
-const OUTCOME_FILTERS = ['pending', 'needs_reschedule', 'lost', 'closed']
+// Prompt 540 — 'needs_reschedule' replaced by 'no_show' (derived, see
+// lib/closerOutcome.js). This admin tab stays read-only (comment above
+// CloserTab below) — it displays the derived No Show state correctly from
+// data alone, it just never runs the auto-Lost escalation write itself
+// (see useMyBooked in useLeads.js for where that happens).
+const OUTCOME_FILTERS = ['pending', 'no_show', 'lost', 'closed']
 
 // Prompt 465 — the raw backlog still sitting in the pool before day-end
 // distributes it into an actual setter/closer's working queue
@@ -400,9 +406,9 @@ function CloserTab() {
   }, [reps])
 
   const counts = useMemo(() => {
-    const c = { pending: 0, needs_reschedule: 0, lost: 0, closed: 0 }
+    const c = { pending: 0, no_show: 0, lost: 0, closed: 0 }
     for (const lead of leads || []) {
-      const key = lead.closer_outcome || 'pending'
+      const key = displayOutcome(lead)
       c[key] = (c[key] || 0) + 1
     }
     return c
@@ -410,7 +416,7 @@ function CloserTab() {
 
   const outcomeFiltered = useMemo(() => {
     if (!leads) return []
-    return leads.filter((l) => (l.closer_outcome || 'pending') === outcomeFilter)
+    return leads.filter((l) => displayOutcome(l) === outcomeFilter)
   }, [leads, outcomeFilter])
 
   const filtered = useMemo(() => filterLeads(outcomeFiltered, search), [outcomeFiltered, search])
@@ -468,7 +474,7 @@ function CloserTab() {
                       {lead.assigned_closer ? closerNames.get(lead.assigned_closer) || '—' : '—'}
                     </td>
                     <td className="px-5 py-4">
-                      <OutcomeBadge outcome={lead.closer_outcome} />
+                      <OutcomeBadge outcome={displayOutcome(lead)} />
                     </td>
                     <td className="px-5 py-4 text-fg-secondary">{fmt(lead.strategy_call_at)}</td>
                   </tr>

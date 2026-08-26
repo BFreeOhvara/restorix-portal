@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { zonedDateStr, zonedDayRange } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
+import { escalateStaleNoShows } from '../lib/closerOutcome'
 
 export function useLeads(statusFilter) {
   return useQuery({
@@ -445,6 +446,16 @@ export function useRequestCloserLeads() {
 
 // A closer's Appointment Booked leads, handed to them by the round-robin
 // assignment in the leads_pipeline_trigger.
+// Prompt 540 — also runs the No Show → Lost auto-escalation (see
+// escalateStaleNoShows) right here, on the closer's own query, rather than
+// from the admin Pipeline Closer tab's read-only rollup (usePipelineCloserLeads,
+// unchanged) — that page is deliberately read-only from admin's side
+// already (outcomes are the closer's to log), and this closer's own session
+// is the one we know for certain has write permission on their own
+// assigned leads (same auth.uid()-scoped access useLogCloserOutcome already
+// relies on). The real trade-off: escalation only fires when this closer's
+// own Overview/My Pipeline actually loads — documented, not hidden, per the
+// spec's own explicit "use your judgment, document the choice."
 export function useMyBooked(closerId) {
   return useQuery({
     queryKey: ['my-booked', closerId],
@@ -456,10 +467,31 @@ export function useMyBooked(closerId) {
         .eq('status', 'appointment_booked')
         .order('strategy_call_at', { ascending: true })
       if (error) throw error
-      return data
+      return escalateStaleNoShows(data)
     },
     enabled: !!closerId,
     refetchInterval: 15000,
+  })
+}
+
+// Prompt 540 — Reschedule sets a new strategy_call_at on a Pending/No Show
+// lead; since that timestamp is now in the future again, the lead reads
+// back as Pending under displayOutcome()'s own rule with zero extra status
+// logic needed. closer_outcome is deliberately left untouched — Reschedule
+// is only ever offered on leads whose displayOutcome is already 'pending'
+// (no_show included, since no_show IS 'pending' underneath), so there's
+// never a stored outcome to change here.
+export function useRescheduleLead() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, strategy_call_at }) => {
+      const { error } = await supabase.from('leads').update({ strategy_call_at }).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-booked'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-closer-leads'] })
+    },
   })
 }
 

@@ -6,7 +6,12 @@ import { Button } from './ui/Button'
 import { OUTCOME_LABELS, OUTCOME_SOLID, OUTCOME_TINT } from './ui/OutcomeBadge'
 import { useLogCloserOutcome } from '../hooks/useLeads'
 
-const OUTCOMES = ['pending', 'needs_reschedule', 'lost', 'closed']
+// Prompt 540 — 'needs_reschedule' retired as a manual pick: No Show is now
+// a derived display state (lib/closerOutcome.js) and a real Reschedule
+// action (CloserLeadModal's own tab) replaces what this button used to
+// stand in for. Was at 0 leads in production at retirement time, so
+// nothing to migrate.
+const OUTCOMES = ['pending', 'lost', 'closed']
 
 // Prompt 464 — same interaction shape as setters' LogCallModal (pick an
 // outcome, optional notes, Save), for the deal-outcome tracking closers
@@ -54,7 +59,7 @@ export function LogOutcomeForm({ lead, onClose }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <Field label="Outcome">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {OUTCOMES.map((o) => (
             <button
               type="button"

@@ -4,8 +4,16 @@ import clsx from 'clsx'
 // StatusBadge.jsx) — own color system so it never gets confused with the
 // setter-facing statuses, but the same TINT/SOLID/labels shape for
 // consistency with the rest of the app.
+// Prompt 540 — `no_show` added as a real badge/label entry even though it's
+// never a stored closer_outcome value (see lib/closerOutcome.js's
+// displayOutcome) — callers pass the derived display value in, this file
+// doesn't need to know it's computed. `needs_reschedule` stays defined here
+// (still a valid legacy DB value, just no longer a manually-selectable
+// outcome — see LogOutcomeModal.jsx) so an old row would still render
+// correctly rather than falling through to the `|| outcome` fallback.
 export const OUTCOME_LABELS = {
   pending: 'Pending',
+  no_show: 'No Show',
   needs_reschedule: 'Needs Rescheduling',
   lost: 'Lost',
   closed: 'Closed',
@@ -26,8 +34,12 @@ export const OUTCOME_LABELS = {
 // entities: closer_outcome here vs. setter lead status there), Brayden
 // wants the color language unambiguous across the whole portal, not just
 // wherever they happen to currently collide on screen.
+// Prompt 540 — `no_show` gets its own purple, distinct from every existing
+// hue here (orange/yellow/red/green all already own a real meaning) so it
+// reads as its own state rather than a shade of Pending or Lost.
 export const OUTCOME_TINT = {
   pending: 'bg-orange-100 !text-orange-800 dark:bg-orange-900/50 dark:!text-orange-300',
+  no_show: 'bg-purple-100 !text-purple-800 dark:bg-purple-900/50 dark:!text-purple-300',
   needs_reschedule: 'bg-yellow-100 !text-yellow-800 dark:bg-yellow-900/50 dark:!text-yellow-300',
   lost: 'bg-[#fbe2de] !text-danger dark:bg-[#3d211c]',
   closed: 'bg-[#dcf3e6] !text-success dark:bg-[#173a28]',
@@ -35,6 +47,7 @@ export const OUTCOME_TINT = {
 
 export const OUTCOME_SOLID = {
   pending: 'bg-orange-600 !text-white dark:bg-orange-500 dark:!text-orange-950',
+  no_show: 'bg-purple-600 !text-white dark:bg-purple-500 dark:!text-purple-950',
   needs_reschedule: 'bg-yellow-600 !text-white dark:bg-yellow-500 dark:!text-yellow-950',
   lost: 'bg-danger !text-white',
   closed: 'bg-success !text-white',

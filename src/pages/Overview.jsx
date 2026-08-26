@@ -9,6 +9,7 @@ import OutcomeBadge, { OUTCOME_LABELS } from '../components/ui/OutcomeBadge'
 import { LiveClock } from '../components/ui/LiveClock'
 import { Button } from '../components/ui/Button'
 import { formatPhone } from '../lib/phone'
+import { displayOutcome } from '../lib/closerOutcome'
 import LogCallModal from '../components/LogCallModal'
 import CloserLeadModal from '../components/CloserLeadModal'
 import { zonedDateStr, zonedDayRange } from '../lib/dates'
@@ -313,7 +314,9 @@ export function SetterOverview({ profile, title = 'Overview' }) {
   )
 }
 
-const CLOSER_OUTCOME_TILES = ['pending', 'needs_reschedule', 'lost', 'closed']
+// Prompt 540 — 'needs_reschedule' replaced by 'no_show' (derived, see
+// lib/closerOutcome.js) as the second tile.
+const CLOSER_OUTCOME_TILES = ['pending', 'no_show', 'lost', 'closed']
 
 // Prompt 487 — restructured to match Setter Overview's own established
 // pattern (stat tiles, then a bordered box holding the lead list with a
@@ -343,7 +346,7 @@ export function CloserOverview({ profile, title = 'Overview' }) {
     const c = {}
     for (const key of CLOSER_OUTCOME_TILES) c[key] = 0
     for (const lead of leads || []) {
-      const outcome = lead.closer_outcome || 'pending'
+      const outcome = displayOutcome(lead)
       c[outcome] = (c[outcome] || 0) + 1
     }
     return c
@@ -397,7 +400,7 @@ export function CloserOverview({ profile, title = 'Overview' }) {
                     </td>
                     <td className="px-5 py-4 text-fg-secondary">{fmt(lead.strategy_call_at)}</td>
                     <td className="px-5 py-4">
-                      <OutcomeBadge outcome={lead.closer_outcome} />
+                      <OutcomeBadge outcome={displayOutcome(lead)} />
                     </td>
                     <td className="px-5 py-4">
                       <button
