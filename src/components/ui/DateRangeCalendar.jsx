@@ -35,9 +35,22 @@ function formatMonthLabel(monthStr) {
 // `range`/`onChange` are controlled by the parent; `viewMonth` (which
 // month is currently displayed) is local — browsing months while picking
 // shouldn't require re-selecting anything.
+//
+// Prompt 536 reopen round 4 — live hover preview while picking the second
+// date. `hoverDate` only matters while `pendingStart` is set (the first
+// click already happened, second hasn't yet) — `cellState` treats
+// `pendingStart`/`hoverDate` as a not-yet-committed stand-in for
+// `range.start`/`range.end`, sorted the same order-independent way
+// `handleClick` itself sorts a real completed pick, so the preview fill
+// looks identical to how the range will actually render once confirmed.
+// Before any hover, `hoverDate` is null and the preview pair collapses to
+// just `pendingStart` alone (matches the old single-dot-selected look).
+// Cleared on mouse-leave so wandering off the grid doesn't leave a stale
+// preview sitting there.
 export function DateRangeCalendar({ range, onChange, initialMonth }) {
   const [viewMonth, setViewMonth] = useState(initialMonth)
   const [pendingStart, setPendingStart] = useState(null)
+  const [hoverDate, setHoverDate] = useState(null)
 
   const count = daysInMonth(viewMonth)
   const leadBlanks = firstWeekday(viewMonth)
@@ -46,23 +59,32 @@ export function DateRangeCalendar({ range, onChange, initialMonth }) {
   function handleClick(dateStr, e) {
     if (e.detail >= 2) {
       setPendingStart(null)
+      setHoverDate(null)
       onChange({ start: dateStr, end: dateStr })
       return
     }
     if (!pendingStart) {
       setPendingStart(dateStr)
+      setHoverDate(null)
       return
     }
     const start = pendingStart < dateStr ? pendingStart : dateStr
     const end = pendingStart < dateStr ? dateStr : pendingStart
     setPendingStart(null)
+    setHoverDate(null)
     onChange({ start, end })
   }
 
   function cellState(dateStr) {
-    if (pendingStart === dateStr) return 'selected'
+    if (pendingStart) {
+      const other = hoverDate || pendingStart
+      const start = pendingStart < other ? pendingStart : other
+      const end = pendingStart < other ? other : pendingStart
+      if (dateStr === start || dateStr === end) return 'selected'
+      if (dateStr > start && dateStr < end) return 'inRange'
+      return 'none'
+    }
     if (!range) return 'none'
-    if (dateStr === range.start && dateStr === range.end) return 'selected'
     if (dateStr === range.start || dateStr === range.end) return 'selected'
     if (dateStr > range.start && dateStr < range.end) return 'inRange'
     return 'none'
@@ -91,7 +113,7 @@ export function DateRangeCalendar({ range, onChange, initialMonth }) {
       <div className="mt-3 grid grid-cols-7 gap-1 text-center font-sans text-[11px] text-fg-faint">
         {WEEKDAY_LABELS.map((d, i) => <div key={i}>{d}</div>)}
       </div>
-      <div className="mt-1 grid grid-cols-7 gap-1">
+      <div className="mt-1 grid grid-cols-7 gap-1" onMouseLeave={() => setHoverDate(null)}>
         {Array.from({ length: leadBlanks }).map((_, i) => <div key={`blank-${i}`} />)}
         {dates.map((dateStr) => {
           const state = cellState(dateStr)
@@ -99,6 +121,7 @@ export function DateRangeCalendar({ range, onChange, initialMonth }) {
             <button
               key={dateStr}
               onClick={(e) => handleClick(dateStr, e)}
+              onMouseEnter={() => { if (pendingStart) setHoverDate(dateStr) }}
               className={clsx(
                 'aspect-square rounded-md font-sans text-xs transition-colors',
                 state === 'none' && 'text-fg-primary hover:bg-surface',

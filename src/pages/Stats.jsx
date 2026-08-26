@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser } from '../hooks/useStats'
@@ -130,6 +130,13 @@ function niceTicks(max, targetIntervals = 6) {
 // already coincide vertically since bookingsAxisMax=6 lines up with
 // niceTicks(maxDials)'s 6 intervals — see round 2 notes above) since two
 // dashes are no longer needed once only one sits in the middle.
+//
+// Prompt 536 reopen round 4 — order from round 3 stays; Brayden just
+// wants the whole group tighter, with Bookings (green) pinned exactly
+// where it already sits (`padXLeft - tickLen`, unchanged). Dials' anchor
+// and the dash both moved right by a few px each so both gaps
+// (Dials-to-dash, dash-to-Bookings) shrink to a consistent ~3px instead
+// of the looser ~6px/~9px round 3 left them at.
 function WeeklyBarChart({ days }) {
   const W = 600
   const H = 200
@@ -161,8 +168,8 @@ function WeeklyBarChart({ days }) {
         {dialsTicks.map((t) => (
           <g key={`dials-tick-${t}`}>
             <line x1={padXLeft} y1={yForDials(t)} x2={W - padXRight} y2={yForDials(t)} className="stroke-line" strokeWidth="1" opacity={t === 0 ? 1 : 0.5} />
-            <line x1={padXLeft - 24} y1={yForDials(t)} x2={padXLeft - 20} y2={yForDials(t)} className="stroke-line" strokeWidth="1" />
-            <text x={padXLeft - 30} y={yForDials(t)} dy="3.5" textAnchor="end" fontSize="10" className="fill-accent">{t}</text>
+            <line x1={padXLeft - 17} y1={yForDials(t)} x2={padXLeft - 13} y2={yForDials(t)} className="stroke-line" strokeWidth="1" />
+            <text x={padXLeft - 20} y={yForDials(t)} dy="3.5" textAnchor="end" fontSize="10" className="fill-accent">{t}</text>
           </g>
         ))}
         {bookingsTicks.map((t) => (
@@ -319,26 +326,28 @@ function mockDays(dateList) {
 // start/end pair from the calendar, not just the first pending click)
 // closes the popover automatically; Clear inside it also closes it.
 //
-// Prompt 536 reopen round 3 — three fixes: (1) default label reads "All
-// Time" (matching the tab it lives under) instead of "Custom Date",
-// since with no range picked this now genuinely shows the true all-time
-// totals rather than an empty prompt state — see Stats() below. (2) an
-// "X" button resets straight back to that All Time default without
-// opening the popover. (3) the label's width now animates instead of
-// snapping — width is measured off the actual rendered label text
-// (`labelRef`/`labelWidth`) and applied as an explicit inline style so
-// `transition-[width]` has real numbers to interpolate between; CSS
-// can't animate a plain 'auto'-to-'auto' width change, which is why
-// Daily→Monthly's own toggle (PillToggle) only ever looked "subtle" by
-// accident (Daily/Monthly happen to be similar text widths) rather than
-// by any real animation — this pill needed the real fix since All
-// Time → a picked date range is a much bigger width swing.
+// Prompt 536 reopen round 3 — default label reads "All Time" and an "X"
+// button resets back to it — with no range picked this now genuinely
+// shows the true all-time totals rather than an empty prompt state, see
+// Stats() below.
+//
+// Prompt 536 reopen round 4 — two fixes: (1) default label reverted to
+// "Custom Date" per Brayden's clarification — "All Time" duplicated the
+// tab label it sits next to, and the true-all-time-by-default *behavior*
+// from round 3 is unchanged, only this pill's idle text changes. (2)
+// dropped round 3's measure-and-animate width entirely in favor of this
+// app's own established pattern for a steady-width nav control —
+// DayPaginator/MonthPaginator both just reserve a fixed `min-w-[Npx]` on
+// their label span sized for their longest realistic text, so the pill
+// never visibly resizes at all rather than resizing smoothly. Brayden's
+// own ask ("hold that same steady width... rather than shrinking/growing
+// noticeably") is a stricter bar than round 3's animation cleared —
+// matching the existing paginators' own technique is both simpler and
+// exactly what he pointed at as the reference.
 function CustomDatePicker({ range, onChange, initialMonth }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
-  const labelRef = useRef(null)
-  const [labelWidth, setLabelWidth] = useState(undefined)
-  const label = range ? formatRangeLabel(range) : 'All Time'
+  const label = range ? formatRangeLabel(range) : 'Custom Date'
 
   useEffect(() => {
     function handleClick(e) {
@@ -348,24 +357,19 @@ function CustomDatePicker({ range, onChange, initialMonth }) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  useLayoutEffect(() => {
-    if (labelRef.current) setLabelWidth(labelRef.current.scrollWidth)
-  }, [label])
-
   return (
     <div ref={ref} className="relative">
       <div className="flex items-center rounded-full border border-line bg-elevated py-1.5 pl-4 pr-1.5 transition-colors hover:bg-surface">
         <button
           onClick={() => setOpen((v) => !v)}
-          className="overflow-hidden whitespace-nowrap font-sans text-xs font-medium text-fg-primary transition-[width] duration-200 ease-out"
-          style={{ width: labelWidth }}
+          className="min-w-[120px] text-center font-sans text-xs font-medium text-fg-primary"
         >
-          <span ref={labelRef} className="inline-block">{label}</span>
+          {label}
         </button>
         {range && (
           <button
             onClick={() => onChange(null)}
-            aria-label="Reset to All Time"
+            aria-label="Clear custom date range"
             className="ml-1 shrink-0 rounded-full p-1 text-fg-faint transition-colors hover:bg-elevated hover:text-fg-primary"
           >
             <X className="h-3 w-3" />
@@ -374,6 +378,9 @@ function CustomDatePicker({ range, onChange, initialMonth }) {
       </div>
       {open && (
         <div className="absolute right-0 top-full z-20 mt-2 w-72 shadow-lg">
+          <p className="mb-2 rounded-card border border-line bg-elevated px-3 py-2 font-sans text-[11px] text-fg-secondary">
+            Select a start or end date, or double-click a date for a single day.
+          </p>
           <DateRangeCalendar
             range={range}
             onChange={(r) => { onChange(r); setOpen(false) }}
