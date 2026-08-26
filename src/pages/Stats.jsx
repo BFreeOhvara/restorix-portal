@@ -97,10 +97,17 @@ function niceTicks(max, targetIntervals = 6) {
 // the line used, just a different mark. Right axis is now a FIXED 0-6
 // range (not `niceTicks`-derived) per Brayden's explicit ask, giving
 // headroom above the real ~2-3 max the same way the left axis already
-// has headroom above its real ~140 max. Axis labels now carry their
-// series' own color (left=accent/blue, right=success/green) with a
-// small tick-mark dash connecting each label to its gridline, and more
-// breathing room between labels and the plot area on both sides.
+// has headroom above its real ~140 max.
+//
+// Prompt 536 reopen — Bookings' axis moved from the right side over to
+// the left, stacked alongside Dials' own numbers (both columns anchored
+// to the same left edge, Bookings offset further left of Dials so the
+// two don't collide character-for-character) — no more right-side axis
+// at all. Each number keeps its own series color (accent/blue for Dials,
+// success/green for Bookings) since that's now the only thing telling
+// the two scales apart; the little tick-mark dash next to each number is
+// a shared neutral (stroke-line) color for both, no longer colored per
+// series.
 function WeeklyBarChart({ days }) {
   const W = 600
   const H = 200
@@ -124,19 +131,20 @@ function WeeklyBarChart({ days }) {
     <div>
       <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full">
         {/* Left axis (Dials) drives the full-width gridlines — a second
-            set from the right axis would draw non-aligned lines and read
-            as noise. Right axis gets its own tick-mark dashes only. */}
+            set from Bookings would draw non-aligned lines and read as
+            noise. Bookings gets its own tick-mark dashes only, sharing
+            the same neutral color and left-edge dash position as Dials. */}
         {dialsTicks.map((t) => (
           <g key={`dials-tick-${t}`}>
             <line x1={padXLeft} y1={yForDials(t)} x2={W - padXRight} y2={yForDials(t)} className="stroke-line" strokeWidth="1" opacity={t === 0 ? 1 : 0.5} />
-            <line x1={padXLeft - tickLen} y1={yForDials(t)} x2={padXLeft} y2={yForDials(t)} className="stroke-accent" strokeWidth="1" />
+            <line x1={padXLeft - tickLen} y1={yForDials(t)} x2={padXLeft} y2={yForDials(t)} className="stroke-line" strokeWidth="1" />
             <text x={padXLeft - tickLen - 4} y={yForDials(t)} dy="3.5" textAnchor="end" fontSize="10" className="fill-accent">{t}</text>
           </g>
         ))}
         {bookingsTicks.map((t) => (
           <g key={`bookings-tick-${t}`}>
-            <line x1={W - padXRight} y1={yForBookings(t)} x2={W - padXRight + tickLen} y2={yForBookings(t)} className="stroke-success" strokeWidth="1" />
-            <text x={W - padXRight + tickLen + 4} y={yForBookings(t)} dy="3.5" textAnchor="start" fontSize="10" className="fill-success">{t}</text>
+            <line x1={padXLeft - tickLen} y1={yForBookings(t)} x2={padXLeft} y2={yForBookings(t)} className="stroke-line" strokeWidth="1" />
+            <text x={padXLeft - tickLen - 20} y={yForBookings(t)} dy="3.5" textAnchor="end" fontSize="10" className="fill-success">{t}</text>
           </g>
         ))}
         {days.map((d, i) => {
@@ -157,8 +165,8 @@ function WeeklyBarChart({ days }) {
         })}
       </svg>
       <div className="mt-2 flex flex-wrap items-center gap-4 font-sans text-xs text-fg-faint">
-        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-accent" /> Dials — 0–{dialsAxisMax.toLocaleString()} (left)</span>
-        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" /> Bookings — 0–{bookingsAxisMax.toLocaleString()} (right)</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-accent" /> Dials — 0–{dialsAxisMax.toLocaleString()}</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" /> Bookings — 0–{bookingsAxisMax.toLocaleString()}</span>
       </div>
     </div>
   )
@@ -396,7 +404,7 @@ export default function Stats() {
         <PillToggle options={PERIOD_TABS} active={periodTab} onChange={setPeriodTab} />
       </div>
 
-      <div className="mt-3 flex justify-end">
+      <div className="mt-2 flex justify-end">
         {periodTab === 'daily' && <DayPaginator date={dayDate} onChange={setDayDate} timezone={tz} />}
         {periodTab === 'monthly' && <MonthPaginator month={monthStr} onChange={setMonthStr} timezone={tz} />}
         {periodTab === 'allTime' && (
@@ -423,7 +431,7 @@ export default function Stats() {
           Pick a start and end date above to see stats for that range.
         </p>
       ) : (
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
           {isCloser ? (
             <Tile label="Strategy Calls Assigned" value={myStats.assigned} />
           ) : (
