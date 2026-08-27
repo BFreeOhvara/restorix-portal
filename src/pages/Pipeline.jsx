@@ -3,6 +3,7 @@ import { Plus, Upload, Search } from 'lucide-react'
 import clsx from 'clsx'
 import {
   usePipelineUnassignedLeads,
+  usePipelineUnassignedNicheCounts,
   usePipelineSetterLeads,
   usePipelineSetterStatusCounts,
   usePipelineCloserLeads,
@@ -124,19 +125,36 @@ const OUTCOME_FILTERS = ['pending', 'no_show', 'lost', 'closed']
 // added under the count/actions row (no sub-tab row beneath this one), and
 // the row list moved into a bounded scrollable box matching Overview's own
 // pattern instead of a full-page table.
+// Prompt 543 — niche filter row (All / Behavioral Health / Bail Bonds)
+// above the search bar. Real server-side filter via usePipelineUnassignedLeads(niche);
+// counts are their own COUNT(*) queries, not derived from the capped list.
+const NICHE_TABS = [
+  { key: 'all', label: 'All' },
+  { key: 'behavioral_health', label: 'Behavioral Health' },
+  { key: 'bail_bonds', label: 'Bail Bonds' },
+]
+
 function UnassignedTab() {
-  const { data: leads, isLoading } = usePipelineUnassignedLeads()
+  const [niche, setNiche] = useState('all')
+  const { data: leads, isLoading } = usePipelineUnassignedLeads(niche)
+  const { data: nicheCounts } = usePipelineUnassignedNicheCounts()
   const [showAdd, setShowAdd] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [search, setSearch] = useState('')
 
   const filtered = useMemo(() => filterLeads(leads, search), [leads, search])
+  const nicheTabs = useMemo(
+    () => NICHE_TABS.map((t) => ({ ...t, label: `${t.label} (${nicheCounts?.[t.key] ?? 0})` })),
+    [nicheCounts]
+  )
 
   return (
     <div>
       <div className="flex items-center justify-between">
         <p className="font-sans text-sm text-fg-secondary">
-          {leads?.length ?? 0} unassigned lead{leads?.length === 1 ? '' : 's'}
+          {(nicheCounts?.[niche] ?? leads?.length ?? 0)} unassigned lead
+          {(nicheCounts?.[niche] ?? leads?.length) === 1 ? '' : 's'}
+          {niche !== 'all' ? ` · ${NICHE_TABS.find((t) => t.key === niche)?.label}` : ''}
         </p>
         <div className="flex gap-3">
           <Button variant="secondary" onClick={() => setShowImport(true)}>
@@ -146,6 +164,10 @@ function UnassignedTab() {
             <Plus size={15} /> Add Lead
           </Button>
         </div>
+      </div>
+
+      <div className="mt-3">
+        <SegmentedTabs tabs={nicheTabs} active={niche} onChange={setNiche} />
       </div>
 
       <SearchBar value={search} onChange={setSearch} />

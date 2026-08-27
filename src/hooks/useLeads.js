@@ -32,18 +32,51 @@ export function useLeads(statusFilter) {
 // not_interested rows were showing up here alongside genuinely-unassigned
 // leads before this fix) — this tab means "fresh pool inventory," not
 // "anything with a null assigned_setter."
-export function usePipelineUnassignedLeads() {
+// Prompt 543 — optional server-side niche filter (behavioral_health /
+// bail_bonds), 'all' meaning no filter. Additive: the default call with no
+// argument behaves exactly as before. The bail_bonds pool arrived with the
+// FL DFS scraper (source='fl_dfs'); before that every row here was
+// behavioral_health so this filter was a no-op worth adding anyway.
+export function usePipelineUnassignedLeads(niche = 'all') {
   return useQuery({
-    queryKey: ['pipeline-unassigned-leads'],
+    queryKey: ['pipeline-unassigned-leads', niche],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('leads')
         .select('*')
         .is('assigned_setter', null)
         .eq('status', 'new')
         .order('created_at', { ascending: false })
+      if (niche !== 'all') query = query.eq('niche', niche)
+      const { data, error } = await query
       if (error) throw error
       return data
+    },
+    refetchInterval: 15000,
+  })
+}
+
+// Live per-niche counts for the Unassigned tab's filter chips — real
+// COUNT(*) queries, not derived from the (PostgREST-capped) fetched list.
+export function usePipelineUnassignedNicheCounts() {
+  return useQuery({
+    queryKey: ['pipeline-unassigned-niche-counts'],
+    queryFn: async () => {
+      const base = () =>
+        supabase
+          .from('leads')
+          .select('id', { count: 'exact', head: true })
+          .is('assigned_setter', null)
+          .eq('status', 'new')
+      const [all, bh, bb] = await Promise.all([
+        base(),
+        base().eq('niche', 'behavioral_health'),
+        base().eq('niche', 'bail_bonds'),
+      ])
+      if (all.error) throw all.error
+      if (bh.error) throw bh.error
+      if (bb.error) throw bb.error
+      return { all: all.count ?? 0, behavioral_health: bh.count ?? 0, bail_bonds: bb.count ?? 0 }
     },
     refetchInterval: 15000,
   })
@@ -197,6 +230,7 @@ export function useAddLead() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-niche-counts'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-setter-leads'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-setter-status-counts'] })
     },
@@ -215,6 +249,7 @@ export function useAddLeads() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-niche-counts'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-setter-leads'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-setter-status-counts'] })
     },
@@ -257,6 +292,7 @@ export function useLogCall() {
       queryClient.invalidateQueries({ queryKey: ['my-not-interested'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-niche-counts'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-setter-leads'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-setter-status-counts'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-not-interested-leads'] })
@@ -390,6 +426,7 @@ export function useFinishDay() {
       queryClient.invalidateQueries({ queryKey: ['my-not-interested'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-niche-counts'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-setter-leads'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-setter-status-counts'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-health'] })
@@ -448,6 +485,7 @@ export function useRequestCloserLeads() {
       queryClient.invalidateQueries({ queryKey: ['my-pool'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-leads'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-niche-counts'] })
     },
   })
 }
