@@ -144,7 +144,12 @@ function FinishDayCard() {
 // data sources here doesn't add anything closer-facing MyPipeline.jsx
 // needs to special-case — useMyFollowUps/useMyNotInterested just return
 // empty for a closer id and those tabs never show a nonzero count.
-export function SetterOverview({ profile, title = 'Overview' }) {
+// Prompt 544 — `headerRight` lets a caller swap what sits opposite the
+// page title (top-right of the header row). Default: the live date/clock,
+// exactly as the setter's own /overview has always shown it. The closer's
+// My Leads (MyLeads.jsx) passes its "Request Leads" button here instead —
+// same slot, no clock — without forking this shared component.
+export function SetterOverview({ profile, title = 'Overview', headerRight }) {
   const { data: pool, isLoading: poolLoading } = useMyPool(profile.id)
   const tz = profile.timezone || DEFAULT_TIMEZONE
   const { data: followUps, isLoading: followUpsLoading } = useMyFollowUps(profile.id, tz)
@@ -210,7 +215,7 @@ export function SetterOverview({ profile, title = 'Overview' }) {
             {pool?.length ?? 0} lead{pool?.length === 1 ? '' : 's'} in your pool
           </p>
         </div>
-        <DateClockRow timezone={tz} />
+        {headerRight ?? <DateClockRow timezone={tz} />}
       </div>
 
       <TodayStrip profile={profile} />
