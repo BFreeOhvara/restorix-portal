@@ -7,6 +7,16 @@ import { SetterOverview } from './Overview'
 
 const POOL_CAP = 150
 
+// Prompt 543 — closers can pull from either vertical's pool. Any closer can
+// request either niche (no per-closer restriction). bail_bonds is genuinely
+// empty until a real lead source is built (Part B research) — a request
+// against it returns 0 cleanly, handled in the result copy below.
+const NICHES = [
+  { value: 'behavioral_health', label: 'Behavioral Health' },
+  { value: 'bail_bonds', label: 'Bail Bonds' },
+]
+const nicheLabel = (v) => NICHES.find((n) => n.value === v)?.label ?? v
+
 // Prompt 509 — closers can now request their own leads from the shared
 // unassigned pool instead of only ever receiving already-booked handoffs.
 // Deliberately on-demand (a real form + button), not a passive cron
@@ -21,6 +31,7 @@ const POOL_CAP = 150
 function RequestLeadsCard({ currentCount }) {
   const requestLeads = useRequestCloserLeads()
   const [count, setCount] = useState(25)
+  const [niche, setNiche] = useState('behavioral_health')
   const [result, setResult] = useState(null)
 
   const room = Math.max(0, POOL_CAP - currentCount)
@@ -28,7 +39,7 @@ function RequestLeadsCard({ currentCount }) {
   async function submit(e) {
     e.preventDefault()
     setResult(null)
-    const assigned = await requestLeads.mutateAsync(count)
+    const assigned = await requestLeads.mutateAsync({ count, niche })
     setResult(assigned)
   }
 
@@ -41,6 +52,23 @@ function RequestLeadsCard({ currentCount }) {
         — room for {room} more.
       </p>
       <form onSubmit={submit} className="mt-4 flex flex-wrap items-end gap-3">
+        <Field label="Niche">
+          <select
+            value={niche}
+            onChange={(e) => {
+              setNiche(e.target.value)
+              setResult(null)
+            }}
+            className={inputClass()}
+            style={{ width: 170 }}
+          >
+            {NICHES.map((n) => (
+              <option key={n.value} value={n.value}>
+                {n.label}
+              </option>
+            ))}
+          </select>
+        </Field>
         <Field label="How many">
           <input
             type="number"
@@ -56,8 +84,12 @@ function RequestLeadsCard({ currentCount }) {
           {requestLeads.isPending ? 'Requesting…' : 'Request'}
         </Button>
         {result !== null && (
-          <span className="pb-2 font-sans text-sm text-success">
-            {result === 0 ? 'No leads available in the pool right now.' : `Got ${result} lead${result === 1 ? '' : 's'}.`}
+          <span
+            className={`pb-2 font-sans text-sm ${result === 0 ? 'text-fg-secondary' : 'text-success'}`}
+          >
+            {result === 0
+              ? `No ${nicheLabel(niche)} leads available in the pool right now.`
+              : `Got ${result} lead${result === 1 ? '' : 's'}.`}
           </span>
         )}
       </form>

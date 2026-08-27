@@ -428,11 +428,19 @@ export function useMyPool(setterId) {
 // returns however many it actually assigned — which may be less than
 // `count` if the closer was already close to the cap. The UI surfaces
 // that real number rather than assuming the full request went through.
+// Prompt 543 — the request now carries a niche (behavioral_health /
+// bail_bonds). request_closer_leads filters the shared pool to that niche
+// server-side and returns the REAL number of rows it assigned (which is 0
+// for a niche whose pool is empty, e.g. bail_bonds until a source is built),
+// not the room-clamped request count.
 export function useRequestCloserLeads() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (count) => {
-      const { data, error } = await supabase.rpc('request_closer_leads', { p_count: count })
+    mutationFn: async ({ count, niche }) => {
+      const { data, error } = await supabase.rpc('request_closer_leads', {
+        p_count: count,
+        p_niche: niche,
+      })
       if (error) throw error
       return data
     },
