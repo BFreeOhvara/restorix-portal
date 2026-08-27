@@ -306,13 +306,22 @@ Deno.serve(async (req) => {
       })
     }
 
-    // 6. diff vs what we've already ingested from this source
-    const { data: existing, error: exErr } = await admin
-      .from('leads')
-      .select('id, external_id, phone, notes')
-      .eq('source', SOURCE)
-    if (exErr) throw exErr
-    const byExt = new Map((existing || []).map((e) => [e.external_id, e]))
+    // 6. diff vs what we've already ingested from this source.
+    // PostgREST caps a select at 1000 rows, so page through explicitly —
+    // the fl_dfs set is already ~1,650 and only grows.
+    const existing: { id: string; external_id: string; phone: string | null; notes: string }[] = []
+    const PAGE = 1000
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await admin
+        .from('leads')
+        .select('id, external_id, phone, notes')
+        .eq('source', SOURCE)
+        .range(from, from + PAGE - 1)
+      if (error) throw error
+      existing.push(...(data || []))
+      if (!data || data.length < PAGE) break
+    }
+    const byExt = new Map(existing.map((e) => [e.external_id, e]))
 
     const toInsert: LeadRow[] = []
     const toUpdate: { id: string; phone: string | null; notes: string }[] = []
@@ -328,7 +337,7 @@ Deno.serve(async (req) => {
       dryRun,
       csvRows: dataRows.length,
       distinctLeads: leads.length,
-      alreadyIngested: existing?.length ?? 0,
+      alreadyIngested: existing.length,
       toInsert: toInsert.length,
       toUpdate: toUpdate.length,
       inserted: 0,
