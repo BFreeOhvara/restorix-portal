@@ -21,7 +21,7 @@ const NAV_GROUPS = [
   {
     label: 'TODAY',
     items: [
-      { to: '/overview', label: 'Overview', icon: BarChart2, roles: ['setter', 'admin', 'closer'] },
+      { to: '/overview', label: 'Overview', icon: BarChart2, roles: ['setter', 'admin', 'closer', 'client'] },
     ],
   },
   {
@@ -98,7 +98,7 @@ const NAV_GROUPS = [
   {
     label: 'ACCOUNT',
     items: [
-      { to: '/settings', label: 'Settings', icon: SettingsIcon, roles: ['setter', 'admin', 'closer'] },
+      { to: '/settings', label: 'Settings', icon: SettingsIcon, roles: ['setter', 'admin', 'closer', 'client'] },
     ],
   },
 ]

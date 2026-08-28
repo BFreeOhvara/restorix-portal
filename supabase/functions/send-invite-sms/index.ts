@@ -104,8 +104,11 @@ Deno.serve(async (req) => {
   if (invite.created_by !== userId) {
     return jsonError('You can only send invites you created', 403)
   }
-  if (invite.role !== 'setter') {
-    return jsonError('This invite flow can only send setter invites', 403)
+  // Prompt 546 — closers also send `client` invites through this flow
+  // (client-portal provisioning on a Closed deal). Still closer-only,
+  // still created_by-scoped; only the allowed role set widened.
+  if (invite.role !== 'setter' && invite.role !== 'client') {
+    return jsonError('This invite flow can only send setter or client invites', 403)
   }
   if (invite.used_at) {
     return jsonError('This invite has already been used', 400)
@@ -123,7 +126,8 @@ Deno.serve(async (req) => {
   }
 
   const link = `https://portal.restorix.co/join/${token}`
-  const messageBody = `You've been invited to join Restorix Portal as a setter. Set up your account: ${link}`
+  const roleWord = invite.role === 'client' ? 'client' : 'setter'
+  const messageBody = `You've been invited to join Restorix Portal as a ${roleWord}. Set up your account: ${link}`
 
   try {
     await sendSms(phone, messageBody, accountSid, apiKeySid, apiKeySecret, fromNumber)

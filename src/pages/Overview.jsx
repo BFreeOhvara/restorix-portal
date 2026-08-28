@@ -3,6 +3,8 @@ import { Phone, Search, ClipboardEdit, CheckCircle2 } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useMyPool, useMyBooked, useMyFollowUps, useMyNotInterested, useFinishDay, usePipelineHealth } from '../hooks/useLeads'
+import { useMyDeal } from '../hooks/useDeals'
+import { catalogEntry, CONNECT_LABELS } from '../lib/agentCatalog'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, followUpsDueToday } from '../hooks/useStats'
 import StatusBadge, { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
 import OutcomeBadge, { OUTCOME_LABELS, OUTCOME_TINT, OUTCOME_SOLID } from '../components/ui/OutcomeBadge'
@@ -458,6 +460,84 @@ export function CloserOverview({ profile, title = 'Overview' }) {
   )
 }
 
+// Prompt 546 — the client's own dashboard. Catalog-driven (Brayden's
+// "build each agent once" model): renders `deals.front_runner` +
+// `deals.sub_agents` as cards, each pulling its copy from the shared
+// catalog and showing an honest status (every entry is 'placeholder'
+// today, so every card reads "Coming soon" — never hidden). RLS scopes
+// `useMyDeal` to this client's own row; there is no other data a client
+// can reach.
+function ClientAgentCard({ entryKey, hero }) {
+  const entry = catalogEntry(entryKey)
+  if (!entry) return null
+  const isLive = entry.status === 'live'
+  return (
+    <div
+      className={clsx(
+        'rounded-card border bg-elevated p-6',
+        hero ? 'border-accent/30' : 'border-line'
+      )}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-display text-lg font-medium text-fg-primary">{entry.label}</p>
+        <span
+          className={clsx(
+            'eyebrow shrink-0 rounded-full px-2.5 py-1',
+            isLive ? STATUS_SOLID.appointment_booked : 'bg-muted !text-fg-secondary'
+          )}
+        >
+          {isLive ? 'Live' : 'Coming soon'}
+        </span>
+      </div>
+      {entry.copy?.whatItIs && (
+        <p className="mt-2 font-sans text-sm leading-relaxed text-fg-secondary">{entry.copy.whatItIs}</p>
+      )}
+      {!isLive && entry.needsConnect.length > 0 && (
+        <p className="mt-3 font-sans text-xs text-fg-faint">
+          We'll walk you through connecting your {entry.needsConnect.map((c) => CONNECT_LABELS[c] || c).join(', ')}{' '}
+          once this is ready.
+        </p>
+      )}
+    </div>
+  )
+}
+
+function ClientOverview({ profile }) {
+  const { data: deal, isLoading, isError } = useMyDeal()
+
+  if (isLoading) {
+    return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
+  }
+  if (isError || !deal) {
+    return (
+      <div>
+        <h1 className="font-display text-2xl font-medium text-fg-primary">Welcome{profile.full_name ? `, ${profile.full_name}` : ''}</h1>
+        <p className="mt-2 font-sans text-sm text-fg-secondary">
+          Your dashboard is being set up. Check back shortly.
+        </p>
+      </div>
+    )
+  }
+
+  const facility = deal.lead?.facility_name || 'Your facility'
+
+  return (
+    <div>
+      <div>
+        <h1 className="font-display text-2xl font-medium text-fg-primary">{facility}</h1>
+        <p className="mt-1 font-sans text-sm text-fg-secondary">Your Restorix setup</p>
+      </div>
+
+      <div className="mt-6 space-y-4">
+        <ClientAgentCard entryKey={deal.front_runner} hero />
+        {(deal.sub_agents || []).map((key) => (
+          <ClientAgentCard key={key} entryKey={key} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function AdminOverview({ profile }) {
   const { data: leads, isLoading: leadsLoading } = useAllLeadsForStats()
   const { data: reps } = useReps()
@@ -569,5 +649,6 @@ export default function Overview() {
 
   if (profile?.role === 'setter') return <SetterOverview profile={profile} />
   if (profile?.role === 'closer') return <CloserOverview profile={profile} />
+  if (profile?.role === 'client') return <ClientOverview profile={profile} />
   return <AdminOverview profile={profile} />
 }

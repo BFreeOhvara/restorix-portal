@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { RotateCcw, ChevronDown } from 'lucide-react'
 import { Button } from '../components/ui/Button'
@@ -112,7 +112,12 @@ function TextField({ label, value, onChange, placeholder, type = 'text' }) {
 // duplicating the question tree/branching logic. `Survey` (this file's
 // default export, the standalone `/survey` nav page) is now a thin
 // wrapper — unchanged behavior for that existing route.
-export function SurveyBody() {
+// Prompt 546 — optional `onResults`: fired with computeSurveyResults(state)
+// whenever the wizard is on the summary step, so CloserLeadModal's Client
+// Portal tab can pre-fill its front-runner/sub-agent picks from the live
+// recommendation. The standalone `/survey` page passes nothing and is
+// unchanged.
+export function SurveyBody({ onResults }) {
   const [state, setState] = useState(initialSurveyState())
   const [stepKey, setStepKey] = useState('q0')
   const [expandedCards, setExpandedCards] = useState(() => new Set())
@@ -150,6 +155,10 @@ export function SurveyBody() {
   const isSummary = step.key === 'summary'
   const results = isSummary ? computeSurveyResults(state) : null
   const advanceOk = canAdvance(step.key, state)
+
+  useEffect(() => {
+    if (isSummary && onResults) onResults(computeSurveyResults(state))
+  }, [isSummary, state, onResults])
 
   return (
     <div>

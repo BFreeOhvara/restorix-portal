@@ -25,6 +25,12 @@ import BugReports from './pages/BugReports'
 
 const queryClient = new QueryClient()
 
+// Prompt 546 — routes a `client` account must never reach. `client` gets
+// only /overview (its own dashboard branch inside Overview.jsx), /profile,
+// and /settings; everything else is internal-staff-only. RoleRoute
+// redirects a client hitting these to / → /overview.
+const INTERNAL_ROLES = ['setter', 'closer', 'admin']
+
 function Gate({ children }) {
   const { session, profile, loading } = useAuth()
 
@@ -65,7 +71,14 @@ export default function App() {
                     <Route element={<Layout />}>
                       <Route path="/" element={<Home />} />
                       <Route path="/overview" element={<Overview />} />
-                      <Route path="/stats" element={<Stats />} />
+                      <Route
+                        path="/stats"
+                        element={
+                          <RoleRoute roles={INTERNAL_ROLES}>
+                            <Stats />
+                          </RoleRoute>
+                        }
+                      />
                       <Route
                         path="/pipeline"
                         element={
@@ -82,12 +95,40 @@ export default function App() {
                           </RoleRoute>
                         }
                       />
-                      <Route path="/training" element={<Training />} />
-                      <Route path="/messages" element={<Messages />} />
-                      <Route path="/my-calls" element={<MyCalls />} />
+                      <Route
+                        path="/training"
+                        element={
+                          <RoleRoute roles={INTERNAL_ROLES}>
+                            <Training />
+                          </RoleRoute>
+                        }
+                      />
+                      <Route
+                        path="/messages"
+                        element={
+                          <RoleRoute roles={INTERNAL_ROLES}>
+                            <Messages />
+                          </RoleRoute>
+                        }
+                      />
+                      <Route
+                        path="/my-calls"
+                        element={
+                          <RoleRoute roles={INTERNAL_ROLES}>
+                            <MyCalls />
+                          </RoleRoute>
+                        }
+                      />
                       <Route path="/profile" element={<Profile />} />
                       <Route path="/settings" element={<Settings />} />
-                      <Route path="/commissions" element={<Commissions />} />
+                      <Route
+                        path="/commissions"
+                        element={
+                          <RoleRoute roles={INTERNAL_ROLES}>
+                            <Commissions />
+                          </RoleRoute>
+                        }
+                      />
                       <Route
                         path="/activity"
                         element={
