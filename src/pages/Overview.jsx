@@ -151,7 +151,12 @@ function FinishDayCard() {
 // exactly as the setter's own /overview has always shown it. The closer's
 // My Leads (MyLeads.jsx) passes its "Request Leads" button here instead —
 // same slot, no clock — without forking this shared component.
-export function SetterOverview({ profile, title = 'Overview', headerRight }) {
+// Prompt 547 — the closer's My Leads also passes `niche`
+// (behavioral_health / bail_bonds) + a `nicheTabs` node (the segmented
+// niche selector, owned by MyLeads.jsx). When `niche` is set every lead
+// list on the page is scoped to it; the setter's own /overview passes
+// neither, so `niche` is undefined there and this renders exactly as before.
+export function SetterOverview({ profile, title = 'Overview', headerRight, niche, nicheTabs }) {
   const { data: pool, isLoading: poolLoading } = useMyPool(profile.id)
   const tz = profile.timezone || DEFAULT_TIMEZONE
   const { data: followUps, isLoading: followUpsLoading } = useMyFollowUps(profile.id, tz)
@@ -161,14 +166,24 @@ export function SetterOverview({ profile, title = 'Overview', headerRight }) {
   const [statusFilter, setStatusFilter] = useState('new')
   const isLoading = poolLoading || followUpsLoading || notInterestedLoading
 
-  const leadsByTab = useMemo(() => ({
-    new: (pool || []).filter((l) => l.status === 'new'),
-    no_answer: (pool || []).filter((l) => l.status === 'no_answer'),
-    appointment_booked: (pool || []).filter((l) => l.status === 'appointment_booked'),
-    follow_up_due: followUps?.due || [],
-    follow_up: followUps?.future || [],
-    not_interested: notInterested || [],
-  }), [pool, followUps, notInterested])
+  const leadsByTab = useMemo(() => {
+    // Prompt 547 — scope every bucket to the selected niche when the closer's
+    // My Leads passes one; identity (no filter) for the setter's /overview.
+    const f = (arr) => (niche ? (arr || []).filter((l) => l.niche === niche) : (arr || []))
+    return {
+      new: f(pool).filter((l) => l.status === 'new'),
+      no_answer: f(pool).filter((l) => l.status === 'no_answer'),
+      appointment_booked: f(pool).filter((l) => l.status === 'appointment_booked'),
+      follow_up_due: f(followUps?.due),
+      follow_up: f(followUps?.future),
+      not_interested: f(notInterested),
+    }
+  }, [pool, followUps, notInterested, niche])
+
+  const poolCount = useMemo(
+    () => (niche ? (pool || []).filter((l) => l.niche === niche).length : pool?.length ?? 0),
+    [pool, niche]
+  )
 
   const counts = useMemo(() => {
     const c = {}
@@ -214,7 +229,7 @@ export function SetterOverview({ profile, title = 'Overview', headerRight }) {
         <div>
           <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
           <p className="mt-1 font-sans text-sm text-fg-secondary">
-            {pool?.length ?? 0} lead{pool?.length === 1 ? '' : 's'} in your pool
+            {poolCount} lead{poolCount === 1 ? '' : 's'} in your pool
           </p>
         </div>
         {headerRight ?? <DateClockRow timezone={tz} />}
@@ -222,7 +237,13 @@ export function SetterOverview({ profile, title = 'Overview', headerRight }) {
 
       <TodayStrip profile={profile} />
 
-      {!isLoading && counts.new === 0 && <FinishDayCard />}
+      {/* Prompt 547 — "Finish Day" is a setter-only day-end action
+          (run_setter_day_end is role-checked to setters), so it's hidden on
+          the closer's niche-scoped My Leads, where an empty niche tab would
+          otherwise trip the counts.new === 0 condition. */}
+      {!isLoading && !niche && counts.new === 0 && <FinishDayCard />}
+
+      {nicheTabs && <div className="mt-6">{nicheTabs}</div>}
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[220px]">

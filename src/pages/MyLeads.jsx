@@ -6,15 +6,20 @@ import { useMyPool, useRequestCloserLeads } from '../hooks/useLeads'
 import { Field, inputClass } from '../components/ui/Field'
 import { Button } from '../components/ui/Button'
 import Modal from '../components/ui/Modal'
+import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 import { STATUS_SOLID } from '../components/ui/StatusBadge'
 import { SetterOverview } from './Overview'
 
 const POOL_CAP = 150
 
 // Prompt 543 — closers can pull from either vertical's pool. Any closer can
-// request either niche (no per-closer restriction). bail_bonds is empty
-// until a real lead source is built — a request against it returns 0
-// cleanly, handled in the result copy below.
+// request either niche (no per-closer restriction).
+// Prompt 547 — the closer's My Leads is now split into two niche tabs
+// (Behavioral Health / Bail Bonds). `request_closer_leads(p_count, p_niche)`
+// has been niche-aware since Prompt 543, so this is a UI split of the one
+// list plus a per-tab request action — no backend change. The active tab's
+// niche is the one the Request Leads modal pulls from (no in-modal picker
+// anymore). My Pipeline stays a single combined list (Brayden's call).
 const NICHES = [
   { value: 'behavioral_health', label: 'Behavioral Health' },
   { value: 'bail_bonds', label: 'Bail Bonds' },
@@ -25,17 +30,18 @@ const nicheLabel = (v) => NICHES.find((n) => n.value === v)?.label ?? v
 // pool on demand (a real form + button), not a passive cron top-up like
 // setters get. The 150 cap is the one thing genuinely shared with that
 // mechanism (same pool, same ceiling, same selection), enforced
-// server-side in `request_closer_leads`, not just this form's max.
+// server-side in `request_closer_leads` against the closer's TOTAL New
+// count (both niches), not just this form's max.
 //
-// Prompt 544 — this form moved out of a full-width inline card at the top
-// of the page and into a centered modal opened by a compact "Request
-// Leads" button in the page header (styled to match the per-row Call
-// pills). Pure UI relocation: the fields and the `request_closer_leads`
-// RPC path are unchanged.
-function RequestLeadsForm({ currentCount, onClose }) {
+// Prompt 544 — this form moved out of a full-width inline card and into a
+// centered modal opened by a compact "Request Leads" button in the page
+// header (styled to match the per-row Call pills).
+// Prompt 547 — the niche is now fixed by the active tab and passed in as a
+// prop; the in-modal Niche <select> is gone. `currentCount` stays the
+// closer's total New count so the cap math is unchanged.
+function RequestLeadsForm({ niche, currentCount, onClose }) {
   const requestLeads = useRequestCloserLeads()
   const [count, setCount] = useState(25)
-  const [niche, setNiche] = useState('behavioral_health')
   const [result, setResult] = useState(null)
 
   const room = Math.max(0, POOL_CAP - currentCount)
@@ -50,26 +56,11 @@ function RequestLeadsForm({ currentCount, onClose }) {
   return (
     <form onSubmit={submit} className="space-y-4">
       <p className="font-sans text-xs text-fg-secondary">
-        Pull leads from the shared unassigned pool into your own working queue. You have{' '}
+        Pull <span className="font-medium text-fg-primary">{nicheLabel(niche)}</span> leads from the shared
+        unassigned pool into your own working queue. You have{' '}
         <span className="font-medium text-fg-primary">{currentCount}</span> of {POOL_CAP} New leads right now
         — room for {room} more.
       </p>
-      <Field label="Niche">
-        <select
-          value={niche}
-          onChange={(e) => {
-            setNiche(e.target.value)
-            setResult(null)
-          }}
-          className={inputClass()}
-        >
-          {NICHES.map((n) => (
-            <option key={n.value} value={n.value}>
-              {n.label}
-            </option>
-          ))}
-        </select>
-      </Field>
       <Field label="How many">
         <input
           type="number"
@@ -99,7 +90,7 @@ function RequestLeadsForm({ currentCount, onClose }) {
   )
 }
 
-function RequestLeadsButton({ currentCount }) {
+function RequestLeadsButton({ niche, currentCount }) {
   const [open, setOpen] = useState(false)
   return (
     <>
@@ -114,8 +105,8 @@ function RequestLeadsButton({ currentCount }) {
         <Plus size={15} /> Request Leads
       </button>
       {open && (
-        <Modal title="Request Leads" onClose={() => setOpen(false)}>
-          <RequestLeadsForm currentCount={currentCount} onClose={() => setOpen(false)} />
+        <Modal title={`Request ${nicheLabel(niche)} Leads`} onClose={() => setOpen(false)}>
+          <RequestLeadsForm niche={niche} currentCount={currentCount} onClose={() => setOpen(false)} />
         </Modal>
       )}
     </>
@@ -125,15 +116,25 @@ function RequestLeadsButton({ currentCount }) {
 export default function MyLeads() {
   const { profile } = useAuth()
   const { data: leads } = useMyPool(profile?.id)
+  const [niche, setNiche] = useState('behavioral_health')
   if (!profile) return null
 
-  const currentNewCount = (leads || []).filter((l) => l.status === 'new').length
+  const pool = leads || []
+  // Total New count across both niches — the number `request_closer_leads`
+  // caps against server-side, so the form's room math must use the same.
+  const currentNewCount = pool.filter((l) => l.status === 'new').length
+  const nicheTabs = NICHES.map((n) => ({
+    key: n.value,
+    label: `${n.label} (${pool.filter((l) => l.niche === n.value).length})`,
+  }))
 
   return (
     <SetterOverview
       profile={profile}
       title="My Leads"
-      headerRight={<RequestLeadsButton currentCount={currentNewCount} />}
+      niche={niche}
+      nicheTabs={<SegmentedTabs tabs={nicheTabs} active={niche} onChange={setNiche} />}
+      headerRight={<RequestLeadsButton niche={niche} currentCount={currentNewCount} />}
     />
   )
 }
