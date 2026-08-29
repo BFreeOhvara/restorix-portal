@@ -435,9 +435,11 @@ export function useFinishDay() {
 }
 
 // A setter's active working pool — leads currently assigned to them (New
-// and, since Prompt 515 Part 2, No Answer too — those now stay assigned
-// until day-end instead of vanishing the instant they're logged). Capped
-// at 150 New+Follow-Up-Due, refilled by the day-end rotation
+// and, since Prompt 515 Part 2, No Answer too). Prompt 554 — a No Answer
+// lead now stays assigned/visible here for a real 24h from no_answer_at
+// (day-end no longer rolls it early); after that redistribute_no_answers()
+// releases it to the Unassigned pool. Capped at 150 New+Follow-Up-Due,
+// refilled by the day-end rotation
 // (`process-setter-day-ends` cron / the Finish Day button) rather than the
 // old continuous `assign_setter_batches` 15-min cron, which Part 2
 // unscheduled in favor of this bounded-day model.
@@ -554,7 +556,11 @@ export function usePipelineHealth() {
     queryFn: async () => {
       const [unassigned, cooldown, followUpRows] = await Promise.all([
         supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new').is('assigned_setter', null),
-        supabase.from('no_answer_queue').select('id', { count: 'exact', head: true }).is('redistributed_at', null),
+        // Prompt 554 — leads currently on the 24h No-Answer hold (still
+        // assigned to the rep who marked them, not yet released to the
+        // Unassigned pool). Replaces the old no_answer_queue count, which is
+        // now always empty (that hand-off queue is deprecated).
+        supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'no_answer').not('no_answer_at', 'is', null),
         supabase
           .from('follow_up_queue')
           .select('follow_up_at, setter:setter_id(timezone)')

@@ -11,6 +11,7 @@ import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, followUpsDu
 import StatusBadge, { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
 import OutcomeBadge, { OUTCOME_LABELS, OUTCOME_TINT, OUTCOME_SOLID } from '../components/ui/OutcomeBadge'
 import { LiveClock } from '../components/ui/LiveClock'
+import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 import { Button } from '../components/ui/Button'
 import { formatPhone } from '../lib/phone'
 import { displayOutcome } from '../lib/closerOutcome'
@@ -162,7 +163,11 @@ function FinishDayCard() {
 // `nicheTabs` is unused but kept as harmless shared plumbing. `actionsRow`
 // is a new slot rendered right above the stat strip — My Leads puts its
 // "Request Leads" button there instead of up in `headerRight` by the title.
-export function SetterOverview({ profile, title = 'Overview', headerRight, actionsRow, niche, nicheTabs }) {
+// Prompt 554 — `embedded` drops SetterOverview's own page header (h1 +
+// headerRight slot) so it can be nested as the "Setter" tab inside
+// CloserPipeline without a duplicate title. Everything below the header
+// (stat strip, search, status sub-tabs, lead table) renders unchanged.
+export function SetterOverview({ profile, title = 'Overview', headerRight, actionsRow, niche, nicheTabs, embedded = false }) {
   const { data: pool, isLoading: poolLoading } = useMyPool(profile.id)
   const tz = profile.timezone || DEFAULT_TIMEZONE
   const { data: followUps, isLoading: followUpsLoading } = useMyFollowUps(profile.id, tz)
@@ -231,15 +236,21 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, actio
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
-          <p className="mt-1 font-sans text-sm text-fg-secondary">
-            {poolCount} lead{poolCount === 1 ? '' : 's'} in your pool
-          </p>
+      {embedded ? (
+        <p className="font-sans text-sm text-fg-secondary">
+          {poolCount} lead{poolCount === 1 ? '' : 's'} in your pool
+        </p>
+      ) : (
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
+            <p className="mt-1 font-sans text-sm text-fg-secondary">
+              {poolCount} lead{poolCount === 1 ? '' : 's'} in your pool
+            </p>
+          </div>
+          {headerRight ?? <DateClockRow timezone={tz} />}
         </div>
-        {headerRight ?? <DateClockRow timezone={tz} />}
-      </div>
+      )}
 
       {actionsRow && <div className="mt-4 flex justify-end">{actionsRow}</div>}
 
@@ -377,13 +388,55 @@ const CLOSER_OUTCOME_TILES = ['pending', 'no_show', 'lost', 'closed']
 // renamed `CloserPipeline` and stays exactly as-is (untouched, per
 // Brayden), while the new `CloserOverview` further down is a real
 // at-a-glance daily snapshot instead of a second copy of this table.
+// Prompt 554 — `CloserPipeline` is now a thin wrapper with a Setter/Closer
+// sub-tab split (below); this is the "Closer" tab body — the booked-
+// appointment outcome table, structurally unchanged, just minus its own
+// page-title header row (the wrapper owns that now).
+const MY_PIPELINE_TABS = [
+  { key: 'closer', label: 'Closer' },
+  { key: 'setter', label: 'Setter' },
+]
+
 export function CloserPipeline({ profile, title = 'My Pipeline' }) {
+  const brand = useBrand()
+  const [view, setView] = useState('closer')
+  const tz = profile.timezone || DEFAULT_TIMEZONE
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
+        {/* Prompt 553 — date label only, no ticking LiveClock on this page. */}
+        <span className="font-mono text-sm text-fg-faint [font-variant-numeric:tabular-nums]">
+          {new Date().toLocaleDateString('en-US', { timeZone: tz, weekday: 'long', month: 'short', day: 'numeric' })}
+        </span>
+      </div>
+
+      {/* Prompt 554 — Closer = booked appointments (setter-booked + own);
+          Setter = leads this closer personally dials via My Leads, i.e.
+          SetterOverview scoped to their own id. Empty Setter tab for a
+          closer who never self-dials. No Unassigned — admin-only concept. */}
+      <div className="mt-4">
+        <SegmentedTabs tabs={MY_PIPELINE_TABS} active={view} onChange={setView} />
+      </div>
+
+      <div className="mt-6">
+        {view === 'closer' ? (
+          <CloserBookedPipeline profile={profile} />
+        ) : (
+          <SetterOverview profile={profile} niche={brand.niche} embedded />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function CloserBookedPipeline({ profile }) {
   const brand = useBrand()
   const { data: allLeads, isLoading } = useMyBooked(profile.id)
   const [activeLead, setActiveLead] = useState(null)
   const [search, setSearch] = useState('')
   const [outcomeFilter, setOutcomeFilter] = useState('pending')
-  const tz = profile.timezone || DEFAULT_TIMEZONE
 
   // Prompt 549 — My Pipeline scopes to the current portal's niche (settled
   // 2026-08-29, overriding Prompt 547's "one combined list"): a closer on
@@ -419,18 +472,7 @@ export function CloserPipeline({ profile, title = 'My Pipeline' }) {
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
-          <p className="mt-1 font-sans text-sm text-fg-secondary">{leads?.length ?? 0} booked leads</p>
-        </div>
-        {/* Prompt 553 — My Pipeline keeps the date label but drops the
-            ticking LiveClock (Brayden's call, this page only). Overview and
-            Setter Activity still use the full DateClockRow. */}
-        <span className="font-mono text-sm text-fg-faint [font-variant-numeric:tabular-nums]">
-          {new Date().toLocaleDateString('en-US', { timeZone: tz, weekday: 'long', month: 'short', day: 'numeric' })}
-        </span>
-      </div>
+      <p className="font-sans text-sm text-fg-secondary">{leads?.length ?? 0} booked leads</p>
 
       <div className="mt-4 flex flex-wrap gap-2">
         {CLOSER_OUTCOME_TILES.map((key) => (
