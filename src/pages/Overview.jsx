@@ -192,7 +192,10 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, actio
   const { data: notInterested, isLoading: notInterestedLoading } = useMyNotInterested(profile.id)
   const [callLead, setCallLead] = useState(null)
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('new')
+  // Prompt 558 — the embedded My Pipeline → Setter tab is a tracking view:
+  // no New pill (a closer works New leads from My Leads), so it opens on
+  // No Answer instead.
+  const [statusFilter, setStatusFilter] = useState(embedded ? 'no_answer' : 'new')
   const isLoading = poolLoading || followUpsLoading || notInterestedLoading
 
   const leadsByTab = useMemo(() => {
@@ -233,10 +236,20 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, actio
   // worked down to zero, fall back to New rather than leaving the view
   // stuck on a tab that's about to disappear.
   useEffect(() => {
-    if (statusFilter === 'follow_up_due' && counts.follow_up_due === 0) setStatusFilter('new')
-  }, [statusFilter, counts.follow_up_due])
+    if (statusFilter === 'follow_up_due' && counts.follow_up_due === 0) setStatusFilter(embedded ? 'no_answer' : 'new')
+  }, [statusFilter, counts.follow_up_due, embedded])
 
-  const visibleTabs = STATUS_TABS.filter((tab) => tab.key !== 'follow_up_due' || counts.follow_up_due > 0)
+  // Prompt 558 — the embedded My Pipeline → Setter tab shows only the
+  // tracking buckets: No Answer, Follow-up, Not Interested. New +
+  // Appointment Booked are dropped there (New belongs to My Leads,
+  // Appointment Booked shows on the Closer tab once booked). Follow-Up Due
+  // dropped too — reading "only no answer, follow-up, and not interested"
+  // literally; it's a live slice of the Follow-up bucket anyway. FLAG: the
+  // Follow-Up Due call wasn't explicit in the spec, confirm with Brayden.
+  const EMBEDDED_STATUS_KEYS = ['no_answer', 'follow_up', 'not_interested']
+  const visibleTabs = embedded
+    ? STATUS_TABS.filter((tab) => EMBEDDED_STATUS_KEYS.includes(tab.key))
+    : STATUS_TABS.filter((tab) => tab.key !== 'follow_up_due' || counts.follow_up_due > 0)
 
   // Prompt 520 — only New and Follow-Up Due are actionable from this
   // table; the other four are informational (No Answer's own re-dial
@@ -262,11 +275,9 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, actio
 
   return (
     <div>
-      {embedded ? (
-        <p className="font-sans text-sm text-fg-secondary">
-          {poolCount} lead{poolCount === 1 ? '' : 's'} in your pool
-        </p>
-      ) : (
+      {/* Prompt 558 — when embedded (My Pipeline → Setter tab) the wrapper
+          owns the title + count line, so no header renders here at all. */}
+      {!embedded && (
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
@@ -284,7 +295,9 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, actio
           (My Leads only); /overview + the embedded Setter tab keep mt-4. */}
       {actionsRow && <div className="mt-3 flex justify-end">{actionsRow}</div>}
 
-      <TodayStrip profile={profile} className={actionsRow ? 'mt-2' : 'mt-4'} />
+      {/* Prompt 558 — no stat tiles in the embedded My Pipeline → Setter
+          tracking view (kept on /overview and My Leads). */}
+      {!embedded && <TodayStrip profile={profile} className={actionsRow ? 'mt-2' : 'mt-4'} />}
 
       {/* Prompt 547 — "Finish Day" is a setter-only day-end action
           (run_setter_day_end is role-checked to setters), so it's hidden on
@@ -294,7 +307,10 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, actio
 
       {nicheTabs && <div className="mt-6">{nicheTabs}</div>}
 
-      <div className="mt-6 flex flex-wrap items-center gap-3">
+      {/* Prompt 558 — embedded has no header/stats/nicheTabs above it, so
+          the search row sits right under the wrapper's own tab switcher —
+          tighter top margin to match the Closer tab's spacing. */}
+      <div className={clsx('flex flex-wrap items-center gap-3', embedded ? 'mt-1' : 'mt-6')}>
         <div className="relative flex-1 min-w-[220px]">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-secondary" />
           <input
@@ -438,17 +454,28 @@ const MY_PIPELINE_TABS = [
 export function CloserPipeline({ profile, title = 'My Pipeline' }) {
   const brand = useBrand()
   const [view, setView] = useState('closer')
-  const tz = profile.timezone || DEFAULT_TIMEZONE
+
+  // Prompt 558 — the count line moves up here (under the title, above the
+  // tab switcher) and switches wording with the active tab, matching how
+  // every other page stacks title+count. The wrapper reads the same two
+  // queries the children do (react-query dedupes identical keys — no extra
+  // fetch), niche-filtered the same way, so the children can stop rendering
+  // their own copy of this line.
+  const { data: bookedLeads } = useMyBooked(profile.id)
+  const { data: poolLeads } = useMyPool(profile.id)
+  const bookedCount = (bookedLeads || []).filter((l) => l.niche === brand.niche).length
+  const poolCount = (poolLeads || []).filter((l) => l.niche === brand.niche).length
+  const subtitle =
+    view === 'closer'
+      ? `${bookedCount} booked lead${bookedCount === 1 ? '' : 's'}`
+      : `${poolCount} lead${poolCount === 1 ? '' : 's'} in your pool`
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
-        {/* Prompt 553 — date label only, no ticking LiveClock on this page. */}
-        <span className="font-mono text-sm text-fg-faint [font-variant-numeric:tabular-nums]">
-          {new Date().toLocaleDateString('en-US', { timeZone: tz, weekday: 'long', month: 'short', day: 'numeric' })}
-        </span>
-      </div>
+      {/* Prompt 558 — no date on this page at all (Prompt 553 dropped the
+          clock, this drops the date too). */}
+      <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
+      <p className="mt-1 font-sans text-sm text-fg-secondary">{subtitle}</p>
 
       {/* Prompt 554 — Closer = booked appointments (setter-booked + own);
           Setter = leads this closer personally dials via My Leads, i.e.
@@ -510,9 +537,9 @@ function CloserBookedPipeline({ profile }) {
 
   return (
     <div>
-      <p className="font-sans text-sm text-fg-secondary">{leads?.length ?? 0} booked leads</p>
-
-      <div className="mt-4 flex flex-wrap gap-2">
+      {/* Prompt 558 — the "N booked leads" line moved up to the CloserPipeline
+          wrapper (above the tab switcher). */}
+      <div className="flex flex-wrap gap-2">
         {CLOSER_OUTCOME_TILES.map((key) => (
           <button
             key={key}
