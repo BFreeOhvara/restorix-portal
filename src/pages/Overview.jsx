@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Phone, Search, ClipboardEdit, CheckCircle2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Phone, Search, ClipboardEdit, CheckCircle2, Video, AlertTriangle, ArrowRight } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useMyPool, useMyBooked, useMyFollowUps, useMyNotInterested, useFinishDay, usePipelineHealth } from '../hooks/useLeads'
 import { useMyDeal } from '../hooks/useDeals'
 import { catalogEntry, CONNECT_LABELS } from '../lib/agentCatalog'
-import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, followUpsDueToday } from '../hooks/useStats'
+import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, followUpsDueToday, inRange } from '../hooks/useStats'
 import StatusBadge, { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
 import OutcomeBadge, { OUTCOME_LABELS, OUTCOME_TINT, OUTCOME_SOLID } from '../components/ui/OutcomeBadge'
 import { LiveClock } from '../components/ui/LiveClock'
@@ -14,7 +15,7 @@ import { formatPhone } from '../lib/phone'
 import { displayOutcome } from '../lib/closerOutcome'
 import LogCallModal from '../components/LogCallModal'
 import CloserLeadModal from '../components/CloserLeadModal'
-import { zonedDateStr, zonedDayRange } from '../lib/dates'
+import { zonedDateStr, zonedDayRange, mondayOf, shiftDay } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 import { SearchBar, filterLeads } from './Pipeline'
 
@@ -360,13 +361,16 @@ const CLOSER_OUTCOME_TILES = ['pending', 'no_show', 'lost', 'closed']
 // `closer_outcome` (defaulting missing/null to 'pending', matching
 // LogOutcomeForm's own default) covers the closer's full working set,
 // not just unresolved ones.
-// Prompt 509: exported so MyPipeline.jsx can reuse this exact component
-// as its own page content — Brayden's own call (asked directly rather
-// than guessed) was that "My Pipeline" is a separate additional tab with
-// the same content shape as Overview already has for closers, not a
-// replacement or relocation of Overview itself. Overview stays completely
-// unchanged; MyPipeline.jsx is a thin wrapper mounting this same component.
-export function CloserOverview({ profile, title = 'Overview' }) {
+// Prompt 509: exported so MyPipeline.jsx can reuse this exact component.
+// Prompt 548: this IS "My Pipeline" now — the closer's Overview and My
+// Pipeline were the literal same component (Overview just passed a
+// different title), which Prompt 509's comment already flagged was meant
+// to diverge once My Leads existed as its own working queue. It now does
+// (Prompt 509/543/547), so the outcome-filtered working table below is
+// renamed `CloserPipeline` and stays exactly as-is (untouched, per
+// Brayden), while the new `CloserOverview` further down is a real
+// at-a-glance daily snapshot instead of a second copy of this table.
+export function CloserPipeline({ profile, title = 'My Pipeline' }) {
   const { data: leads, isLoading } = useMyBooked(profile.id)
   const [activeLead, setActiveLead] = useState(null)
   const [search, setSearch] = useState('')
@@ -473,6 +477,177 @@ export function CloserOverview({ profile, title = 'Overview' }) {
               </tbody>
             </table>
           </div>
+        )}
+      </div>
+
+      {activeLead && <CloserLeadModal lead={activeLead} onClose={() => setActiveLead(null)} />}
+    </div>
+  )
+}
+
+// Prompt 548 — one row of the closer Overview's "Today's Strategy Calls"
+// list. Local time · facility · contact, then a real Zoom join link when
+// `zoom_join_url` is set (opens in a new tab, doesn't bubble to the row's
+// own click) or muted "Zoom pending" text when it isn't. The row itself
+// opens the same CloserLeadModal My Pipeline uses.
+function StrategyCallRow({ lead, tz, onOpen }) {
+  const time = new Date(lead.strategy_call_at).toLocaleTimeString('en-US', {
+    timeZone: tz, hour: 'numeric', minute: '2-digit',
+  })
+  return (
+    <tr onClick={onOpen} className="cursor-pointer border-t border-line font-sans text-sm hover:bg-surface">
+      <td className="px-5 py-4 font-mono text-fg-primary [font-variant-numeric:tabular-nums]">{time}</td>
+      <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
+      <td className="px-5 py-4 text-fg-secondary">
+        {lead.contact_name || 'No contact name'} · {formatPhone(lead.phone) || 'No phone'}
+      </td>
+      <td className="px-5 py-4">
+        {lead.zoom_join_url ? (
+          <a
+            href={lead.zoom_join_url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 font-sans text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            <Video size={15} /> Join
+          </a>
+        ) : (
+          <span className="font-sans text-sm text-fg-faint">Zoom pending</span>
+        )}
+      </td>
+    </tr>
+  )
+}
+
+// Prompt 548 — the closer's Overview, rebuilt as an at-a-glance daily
+// snapshot. It used to be the literal same component as My Pipeline
+// (CloserPipeline above, just a different title) — Prompt 509's own
+// comment flagged that was meant to diverge once My Leads became its own
+// working queue, which it now is (509/543/547). My Pipeline is untouched;
+// this is a genuinely different view: today's strategy calls (a short
+// chronological list, not a paginated table), a stat-tile row, and a
+// conditional No-Show alert. Every number comes from useMyBooked, already
+// scoped to `assigned_closer = me` + `status = 'appointment_booked'` —
+// the same single source CloserPipeline reads.
+export function CloserOverview({ profile, title = 'Overview' }) {
+  const { data: leads, isLoading } = useMyBooked(profile.id)
+  const [activeLead, setActiveLead] = useState(null)
+  const tz = profile.timezone || DEFAULT_TIMEZONE
+
+  const todayRange = useMemo(() => zonedDayRange(zonedDateStr(Date.now(), tz), tz), [tz])
+  const weekRange = useMemo(() => {
+    const monday = mondayOf(zonedDateStr(Date.now(), tz))
+    return {
+      start: zonedDayRange(monday, tz).start,
+      end: zonedDayRange(shiftDay(monday, 6), tz).end,
+    }
+  }, [tz])
+
+  // Raw closer_outcome here, NOT displayOutcome — a No Show that happened
+  // today still belongs on today's list so the closer can log the real
+  // outcome, rather than silently dropping off once its time passes.
+  const todaysCalls = useMemo(
+    () =>
+      (leads || [])
+        .filter(
+          (l) =>
+            l.strategy_call_at &&
+            inRange(l.strategy_call_at, todayRange.start, todayRange.end) &&
+            (!l.closer_outcome || l.closer_outcome === 'pending')
+        )
+        .sort((a, b) => new Date(a.strategy_call_at) - new Date(b.strategy_call_at)),
+    [leads, todayRange]
+  )
+
+  const tiles = useMemo(() => {
+    const all = leads || []
+    // Booked This Week — mirrors statsForCloser's `assigned` rule
+    // (assigned_closer + appointment_booked are already guaranteed by
+    // useMyBooked), ranged to this ISO week by strategy_call_at.
+    const bookedThisWeek = all.filter((l) => inRange(l.strategy_call_at, weekRange.start, weekRange.end)).length
+    // Closed This Week — closer_outcome_at is forward-only (Prompt 548 DB
+    // prep): a null stamp on an older closed lead is simply not countable
+    // in a date-ranged tile (inRange returns false for null), not an error.
+    const closedThisWeek = all.filter(
+      (l) => l.closer_outcome === 'closed' && inRange(l.closer_outcome_at, weekRange.start, weekRange.end)
+    ).length
+    // Win Rate — deliberately all-time (a single week's sample is too small
+    // to mean anything). Only resolved deals: closed / (closed + lost);
+    // pending/no-show are excluded from the denominator entirely.
+    const closed = all.filter((l) => l.closer_outcome === 'closed').length
+    const lost = all.filter((l) => l.closer_outcome === 'lost').length
+    const winRate = closed + lost > 0 ? `${Math.round((closed / (closed + lost)) * 100)}%` : '—'
+    return { bookedThisWeek, closedThisWeek, winRate }
+  }, [leads, weekRange])
+
+  const noShowCount = useMemo(
+    () => (leads || []).filter((l) => displayOutcome(l) === 'no_show').length,
+    [leads]
+  )
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
+          <p className="mt-1 font-sans text-sm text-fg-secondary">Your day at a glance</p>
+        </div>
+        <DateClockRow timezone={tz} />
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Tile label="Booked This Week" value={isLoading ? '—' : tiles.bookedThisWeek} />
+        <Tile label="Closed This Week" value={isLoading ? '—' : tiles.closedThisWeek} />
+        <Tile label="Win Rate (All Time)" value={isLoading ? '—' : tiles.winRate} />
+      </div>
+
+      {/* Needs Attention — unresolved No Shows only, hidden entirely at
+          zero. Reuses the app's established No-Show purple (OUTCOME_TINT,
+          Prompt 540) rather than a new color; links into My Pipeline,
+          whose No Show filter chip already exists (CLOSER_OUTCOME_TILES). */}
+      {!isLoading && noShowCount > 0 && (
+        <Link
+          to="/my-pipeline"
+          className={clsx(
+            'mt-4 flex flex-wrap items-center gap-3 rounded-card border border-line px-4 py-3 transition-opacity hover:opacity-90',
+            OUTCOME_TINT.no_show
+          )}
+        >
+          <AlertTriangle size={18} />
+          <p className="flex-1 font-sans text-sm font-medium">
+            {noShowCount} unresolved No Show{noShowCount === 1 ? '' : 's'} — log an outcome or reschedule.
+          </p>
+          <span className="inline-flex items-center gap-1.5 font-sans text-sm font-semibold">
+            My Pipeline <ArrowRight size={14} />
+          </span>
+        </Link>
+      )}
+
+      <h2 className="mt-8 font-display text-lg font-medium text-fg-primary">Today's Strategy Calls</h2>
+      <div className="mt-3 overflow-hidden rounded-card border border-line bg-elevated">
+        {isLoading ? (
+          <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
+        ) : !todaysCalls.length ? (
+          <p className="p-8 text-center font-sans text-sm text-fg-secondary">
+            No strategy calls scheduled for today.
+          </p>
+        ) : (
+          <table className="w-full text-left">
+            <thead className="eyebrow bg-surface">
+              <tr>
+                <th className="px-5 py-3">Time</th>
+                <th className="px-5 py-3">Business</th>
+                <th className="px-5 py-3">Contact</th>
+                <th className="px-5 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {todaysCalls.map((lead) => (
+                <StrategyCallRow key={lead.id} lead={lead} tz={tz} onOpen={() => setActiveLead(lead)} />
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
 
