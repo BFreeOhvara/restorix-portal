@@ -29,11 +29,12 @@ export const BRAND_FALLBACK = {
     niche: 'bail_bonds',
     brand_name: 'Suretix',
     wordmark: 'Suretix Portal',
-    // No real Suretix logo yet — render the plain-text wordmark alone until
-    // Brayden supplies brand assets (Prompt 549).
     portal_domain: 'portal.suretix.co',
     marketing_domain: 'suretix.co',
-    logo_url: null,
+    // Prompt 552 — real Suretix portal icon (golden-mustard "S"), committed
+    // as a static asset in this repo's public/. Keep in sync with the
+    // niche_brands.bail_bonds.logo_url DB value.
+    logo_url: '/suretix-logo-icon.png',
   },
 }
 

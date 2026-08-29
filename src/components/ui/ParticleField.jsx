@@ -1,4 +1,19 @@
 import { useEffect, useRef } from 'react'
+import { useBrand } from '../../hooks/useBrand'
+
+// Prompt 552 — brand-aware accent. Canvas fillStyle/strokeStyle can't read
+// CSS custom properties, so the rgba values are hardcoded (same reason the
+// inline notes below already give). Each pair mirrors that brand's existing
+// --accent / --accent-bright token values from index.css — NOT the Prompt
+// 552 logo-icon colors, which are a separate, narrower brand element. The
+// marketing site's own ParticleField made the same blue→amber swap in
+// Prompt 550.
+const BRAND_PARTICLES = {
+  // --accent #3a63d6 / --accent-bright #7c9eff
+  behavioral_health: { line: '58, 99, 214', dot: 'rgba(124, 158, 255, 0.6)' },
+  // Suretix --accent #b45309 / --accent-bright #f59e0b
+  bail_bonds: { line: '180, 83, 9', dot: 'rgba(245, 158, 11, 0.6)' },
+}
 
 const DOT_COUNT = 42
 const LINK_DISTANCE = 250
@@ -31,6 +46,8 @@ const EASE = 0.12
 export default function ParticleField({ className = '' }) {
   const canvasRef = useRef(null)
   const mouseRef = useRef({ x: -9999, y: -9999 })
+  const { niche } = useBrand()
+  const particles = BRAND_PARTICLES[niche] || BRAND_PARTICLES.behavioral_health
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -108,10 +125,10 @@ export default function ParticleField({ className = '' }) {
           const b = dots[j]
           const dist = Math.hypot(a.rx - b.rx, a.ry - b.ry)
           if (dist < LINK_DISTANCE) {
-            // rgba mirrors --accent (#3a63d6) — canvas fillStyle/strokeStyle
-            // can't resolve CSS custom properties, hardcoded for that reason,
-            // same as the marketing site's own version.
-            ctx.strokeStyle = `rgba(58, 99, 214, ${LINK_OPACITY * (1 - dist / LINK_DISTANCE)})`
+            // rgb triple mirrors the active brand's --accent (see
+            // BRAND_PARTICLES) — hardcoded because canvas strokeStyle can't
+            // resolve CSS custom properties.
+            ctx.strokeStyle = `rgba(${particles.line}, ${LINK_OPACITY * (1 - dist / LINK_DISTANCE)})`
             ctx.lineWidth = LINE_WIDTH
             ctx.beginPath()
             ctx.moveTo(a.rx, a.ry)
@@ -120,8 +137,8 @@ export default function ParticleField({ className = '' }) {
           }
         }
       }
-      // rgba mirrors --accent-bright (#7c9eff), same reason as above.
-      ctx.fillStyle = 'rgba(124, 158, 255, 0.6)'
+      // mirrors the active brand's --accent-bright, same reason as above.
+      ctx.fillStyle = particles.dot
       for (const d of dots) {
         ctx.beginPath()
         ctx.arc(d.rx, d.ry, d.r, 0, Math.PI * 2)
@@ -191,7 +208,9 @@ export default function ParticleField({ className = '' }) {
       parent.removeEventListener('pointermove', onPointerMove)
       parent.removeEventListener('pointerleave', onPointerLeave)
     }
-  }, [])
+    // Re-init on brand switch (e.g. the ?brand= preview override or a
+    // cross-domain Swap) so the loop closure picks up the new rgba pair.
+  }, [particles.line, particles.dot])
 
   return <canvas ref={canvasRef} className={className} aria-hidden="true" />
 }

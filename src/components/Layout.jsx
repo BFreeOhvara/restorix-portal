@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, ListChecks, UserPlus, GitBranch, Bug, Smartphone, ArrowLeftRight } from 'lucide-react'
+import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, ListChecks, UserPlus, GitBranch, Bug, Smartphone } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useBrand } from '../hooks/useBrand'
 import { supabase, SUPABASE_URL } from '../lib/supabase'
@@ -176,7 +176,10 @@ function NotificationBell() {
 // relative to the rest of the sidebar (17px nav icons, the account card
 // below). 44px + size-20 keeps both circular and equal to each other, just
 // noticeably smaller.
-function SidebarIconButton({ icon: Icon, label, onClick, disabled }) {
+// Prompt 552 — `iconSrc` renders a PNG (a brand logo-icon) in place of the
+// Lucide `icon` component, at the same 20px box. Used by SwapButton to show
+// the destination brand's own portal icon instead of a generic arrow.
+function SidebarIconButton({ icon: Icon, iconSrc, label, onClick, disabled }) {
   return (
     <button
       onClick={onClick}
@@ -184,7 +187,7 @@ function SidebarIconButton({ icon: Icon, label, onClick, disabled }) {
       disabled={disabled}
       className="flex h-11 w-11 items-center justify-center rounded-full border border-line bg-surface text-fg-secondary transition-colors hover:border-fg-primary/40 hover:text-fg-primary disabled:cursor-wait disabled:opacity-50"
     >
-      <Icon size={20} />
+      {iconSrc ? <img src={iconSrc} alt="" className="h-5 w-5 object-contain" /> : <Icon size={20} />}
     </button>
   )
 }
@@ -200,6 +203,11 @@ function SwapButton() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const otherName = brand.niche === 'bail_bonds' ? 'Restorix Sustain' : 'Suretix'
+  // Prompt 552 — show the DESTINATION brand's own portal icon, not a generic
+  // swap arrow. On Restorix you're swapping TO Suretix (amber "S"); on
+  // Suretix you're swapping TO Restorix (teal "R", the shared /logo-icon.png
+  // static asset, md5-identical to restorix-icon-transparent.png).
+  const destIcon = brand.niche === 'bail_bonds' ? '/logo-icon.png' : '/suretix-logo-icon.png'
 
   async function swap() {
     setError(null)
@@ -226,7 +234,7 @@ function SwapButton() {
 
   return (
     <SidebarIconButton
-      icon={ArrowLeftRight}
+      iconSrc={destIcon}
       label={error ? `Swap failed — ${error}` : busy ? 'Swapping…' : `Swap to ${otherName}`}
       onClick={swap}
       disabled={busy}
