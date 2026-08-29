@@ -129,6 +129,9 @@ export default function MyLeads() {
       // Request Leads button drops to `actionsRow` just above the stat tiles.
       headerRight={false}
       actionsRow={<RequestLeadsButton niche={niche} currentCount={currentNewCount} />}
+      // Prompt 559 — Follow-up leads clear from My Leads at local midnight
+      // (kept permanently on My Pipeline → Setter).
+      todayFollowUpOnly
     />
   )
 }

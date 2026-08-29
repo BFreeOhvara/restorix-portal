@@ -28,6 +28,18 @@ function fmt(dt) {
   })
 }
 
+// Prompt 559 — time left on a held No-Answer lead before Prompt 554's 24h
+// hold expires and redistribute_no_answers() releases it to Unassigned.
+// Recomputed on each render; useMyPool refetches every 15s so it stays
+// current without its own ticking interval.
+function noAnswerTimeLeft(noAnswerAt) {
+  if (!noAnswerAt) return '—'
+  const ms = new Date(noAnswerAt).getTime() + 24 * 60 * 60 * 1000 - Date.now()
+  if (ms <= 0) return 'Releasing…'
+  const mins = Math.round(ms / 60000)
+  return mins >= 60 ? `${Math.floor(mins / 60)}h left` : `${mins}m left`
+}
+
 function Tile({ label, value }) {
   return (
     <div className="rounded-card border border-line bg-elevated p-5">
@@ -58,7 +70,7 @@ function DateClockRow({ timezone }) {
 // (defaulting to DEFAULT_TIMEZONE for accounts that predate this column)
 // instead of the UTC calendar day — both the label above and the actual
 // query boundaries feeding statsForUser/followUpsDueToday.
-function TodayStrip({ profile }) {
+function TodayStrip({ profile, className = 'mt-4' }) {
   const { data: leads, isLoading } = useAllLeadsForStats()
   const tz = profile.timezone || DEFAULT_TIMEZONE
   const { start, end } = useMemo(() => zonedDayRange(zonedDateStr(Date.now(), tz), tz), [tz])
@@ -71,7 +83,7 @@ function TodayStrip({ profile }) {
   }, [leads, profile.id, start, end])
 
   return (
-    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className={clsx('grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4', className)}>
       <Tile label="Calls Made Today" value={isLoading ? '—' : today.logged} />
       <Tile label="Booked Today" value={isLoading ? '—' : today.booked} />
       <Tile label="Today's Booking Rate" value={isLoading ? '—' : `${today.bookingPct}%`} />
@@ -167,7 +179,13 @@ function FinishDayCard() {
 // headerRight slot) so it can be nested as the "Setter" tab inside
 // CloserPipeline without a duplicate title. Everything below the header
 // (stat strip, search, status sub-tabs, lead table) renders unchanged.
-export function SetterOverview({ profile, title = 'Overview', headerRight, actionsRow, niche, nicheTabs, embedded = false }) {
+// Prompt 559 — `todayFollowUpOnly` (My Leads only) scopes the Follow-up
+// tabs to leads *marked* follow-up on the viewer's local today, keyed off
+// last_action_at; once local midnight passes they drop out of My Leads.
+// My Pipeline → Setter (embedded) and the setter's own /overview both leave
+// it off, so they keep showing every Follow-up lead — same "always visible"
+// shape Not Interested has.
+export function SetterOverview({ profile, title = 'Overview', headerRight, actionsRow, niche, nicheTabs, embedded = false, todayFollowUpOnly = false }) {
   const { data: pool, isLoading: poolLoading } = useMyPool(profile.id)
   const tz = profile.timezone || DEFAULT_TIMEZONE
   const { data: followUps, isLoading: followUpsLoading } = useMyFollowUps(profile.id, tz)
@@ -181,15 +199,23 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, actio
     // Prompt 547 — scope every bucket to the selected niche when the closer's
     // My Leads passes one; identity (no filter) for the setter's /overview.
     const f = (arr) => (niche ? (arr || []).filter((l) => l.niche === niche) : (arr || []))
+    // Prompt 559 — on My Leads, drop Follow-up leads not marked today (local
+    // date of last_action_at — when it was marked, NOT follow_up_at's
+    // scheduled callback date). Identity everywhere else.
+    const localToday = zonedDateStr(Date.now(), tz)
+    const fu = (arr) =>
+      todayFollowUpOnly
+        ? (arr || []).filter((l) => l.last_action_at && zonedDateStr(new Date(l.last_action_at).getTime(), tz) === localToday)
+        : (arr || [])
     return {
       new: f(pool).filter((l) => l.status === 'new'),
       no_answer: f(pool).filter((l) => l.status === 'no_answer'),
       appointment_booked: f(pool).filter((l) => l.status === 'appointment_booked'),
-      follow_up_due: f(followUps?.due),
-      follow_up: f(followUps?.future),
+      follow_up_due: f(fu(followUps?.due)),
+      follow_up: f(fu(followUps?.future)),
       not_interested: f(notInterested),
     }
-  }, [pool, followUps, notInterested, niche])
+  }, [pool, followUps, notInterested, niche, todayFollowUpOnly, tz])
 
   const poolCount = useMemo(
     () => (niche ? (pool || []).filter((l) => l.niche === niche).length : pool?.length ?? 0),
@@ -252,9 +278,13 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, actio
         </div>
       )}
 
-      {actionsRow && <div className="mt-4 flex justify-end">{actionsRow}</div>}
+      {/* Prompt 559 Part A — My Leads: the button row + stat tiles read as
+          one tight block under the header, not a lopsided gap under the
+          left-hand subtitle. Tighter margins when actionsRow is present
+          (My Leads only); /overview + the embedded Setter tab keep mt-4. */}
+      {actionsRow && <div className="mt-3 flex justify-end">{actionsRow}</div>}
 
-      <TodayStrip profile={profile} />
+      <TodayStrip profile={profile} className={actionsRow ? 'mt-2' : 'mt-4'} />
 
       {/* Prompt 547 — "Finish Day" is a setter-only day-end action
           (run_setter_day_end is role-checked to setters), so it's hidden on
@@ -315,6 +345,9 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, actio
                   {(statusFilter === 'follow_up_due' || statusFilter === 'follow_up') && (
                     <th className="px-5 py-3">Callback</th>
                   )}
+                  {/* Prompt 559 Part B — countdown to the 24h No-Answer
+                      hold releasing the lead to Unassigned. */}
+                  {statusFilter === 'no_answer' && <th className="px-5 py-3">Releases in</th>}
                   {canCallFromTab && <th className="px-5 py-3"></th>}
                 </tr>
               </thead>
@@ -335,6 +368,11 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, actio
                     </td>
                     {(statusFilter === 'follow_up_due' || statusFilter === 'follow_up') && (
                       <td className="px-5 py-4 text-fg-secondary">{fmt(lead.follow_up_at)}</td>
+                    )}
+                    {statusFilter === 'no_answer' && (
+                      <td className="px-5 py-4 font-mono text-fg-secondary [font-variant-numeric:tabular-nums]">
+                        {noAnswerTimeLeft(lead.no_answer_at)}
+                      </td>
                     )}
                     {canCallFromTab && (
                       <td className="px-5 py-4">
