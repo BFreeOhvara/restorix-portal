@@ -2,29 +2,25 @@ import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
+import { useBrand } from '../hooks/useBrand'
 import { useMyPool, useRequestCloserLeads } from '../hooks/useLeads'
 import { Field, inputClass } from '../components/ui/Field'
 import { Button } from '../components/ui/Button'
 import Modal from '../components/ui/Modal'
-import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 import { STATUS_SOLID } from '../components/ui/StatusBadge'
 import { SetterOverview } from './Overview'
 
 const POOL_CAP = 150
 
-// Prompt 543 — closers can pull from either vertical's pool. Any closer can
-// request either niche (no per-closer restriction).
-// Prompt 547 — the closer's My Leads is now split into two niche tabs
-// (Behavioral Health / Bail Bonds). `request_closer_leads(p_count, p_niche)`
-// has been niche-aware since Prompt 543, so this is a UI split of the one
-// list plus a per-tab request action — no backend change. The active tab's
-// niche is the one the Request Leads modal pulls from (no in-modal picker
-// anymore). My Pipeline stays a single combined list (Brayden's call).
-const NICHES = [
-  { value: 'behavioral_health', label: 'Behavioral Health' },
-  { value: 'bail_bonds', label: 'Bail Bonds' },
-]
-const nicheLabel = (v) => NICHES.find((n) => n.value === v)?.label ?? v
+// Prompt 543 — closers can pull from either vertical's pool.
+// Prompt 547 — My Leads was split into two niche tabs (Behavioral Health /
+// Bail Bonds), the active tab driving the Request Leads modal.
+// Prompt 555 — that tab is gone. `portal.restorix.co` only serves
+// behavioral_health closers and `portal.suretix.co` only serves bail_bonds
+// closers, so the niche is fixed by the portal (`useBrand()`), not chosen
+// by hand. `request_closer_leads(p_count, p_niche)` is unchanged.
+const NICHE_LABEL = { behavioral_health: 'Behavioral Health', bail_bonds: 'Bail Bonds' }
+const nicheLabel = (v) => NICHE_LABEL[v] ?? v
 
 // Prompt 509 — closers request their own leads from the shared unassigned
 // pool on demand (a real form + button), not a passive cron top-up like
@@ -115,26 +111,24 @@ function RequestLeadsButton({ niche, currentCount }) {
 
 export default function MyLeads() {
   const { profile } = useAuth()
+  const { niche } = useBrand()
   const { data: leads } = useMyPool(profile?.id)
-  const [niche, setNiche] = useState('behavioral_health')
   if (!profile) return null
 
   const pool = leads || []
   // Total New count across both niches — the number `request_closer_leads`
   // caps against server-side, so the form's room math must use the same.
   const currentNewCount = pool.filter((l) => l.status === 'new').length
-  const nicheTabs = NICHES.map((n) => ({
-    key: n.value,
-    label: `${n.label} (${pool.filter((l) => l.niche === n.value).length})`,
-  }))
 
   return (
     <SetterOverview
       profile={profile}
       title="My Leads"
       niche={niche}
-      nicheTabs={<SegmentedTabs tabs={nicheTabs} active={niche} onChange={setNiche} />}
-      headerRight={<RequestLeadsButton niche={niche} currentCount={currentNewCount} />}
+      // Prompt 555 — no clock in this slot (My Leads never had one), and the
+      // Request Leads button drops to `actionsRow` just above the stat tiles.
+      headerRight={false}
+      actionsRow={<RequestLeadsButton niche={niche} currentCount={currentNewCount} />}
     />
   )
 }

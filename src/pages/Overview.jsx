@@ -158,7 +158,11 @@ function FinishDayCard() {
 // niche selector, owned by MyLeads.jsx). When `niche` is set every lead
 // list on the page is scoped to it; the setter's own /overview passes
 // neither, so `niche` is undefined there and this renders exactly as before.
-export function SetterOverview({ profile, title = 'Overview', headerRight, niche, nicheTabs }) {
+// Prompt 555 — the niche selector is gone (one brand per portal now), so
+// `nicheTabs` is unused but kept as harmless shared plumbing. `actionsRow`
+// is a new slot rendered right above the stat strip — My Leads puts its
+// "Request Leads" button there instead of up in `headerRight` by the title.
+export function SetterOverview({ profile, title = 'Overview', headerRight, actionsRow, niche, nicheTabs }) {
   const { data: pool, isLoading: poolLoading } = useMyPool(profile.id)
   const tz = profile.timezone || DEFAULT_TIMEZONE
   const { data: followUps, isLoading: followUpsLoading } = useMyFollowUps(profile.id, tz)
@@ -236,6 +240,8 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
         </div>
         {headerRight ?? <DateClockRow timezone={tz} />}
       </div>
+
+      {actionsRow && <div className="mt-4 flex justify-end">{actionsRow}</div>}
 
       <TodayStrip profile={profile} />
 
