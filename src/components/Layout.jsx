@@ -1,7 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, ListChecks, UserPlus, GitBranch, Bug, Smartphone } from 'lucide-react'
+import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, ListChecks, UserPlus, GitBranch, Bug, Smartphone, ArrowLeftRight } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import { useBrand } from '../hooks/useBrand'
+import { supabase, SUPABASE_URL } from '../lib/supabase'
 import ParticleField from './ui/ParticleField'
 import { Avatar } from './ui/Avatar'
 import BugReportModal from './BugReportModal'
@@ -174,15 +176,61 @@ function NotificationBell() {
 // relative to the rest of the sidebar (17px nav icons, the account card
 // below). 44px + size-20 keeps both circular and equal to each other, just
 // noticeably smaller.
-function SidebarIconButton({ icon: Icon, label, onClick }) {
+function SidebarIconButton({ icon: Icon, label, onClick, disabled }) {
   return (
     <button
       onClick={onClick}
       title={label}
-      className="flex h-11 w-11 items-center justify-center rounded-full border border-line bg-surface text-fg-secondary transition-colors hover:border-fg-primary/40 hover:text-fg-primary"
+      disabled={disabled}
+      className="flex h-11 w-11 items-center justify-center rounded-full border border-line bg-surface text-fg-secondary transition-colors hover:border-fg-primary/40 hover:text-fg-primary disabled:cursor-wait disabled:opacity-50"
     >
       <Icon size={20} />
     </button>
+  )
+}
+
+// Prompt 549 — closer-only. Mints a short-lived magic link via the
+// mint-handoff-link edge function targeting the OTHER niche's portal
+// domain, then hard-navigates to it — Supabase's /auth/v1/verify does the
+// session exchange server-side and redirects to that domain's
+// /auth/callback with the new session, so the closer lands logged in on
+// the other branded portal without re-entering a password.
+function SwapButton() {
+  const brand = useBrand()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const otherName = brand.niche === 'bail_bonds' ? 'Restorix Sustain' : 'Suretix'
+
+  async function swap() {
+    setError(null)
+    setBusy(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('No active session')
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/mint-handoff-link`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ from_niche: brand.niche }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.action_link) throw new Error(data.error || 'Swap failed')
+      window.location.href = data.action_link
+    } catch (e) {
+      setError(e.message || 'Swap failed')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <SidebarIconButton
+      icon={ArrowLeftRight}
+      label={error ? `Swap failed — ${error}` : busy ? 'Swapping…' : `Swap to ${otherName}`}
+      onClick={swap}
+      disabled={busy}
+    />
   )
 }
 
@@ -266,6 +314,7 @@ function HeaderName({ profile }) {
 
 export default function Layout() {
   const { profile, signOut } = useAuth()
+  const brand = useBrand()
   const navigate = useNavigate()
   const location = useLocation()
   // Prompt 528
@@ -295,9 +344,13 @@ export default function Layout() {
             marketing site's icon; Prompt 504 dropped that idea and
             reverted `logo-icon.png` back to the original teal/mint asset
             both sites now share again — same file, not a new one. */}
+        {/* Prompt 549 — logo + wordmark are brand-driven now (useBrand,
+            resolved from the portal's hostname). Behavioral health keeps the
+            exact same PNG + "Restorix Portal" text; Suretix has no logo
+            asset yet so it renders the plain-text wordmark alone. */}
         <div className="flex h-16 items-center gap-2.5 px-5">
-          <img src="/logo-icon.png" alt="" className="h-8 w-auto" />
-          <span className="font-display text-lg font-semibold tracking-tight text-fg-primary">Restorix Portal</span>
+          {brand.logo_url && <img src={brand.logo_url} alt="" className="h-8 w-auto" />}
+          <span className="font-display text-lg font-semibold tracking-tight text-fg-primary">{brand.wordmark}</span>
         </div>
 
         <nav className="flex-1 space-y-4 px-3">
@@ -323,8 +376,12 @@ export default function Layout() {
             logo block's own edge padding above so both buttons align to
             the sidebar's real left/right edges. Sits directly above the
             existing divider line (drawn by AccountPopover's own border-t). */}
+        {/* Prompt 549 — closer-only Swap button sits between Report a Bug
+            and Add to Home Screen (the nav landmark Brayden named as "the
+            phone button"). Non-closers keep the original two-corner row. */}
         <div className="flex items-center justify-between px-5 pb-3">
           <SidebarIconButton icon={Bug} label="Report a Bug" onClick={() => setShowBugReport(true)} />
+          {profile?.role === 'closer' && <SwapButton />}
           <SidebarIconButton icon={Smartphone} label="Add to Home Screen" onClick={() => setShowAddToHome(true)} />
         </div>
 

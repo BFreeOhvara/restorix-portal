@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Phone, Search, ClipboardEdit, CheckCircle2, Video, AlertTriangle, ArrowRight } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
+import { useBrand } from '../hooks/useBrand'
 import { useMyPool, useMyBooked, useMyFollowUps, useMyNotInterested, useFinishDay, usePipelineHealth } from '../hooks/useLeads'
 import { useMyDeal } from '../hooks/useDeals'
 import { catalogEntry, CONNECT_LABELS } from '../lib/agentCatalog'
@@ -371,11 +372,22 @@ const CLOSER_OUTCOME_TILES = ['pending', 'no_show', 'lost', 'closed']
 // Brayden), while the new `CloserOverview` further down is a real
 // at-a-glance daily snapshot instead of a second copy of this table.
 export function CloserPipeline({ profile, title = 'My Pipeline' }) {
-  const { data: leads, isLoading } = useMyBooked(profile.id)
+  const brand = useBrand()
+  const { data: allLeads, isLoading } = useMyBooked(profile.id)
   const [activeLead, setActiveLead] = useState(null)
   const [search, setSearch] = useState('')
   const [outcomeFilter, setOutcomeFilter] = useState('pending')
   const tz = profile.timezone || DEFAULT_TIMEZONE
+
+  // Prompt 549 — My Pipeline scopes to the current portal's niche (settled
+  // 2026-08-29, overriding Prompt 547's "one combined list"): a closer on
+  // the Suretix portal sees only bail_bonds booked leads, swap back and
+  // it's only behavioral_health. Same client-side `l.niche === …` filter
+  // My Leads' niche tabs use.
+  const leads = useMemo(
+    () => (allLeads || []).filter((l) => l.niche === brand.niche),
+    [allLeads, brand.niche]
+  )
 
   const counts = useMemo(() => {
     const c = {}

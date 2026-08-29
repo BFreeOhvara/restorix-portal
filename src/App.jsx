@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { ThemeProvider } from './hooks/useTheme'
+import { BrandProvider } from './hooks/useBrand'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Join from './pages/Join'
@@ -55,14 +56,34 @@ function Home() {
   return <Navigate to="/overview" replace />
 }
 
+// Prompt 549 — cross-domain SSO landing. The Swap button mints a magic
+// link via mint-handoff-link; following it hits Supabase's /auth/v1/verify,
+// which 302s here with the new session in the URL fragment. supabase-js
+// (detectSessionInUrl defaults on — see src/lib/supabase.js, created with
+// no overriding options) parses that fragment and AuthProvider picks the
+// session up; this route just waits for that and forwards to /overview.
+function AuthCallback() {
+  const { session, loading } = useAuth()
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-base">
+        <p className="font-sans text-sm text-fg-secondary">Signing you in…</p>
+      </div>
+    )
+  }
+  return <Navigate to={session ? '/overview' : '/'} replace />
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <ThemeProvider>
         <BrowserRouter>
+        <BrandProvider>
           <Routes>
             <Route path="/join/:token" element={<Join />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route
               path="/*"
               element={
@@ -191,6 +212,7 @@ export default function App() {
               }
             />
           </Routes>
+        </BrandProvider>
         </BrowserRouter>
         </ThemeProvider>
       </AuthProvider>

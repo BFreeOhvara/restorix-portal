@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
+import { useBrand } from '../hooks/useBrand'
 import { Button } from '../components/ui/Button'
 import { Field, inputClass } from '../components/ui/Field'
 
@@ -9,6 +10,7 @@ export default function Join() {
   const { token } = useParams()
   const navigate = useNavigate()
   const { signIn } = useAuth()
+  const brand = useBrand()
 
   const [checking, setChecking] = useState(true)
   const [checkError, setCheckError] = useState('')
@@ -71,7 +73,7 @@ export default function Join() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-base px-6">
       <div className="w-full max-w-sm rounded-card border border-line bg-elevated p-8">
-        <span className="font-display text-xl font-semibold tracking-tight text-fg-primary">Restorix Portal</span>
+        <span className="font-display text-xl font-semibold tracking-tight text-fg-primary">{brand.wordmark}</span>
 
         {checking ? (
           <p className="mt-4 font-sans text-sm text-fg-secondary">Checking invite…</p>

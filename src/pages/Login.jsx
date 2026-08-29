@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { useBrand } from '../hooks/useBrand'
 import { Button } from '../components/ui/Button'
 import { Field, inputClass } from '../components/ui/Field'
 import ParticleField from '../components/ui/ParticleField'
 
 export default function Login() {
   const { signIn } = useAuth()
+  const brand = useBrand()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -37,7 +39,7 @@ export default function Login() {
       </div>
       <div className="relative z-10 flex min-h-screen items-center justify-center px-6">
         <div className="w-full max-w-sm rounded-card border border-line bg-elevated p-8">
-          <span className="font-display text-xl font-semibold tracking-tight text-fg-primary">Restorix Portal</span>
+          <span className="font-display text-xl font-semibold tracking-tight text-fg-primary">{brand.wordmark}</span>
           <p className="mt-1 font-sans text-sm text-fg-secondary">Sign in to manage your leads, calls, and pipeline.</p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
