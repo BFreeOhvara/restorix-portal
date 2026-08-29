@@ -418,7 +418,12 @@ export function CloserPipeline({ profile, title = 'My Pipeline' }) {
           <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
           <p className="mt-1 font-sans text-sm text-fg-secondary">{leads?.length ?? 0} booked leads</p>
         </div>
-        <DateClockRow timezone={tz} />
+        {/* Prompt 553 — My Pipeline keeps the date label but drops the
+            ticking LiveClock (Brayden's call, this page only). Overview and
+            Setter Activity still use the full DateClockRow. */}
+        <span className="font-mono text-sm text-fg-faint [font-variant-numeric:tabular-nums]">
+          {new Date().toLocaleDateString('en-US', { timeZone: tz, weekday: 'long', month: 'short', day: 'numeric' })}
+        </span>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
