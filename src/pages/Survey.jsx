@@ -3,7 +3,19 @@ import clsx from 'clsx'
 import { RotateCcw, ChevronDown } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Field, inputClass } from '../components/ui/Field'
-import { initialSurveyState, visibleSteps, canAdvance, computeSurveyResults, RESULTS_CONTENT } from '../lib/survey'
+import { useBrand } from '../hooks/useBrand'
+import * as surveyBH from '../lib/survey'
+import * as surveySuretix from '../lib/surveySuretix'
+
+// Prompt 551 — the wizard's question tree / branching / state-machine is a
+// single shared implementation; only the *content module* swaps by niche.
+// behavioral_health → survey.js, bail_bonds → surveySuretix.js. Both export
+// the same shape (COPY, RESULTS_CONTENT, initialSurveyState, visibleSteps,
+// canAdvance, computeSurveyResults, INTAKE_KEY, MISSED_CALL_KEY).
+const SURVEY_MODULES = {
+  behavioral_health: surveyBH,
+  bail_bonds: surveySuretix,
+}
 
 // Prompt 470 — click-to-expand in place, no popup, no separate "Show
 // more" button: the whole box is the trigger, exactly as Brayden
@@ -117,12 +129,19 @@ function TextField({ label, value, onChange, placeholder, type = 'text' }) {
 // Portal tab can pre-fill its front-runner/sub-agent picks from the live
 // recommendation. The standalone `/survey` page passes nothing and is
 // unchanged.
-export function SurveyBody({ onResults }) {
-  const [state, setState] = useState(initialSurveyState())
+// Prompt 551 — optional `niche` selects the content module. Defaults to
+// behavioral_health so CloserLeadModal (which doesn't pass it) is unchanged;
+// the standalone `/survey` page passes useBrand().niche so it follows the
+// portal's brand (verifiable via the ?brand=bail_bonds preview override).
+export function SurveyBody({ onResults, niche = 'behavioral_health' }) {
+  const M = SURVEY_MODULES[niche] || surveyBH
+  const { COPY, RESULTS_CONTENT } = M
+
+  const [state, setState] = useState(() => M.initialSurveyState())
   const [stepKey, setStepKey] = useState('q0')
   const [expandedCards, setExpandedCards] = useState(() => new Set())
 
-  const steps = useMemo(() => visibleSteps(state), [state])
+  const steps = useMemo(() => M.visibleSteps(state), [M, state])
   const currentIndex = steps.findIndex((s) => s.key === stepKey)
   const step = steps[currentIndex] ?? steps[0]
 
@@ -139,7 +158,7 @@ export function SurveyBody({ onResults }) {
     if (prevStep) setStepKey(prevStep.key)
   }
   function restart() {
-    setState(initialSurveyState())
+    setState(M.initialSurveyState())
     setStepKey('q0')
     setExpandedCards(new Set())
   }
@@ -153,21 +172,19 @@ export function SurveyBody({ onResults }) {
   }
 
   const isSummary = step.key === 'summary'
-  const results = isSummary ? computeSurveyResults(state) : null
-  const advanceOk = canAdvance(step.key, state)
+  const results = isSummary ? M.computeSurveyResults(state) : null
+  const advanceOk = M.canAdvance(step.key, state)
 
   useEffect(() => {
-    if (isSummary && onResults) onResults(computeSurveyResults(state))
-  }, [isSummary, state, onResults])
+    if (isSummary && onResults) onResults(M.computeSurveyResults(state))
+  }, [isSummary, state, onResults, M])
 
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-medium text-fg-primary">Closer Survey</h1>
-          <p className="mt-1 font-sans text-sm text-fg-secondary">
-            Stack qualification — talk track for a live call, nothing saved.
-          </p>
+          <h1 className="font-display text-2xl font-medium text-fg-primary">{COPY.header.title}</h1>
+          <p className="mt-1 font-sans text-sm text-fg-secondary">{COPY.header.subtitle}</p>
         </div>
         <Button variant="ghost" onClick={restart}>
           <RotateCcw size={14} /> Start over
@@ -182,71 +199,58 @@ export function SurveyBody({ onResults }) {
 
       <div className="mt-4 rounded-card border border-line bg-elevated p-8">
         {step.key === 'q0' && (
-          <Question label="If we could have AI answer every single inquiry call live, 24/7, book-capable — is that something you'd want, or would you rather keep your own staff answering live and have AI catch what they miss?">
-            <ChoiceButtons
-              value={state.q0}
-              onChange={set('q0')}
-              options={[
-                { value: 'intake_triage', label: "We'd want AI answering live" },
-                { value: 'missed_call_recovery', label: "We'd rather keep our staff primary" },
-              ]}
-            />
+          <Question label={COPY.q0.question}>
+            <ChoiceButtons value={state.q0} onChange={set('q0')} options={COPY.q0.options} />
           </Question>
         )}
 
         {step.key === 'section1' && (
           <div className="space-y-8">
             <TextField
-              label="About how many admission inquiry calls does your front desk get in a typical week?"
+              label={COPY.section1.weeklyCallVolumeLabel}
               type="number"
               value={state.weeklyCallVolume}
               onChange={set('weeklyCallVolume')}
-              placeholder="e.g. 40"
+              placeholder={COPY.section1.weeklyCallVolumePlaceholder}
             />
-            <Question label="Of those, roughly how many go unanswered — after hours, line's busy, weekends?">
+            <Question label={COPY.section1.missedVolumeQuestion}>
               <ChoiceButtons
                 value={state.missedVolume}
                 onChange={set('missedVolume')}
-                options={[
-                  { value: 'hardly_any', label: 'Hardly any, we catch almost everything' },
-                  { value: 'some_a_lot', label: 'Some / a lot' },
-                ]}
+                options={COPY.section1.missedVolumeOptions}
               />
             </Question>
             {state.missedVolume === 'some_a_lot' && (
               <>
-                <Question label="What happens to those calls right now — does anyone call them back, and how fast?">
+                <Question label={COPY.section1.missedCallbackSpeedQuestion}>
                   <ChoiceButtons
                     value={state.missedCallbackSpeed}
                     onChange={set('missedCallbackSpeed')}
-                    options={[
-                      { value: 'within_hour', label: "We're usually back to them within the hour" },
-                      { value: 'sometimes_not_at_all', label: 'Sometimes next day, sometimes not at all' },
-                    ]}
+                    options={COPY.section1.missedCallbackSpeedOptions}
                   />
                 </Question>
                 {state.missedCallbackSpeed === 'sometimes_not_at_all' && (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <TextField
-                      label="Missed calls per week"
+                      label={COPY.section1.missedCallsPerWeekLabel}
                       type="number"
                       value={state.missedCallsPerWeek}
                       onChange={set('missedCallsPerWeek')}
-                      placeholder="If they know"
+                      placeholder={COPY.section1.missedCallsPerWeekPlaceholder}
                     />
                     <TextField
-                      label="Response-time gap"
+                      label={COPY.section1.responseTimeGapLabel}
                       value={state.responseTimeGap}
                       onChange={set('responseTimeGap')}
-                      placeholder="e.g. next day, 3+ days"
+                      placeholder={COPY.section1.responseTimeGapPlaceholder}
                     />
                   </div>
                 )}
                 <TextField
-                  label="Any sense of how many of those missed calls end up going to another facility instead?"
+                  label={COPY.section1.lostToCompetitorLabel}
                   value={state.lostToCompetitor}
                   onChange={set('lostToCompetitor')}
-                  placeholder="They may not know — that's fine"
+                  placeholder={COPY.section1.lostToCompetitorPlaceholder}
                 />
               </>
             )}
@@ -255,30 +259,24 @@ export function SurveyBody({ onResults }) {
 
         {step.key === 'section2' && (
           <div className="space-y-8">
-            {state.q0 === 'intake_triage' && (
+            {state.q0 === M.INTAKE_KEY && (
               <p className="rounded-lg border border-line bg-surface px-4 py-3 font-sans text-sm text-fg-secondary">
-                Crisis-language routing is already included with Intake &amp; Triage — this just confirms the gap it closes, not something to qualify separately.
+                {COPY.section2.includedNote}
               </p>
             )}
-            <Question label="Is anyone answering calls after hours or weekends right now?">
+            <Question label={COPY.section2.afterHoursQuestion}>
               <ChoiceButtons
                 value={state.afterHours}
                 onChange={set('afterHours')}
-                options={[
-                  { value: 'voicemail', label: 'No, goes to voicemail' },
-                  { value: 'on_call_staff', label: 'Yes, on-call staff' },
-                ]}
+                options={COPY.section2.afterHoursOptions}
               />
             </Question>
             {state.afterHours === 'on_call_staff' && (
-              <Question label="How often does that on-call person actually get reached quickly?">
+              <Question label={COPY.section2.onCallReachedQuestion}>
                 <ChoiceButtons
                   value={state.onCallReachedQuickly}
                   onChange={set('onCallReachedQuickly')}
-                  options={[
-                    { value: 'yes', label: 'Reliably, most of the time' },
-                    { value: 'no', label: "Slow / unreliable" },
-                  ]}
+                  options={COPY.section2.onCallReachedOptions}
                 />
               </Question>
             )}
@@ -288,24 +286,21 @@ export function SurveyBody({ onResults }) {
         {step.key === 'section3' && (
           <div className="space-y-8">
             <p className="rounded-lg border border-line bg-surface px-4 py-3 font-sans text-sm text-fg-secondary">
-              Intake &amp; Triage already includes a quick conversational pre-screen ("what insurance do you have?"). This qualifies for the deeper add-on — a real-time eligibility/benefits check with the actual payer.
+              {COPY.section3.note}
             </p>
-            <Question label="When someone calls asking if you take their insurance, how does that get answered — on the spot, or do you have to check and call back?">
+            <Question label={COPY.section3.checkQuestion}>
               <ChoiceButtons
                 value={state.insuranceCheck}
                 onChange={set('insuranceCheck')}
-                options={[
-                  { value: 'on_the_spot', label: 'On the spot, we have someone dedicated' },
-                  { value: 'check_callback', label: 'We usually have to check and call back' },
-                ]}
+                options={COPY.section3.checkOptions}
               />
             </Question>
             {state.insuranceCheck === 'check_callback' && (
               <TextField
-                label="How long does that callback usually take?"
+                label={COPY.section3.callbackTimeLabel}
                 value={state.insuranceCallbackTime}
                 onChange={set('insuranceCallbackTime')}
-                placeholder="Minutes, hours, days…"
+                placeholder={COPY.section3.callbackTimePlaceholder}
               />
             )}
           </div>
@@ -313,23 +308,20 @@ export function SurveyBody({ onResults }) {
 
         {step.key === 'section4' && (
           <div className="space-y-8">
-            <Question label="For people who call but don't book same-day, what's the process for following up with them?">
+            <Question label={COPY.section4.followUpQuestion}>
               <ChoiceButtons
                 value={state.followUp}
                 onChange={set('followUp')}
-                options={[
-                  { value: 'real_process', label: 'We have a real nurture process, we stay on it' },
-                  { value: 'falls_through', label: 'Not really, it kind of falls through the cracks' },
-                ]}
+                options={COPY.section4.followUpOptions}
               />
             </Question>
             {state.followUp === 'falls_through' && (
               <TextField
-                label="Any rough sense of how many inquiries a month don't convert same-day?"
+                label={COPY.section4.coldInquiriesLabel}
                 type="number"
                 value={state.monthlyColdInquiries}
                 onChange={set('monthlyColdInquiries')}
-                placeholder="If they know"
+                placeholder={COPY.section4.coldInquiriesPlaceholder}
               />
             )}
           </div>
@@ -337,22 +329,19 @@ export function SurveyBody({ onResults }) {
 
         {step.key === 'section5' && (
           <div className="space-y-8">
-            <Question label="When intake is checking whether there's an open bed or program slot, is that instant, or does someone have to check with clinical/ops first?">
+            <Question label={COPY.section5.availabilityQuestion}>
               <ChoiceButtons
                 value={state.bedAvailability}
                 onChange={set('bedAvailability')}
-                options={[
-                  { value: 'instant', label: "Instant, we already have that automated" },
-                  { value: 'manual', label: 'Manual, has to check' },
-                ]}
+                options={COPY.section5.availabilityOptions}
               />
             </Question>
             {state.bedAvailability === 'manual' && (
               <TextField
-                label="How often does that delay end up losing the inquiry?"
+                label={COPY.section5.delayLabel}
                 value={state.bedDelayLosesInquiry}
                 onChange={set('bedDelayLosesInquiry')}
-                placeholder="e.g. sometimes, rarely, often"
+                placeholder={COPY.section5.delayPlaceholder}
               />
             )}
           </div>
@@ -360,22 +349,19 @@ export function SurveyBody({ onResults }) {
 
         {step.key === 'section6' && (
           <div className="space-y-8">
-            <Question label="Once someone's actually booked an intake appointment, what happens to make sure they show up — any reminders, confirmations?">
+            <Question label={COPY.section6.remindersQuestion}>
               <ChoiceButtons
                 value={state.reminders}
                 onChange={set('reminders')}
-                options={[
-                  { value: 'solid', label: 'Yes, we have a solid reminder process' },
-                  { value: 'hope_they_show', label: 'Not really, we just hope they show' },
-                ]}
+                options={COPY.section6.remindersOptions}
               />
             </Question>
             {state.reminders === 'hope_they_show' && (
               <TextField
-                label="Any sense of your current no-show rate for booked intakes?"
+                label={COPY.section6.rateLabel}
                 value={state.noShowRate}
                 onChange={set('noShowRate')}
-                placeholder="e.g. 20%"
+                placeholder={COPY.section6.ratePlaceholder}
               />
             )}
           </div>
@@ -383,22 +369,19 @@ export function SurveyBody({ onResults }) {
 
         {step.key === 'section7' && (
           <div className="space-y-8">
-            <Question label="Do you currently know which marketing channels or referral sources are actually turning into real admissions?">
+            <Question label={COPY.section7.trackingQuestion}>
               <ChoiceButtons
                 value={state.referralTracking}
                 onChange={set('referralTracking')}
-                options={[
-                  { value: 'yes_track', label: 'Yes, we track that well' },
-                  { value: 'no_guess', label: "No / not really, it's a guess" },
-                ]}
+                options={COPY.section7.trackingOptions}
               />
             </Question>
             {state.referralTracking === 'no_guess' && (
               <TextField
-                label="Is that something ownership/BD cares about, or is intake speed the bigger priority right now?"
+                label={COPY.section7.priorityLabel}
                 value={state.referralPriority}
                 onChange={set('referralPriority')}
-                placeholder="Gauges whether this is worth including"
+                placeholder={COPY.section7.priorityPlaceholder}
               />
             )}
           </div>
@@ -419,12 +402,12 @@ export function SurveyBody({ onResults }) {
                 </p>
                 {results.crisisRoutingIncluded && (
                   <p className="mt-1 font-sans text-sm text-fg-secondary">
-                    After-hours crisis-language routing included automatically — not a separate line item.
+                    {COPY.summary.frontRunnerIncludedNote}
                   </p>
                 )}
                 {results.missedCallStrongSignal && (
                   <p className="mt-1 font-sans text-sm text-success">
-                    Strong signal for Missed-Call Recovery — missed calls often go a day or more without a callback.
+                    {COPY.summary.missedCallStrongSignalNote}
                   </p>
                 )}
               </ExpandableCard>
@@ -505,5 +488,8 @@ export function SurveyBody({ onResults }) {
 }
 
 export default function Survey() {
-  return <SurveyBody />
+  const brand = useBrand()
+  // key forces a clean remount (fresh state from the right module) if the
+  // resolved niche changes mid-session, e.g. toggling the ?brand= override.
+  return <SurveyBody key={brand.niche} niche={brand.niche} />
 }

@@ -13,6 +13,12 @@ export const FRONT_RUNNERS = {
   missed_call_recovery: 'Missed-Call Recovery',
 }
 
+// Prompt 551 — the two q0 outcomes, named so Survey.jsx's shared branching
+// code doesn't hardcode a niche-specific key (surveySuretix.js uses
+// 'intake_dispatch' for the intake path; the missed-call key is the same).
+export const INTAKE_KEY = 'intake_triage'
+export const MISSED_CALL_KEY = 'missed_call_recovery'
+
 // Prompt 470 — results-screen copy, pulled verbatim from the "Restorix
 // Closer Survey" vault note's own "Content for the results screen"
 // section rather than summarized/rewritten here. Keyed to match
@@ -60,6 +66,116 @@ export const RESULTS_CONTENT = {
       'Tracking that shows which marketing channels or referral sources are actually turning into real admissions, not just inquiries.',
     whatItDoes:
       "Most facilities are guessing which channels are worth the spend. This gives ownership/BD a clear, accurate picture of what's actually working, so marketing dollars go toward what's proven instead of what feels like it's working.",
+  },
+}
+
+// Prompt 551 — every niche-specific string the wizard renders lives here
+// (was hardcoded in Survey.jsx). `surveySuretix.js` exports a COPY object of
+// the same shape; Survey.jsx renders from whichever module useBrand() picks,
+// so the branching/state-machine JSX stays a single shared implementation.
+export const COPY = {
+  header: {
+    title: 'Closer Survey',
+    subtitle: 'Stack qualification — talk track for a live call, nothing saved.',
+  },
+  q0: {
+    question:
+      "If we could have AI answer every single inquiry call live, 24/7, book-capable — is that something you'd want, or would you rather keep your own staff answering live and have AI catch what they miss?",
+    options: [
+      { value: 'intake_triage', label: "We'd want AI answering live" },
+      { value: 'missed_call_recovery', label: "We'd rather keep our staff primary" },
+    ],
+  },
+  section1: {
+    weeklyCallVolumeLabel: 'About how many admission inquiry calls does your front desk get in a typical week?',
+    weeklyCallVolumePlaceholder: 'e.g. 40',
+    missedVolumeQuestion: "Of those, roughly how many go unanswered — after hours, line's busy, weekends?",
+    missedVolumeOptions: [
+      { value: 'hardly_any', label: 'Hardly any, we catch almost everything' },
+      { value: 'some_a_lot', label: 'Some / a lot' },
+    ],
+    missedCallbackSpeedQuestion: 'What happens to those calls right now — does anyone call them back, and how fast?',
+    missedCallbackSpeedOptions: [
+      { value: 'within_hour', label: "We're usually back to them within the hour" },
+      { value: 'sometimes_not_at_all', label: 'Sometimes next day, sometimes not at all' },
+    ],
+    missedCallsPerWeekLabel: 'Missed calls per week',
+    missedCallsPerWeekPlaceholder: 'If they know',
+    responseTimeGapLabel: 'Response-time gap',
+    responseTimeGapPlaceholder: 'e.g. next day, 3+ days',
+    lostToCompetitorLabel:
+      'Any sense of how many of those missed calls end up going to another facility instead?',
+    lostToCompetitorPlaceholder: "They may not know — that's fine",
+  },
+  section2: {
+    includedNote:
+      'Crisis-language routing is already included with Intake & Triage — this just confirms the gap it closes, not something to qualify separately.',
+    afterHoursQuestion: 'Is anyone answering calls after hours or weekends right now?',
+    afterHoursOptions: [
+      { value: 'voicemail', label: 'No, goes to voicemail' },
+      { value: 'on_call_staff', label: 'Yes, on-call staff' },
+    ],
+    onCallReachedQuestion: 'How often does that on-call person actually get reached quickly?',
+    onCallReachedOptions: [
+      { value: 'yes', label: 'Reliably, most of the time' },
+      { value: 'no', label: 'Slow / unreliable' },
+    ],
+  },
+  section3: {
+    note:
+      'Intake & Triage already includes a quick conversational pre-screen ("what insurance do you have?"). This qualifies for the deeper add-on — a real-time eligibility/benefits check with the actual payer.',
+    checkQuestion:
+      'When someone calls asking if you take their insurance, how does that get answered — on the spot, or do you have to check and call back?',
+    checkOptions: [
+      { value: 'on_the_spot', label: 'On the spot, we have someone dedicated' },
+      { value: 'check_callback', label: 'We usually have to check and call back' },
+    ],
+    callbackTimeLabel: 'How long does that callback usually take?',
+    callbackTimePlaceholder: 'Minutes, hours, days…',
+  },
+  section4: {
+    followUpQuestion: "For people who call but don't book same-day, what's the process for following up with them?",
+    followUpOptions: [
+      { value: 'real_process', label: 'We have a real nurture process, we stay on it' },
+      { value: 'falls_through', label: 'Not really, it kind of falls through the cracks' },
+    ],
+    coldInquiriesLabel: "Any rough sense of how many inquiries a month don't convert same-day?",
+    coldInquiriesPlaceholder: 'If they know',
+  },
+  section5: {
+    availabilityQuestion:
+      "When intake is checking whether there's an open bed or program slot, is that instant, or does someone have to check with clinical/ops first?",
+    availabilityOptions: [
+      { value: 'instant', label: 'Instant, we already have that automated' },
+      { value: 'manual', label: 'Manual, has to check' },
+    ],
+    delayLabel: 'How often does that delay end up losing the inquiry?',
+    delayPlaceholder: 'e.g. sometimes, rarely, often',
+  },
+  section6: {
+    remindersQuestion:
+      "Once someone's actually booked an intake appointment, what happens to make sure they show up — any reminders, confirmations?",
+    remindersOptions: [
+      { value: 'solid', label: 'Yes, we have a solid reminder process' },
+      { value: 'hope_they_show', label: 'Not really, we just hope they show' },
+    ],
+    rateLabel: 'Any sense of your current no-show rate for booked intakes?',
+    ratePlaceholder: 'e.g. 20%',
+  },
+  section7: {
+    trackingQuestion:
+      'Do you currently know which marketing channels or referral sources are actually turning into real admissions?',
+    trackingOptions: [
+      { value: 'yes_track', label: 'Yes, we track that well' },
+      { value: 'no_guess', label: "No / not really, it's a guess" },
+    ],
+    priorityLabel: 'Is that something ownership/BD cares about, or is intake speed the bigger priority right now?',
+    priorityPlaceholder: 'Gauges whether this is worth including',
+  },
+  summary: {
+    frontRunnerIncludedNote: 'After-hours crisis-language routing included automatically — not a separate line item.',
+    missedCallStrongSignalNote:
+      'Strong signal for Missed-Call Recovery — missed calls often go a day or more without a callback.',
   },
 }
 
