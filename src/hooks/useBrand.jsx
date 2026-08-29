@@ -121,6 +121,22 @@ export function BrandProvider({ children }) {
     // index.css [data-brand] values.
     const themeMeta = document.querySelector('meta[name="theme-color"]')
     if (themeMeta) themeMeta.setAttribute('content', brand.niche === 'bail_bonds' ? '#b45309' : '#3a63d6')
+    // Prompt 556 — favicon <link> tags are just as static in index.html as
+    // the title/theme-color above; swap each to the Suretix set on the
+    // bail_bonds portal, back to the Restorix teal set otherwise. Same
+    // effect + dep array, so this also re-flips on ?brand= override and
+    // hostname changes for free.
+    const suretix = brand.niche === 'bail_bonds'
+    for (const [id, base] of [
+      ['favicon-16', '/favicon-16.png'],
+      ['favicon-32', '/favicon-32.png'],
+      ['favicon-48', '/favicon-48.png'],
+      ['favicon-512', '/favicon-512.png'],
+      ['apple-touch-icon', '/apple-touch-icon.png'],
+    ]) {
+      const link = document.getElementById(id)
+      if (link) link.setAttribute('href', suretix ? base.replace('.png', '-suretix.png') : base)
+    }
   }, [brand.niche, brand.wordmark])
 
   return <BrandContext.Provider value={brand}>{children}</BrandContext.Provider>

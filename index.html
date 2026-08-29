@@ -2,11 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
-    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
-    <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <!-- Prompt 556 — ids let useBrand.jsx runtime-swap these to the Suretix
+         set on portal.suretix.co / ?brand=bail_bonds, same as it already
+         does for document.title and the theme-color meta below. Default
+         hrefs are the Restorix teal set. -->
+    <link id="favicon-16" rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link id="favicon-32" rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link id="favicon-48" rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
+    <link id="favicon-512" rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png" />
+    <link id="apple-touch-icon" rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <!-- Prompt 528 — real PWA manifest so "Add to Home Screen" installs a
          proper app icon (Android reads this; iOS uses apple-touch-icon
          above instead). No service worker — that's a separate, larger
