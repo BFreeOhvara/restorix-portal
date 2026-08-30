@@ -283,15 +283,16 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, actio
         </div>
       )}
 
-      {/* Prompt 559 Part A — My Leads: the button row + stat tiles read as
-          one tight block under the header, not a lopsided gap under the
-          left-hand subtitle. Tighter margins when actionsRow is present
-          (My Leads only); /overview + the embedded Setter tab keep mt-4. */}
-      {actionsRow && <div className="mt-3 flex justify-end">{actionsRow}</div>}
+      {/* Prompt 562 — My Leads (2nd pass at the gap complaint): the button
+          row + stat tiles pull up tight against the header as one block —
+          near-zero margins (mt-1) so subtitle → button → tiles read as a
+          single unit, no awkward gap anywhere in that span. /overview + the
+          embedded Setter tab are untouched (no actionsRow → TodayStrip mt-4). */}
+      {actionsRow && <div className="mt-1 flex justify-end">{actionsRow}</div>}
 
       {/* Prompt 558 — no stat tiles in the embedded My Pipeline → Setter
           tracking view (kept on /overview and My Leads). */}
-      {!embedded && <TodayStrip profile={profile} className={actionsRow ? 'mt-2' : 'mt-4'} />}
+      {!embedded && <TodayStrip profile={profile} className={actionsRow ? 'mt-1' : 'mt-4'} />}
 
       {/* Prompt 547 — "Finish Day" is a setter-only day-end action
           (run_setter_day_end is role-checked to setters), so it's hidden on
