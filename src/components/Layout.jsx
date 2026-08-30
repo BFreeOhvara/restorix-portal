@@ -54,10 +54,11 @@ const NAV_GROUPS = [
     // My Calls again now.
     label: 'WORK',
     items: [
-      // Prompt 474: setter-only label swap — "My Recordings" reads better
-      // for a setter's own dial history, closer/admin keep "My Calls"
-      // exactly as-is (same route, same data, label only).
-      { to: '/my-calls', label: 'My Calls', labelByRole: { setter: 'My Recordings' }, icon: PhoneCall, roles: ['setter', 'closer'] },
+      // Prompt 474 / 561: "My Recordings" reads better than "My Calls" for
+      // one's own dial history — Prompt 474 did this for setters, Prompt 561
+      // extends it to closers (setter + closer are the only roles with this
+      // item; admin doesn't get it). Same route, same data, label only.
+      { to: '/my-calls', label: 'My Recordings', icon: PhoneCall, roles: ['setter', 'closer'] },
       // Prompt 469 — live-call talk-track tool, closer's own working
       // tool same as My Calls is the setter's, so it lives in WORK too.
       { to: '/survey', label: 'Closer Survey', icon: ListChecks, roles: ['closer', 'admin'] },
