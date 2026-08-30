@@ -267,6 +267,42 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, actio
     )
   }, [leadsByTab, search, statusFilter])
 
+  // Prompt 560 — on the embedded My Pipeline → Setter tab the status pills
+  // sit ABOVE the search bar; on /overview and My Leads the search bar stays
+  // above the pills (unchanged). Purely a render-order swap — whichever row
+  // comes first owns the tight top margin under whatever sits above it.
+  const searchRow = (
+    <div className={clsx('flex flex-wrap items-center gap-3', embedded ? 'mt-3' : 'mt-6')}>
+      <div className="relative flex-1 min-w-[220px]">
+        <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-secondary" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search facility, contact, or phone…"
+          className="w-full rounded-lg border-2 border-line bg-elevated py-2 pl-9 pr-3 font-sans text-sm text-fg-primary shadow-sm outline-none focus:border-accent"
+        />
+      </div>
+    </div>
+  )
+
+  const pillsRow = (
+    <div className={clsx('flex flex-wrap gap-2', embedded ? 'mt-1' : 'mt-3')}>
+      {visibleTabs.map((tab) => (
+        <button
+          key={tab.key}
+          onClick={() => setStatusFilter(tab.key)}
+          className={clsx(
+            'eyebrow rounded-full px-3.5 py-2 transition-colors hover:opacity-85',
+            statusFilter === tab.key ? STATUS_SOLID[tab.styleKey] : STATUS_TINT[tab.styleKey]
+          )}
+        >
+          {tab.label} ({counts[tab.key] || 0})
+        </button>
+      ))}
+    </div>
+  )
+
   return (
     <div>
       {/* Prompt 558 — when embedded (My Pipeline → Setter tab) the wrapper
@@ -303,35 +339,21 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, actio
       {nicheTabs && <div className="mt-6">{nicheTabs}</div>}
 
       {/* Prompt 558 — embedded has no header/stats/nicheTabs above it, so
-          the search row sits right under the wrapper's own tab switcher —
-          tighter top margin to match the Closer tab's spacing. */}
-      <div className={clsx('flex flex-wrap items-center gap-3', embedded ? 'mt-1' : 'mt-6')}>
-        <div className="relative flex-1 min-w-[220px]">
-          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-secondary" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search facility, contact, or phone…"
-            className="w-full rounded-lg border-2 border-line bg-elevated py-2 pl-9 pr-3 font-sans text-sm text-fg-primary shadow-sm outline-none focus:border-accent"
-          />
-        </div>
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        {visibleTabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setStatusFilter(tab.key)}
-            className={clsx(
-              'eyebrow rounded-full px-3.5 py-2 transition-colors hover:opacity-85',
-              statusFilter === tab.key ? STATUS_SOLID[tab.styleKey] : STATUS_TINT[tab.styleKey]
-            )}
-          >
-            {tab.label} ({counts[tab.key] || 0})
-          </button>
-        ))}
-      </div>
+          the first control row sits right under the wrapper's own tab
+          switcher (tight top margin). Prompt 560 — that first row is the
+          status pills on the embedded Setter tab, the search bar everywhere
+          else. */}
+      {embedded ? (
+        <>
+          {pillsRow}
+          {searchRow}
+        </>
+      ) : (
+        <>
+          {searchRow}
+          {pillsRow}
+        </>
+      )}
 
       {/* Own scroll region for the row list, bounded height so the strip/
           search/filters above stay pinned while scrolling a 150-lead pool
