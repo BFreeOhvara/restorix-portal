@@ -18,46 +18,57 @@ import { RESULTS_CONTENT } from './survey'
 export const FRONT_RUNNER_KEYS = ['intake_triage', 'missed_call_recovery']
 export const SUB_AGENT_KEYS = ['insurance', 'follow_up', 'bed_sync', 'reminders', 'referral_reporting']
 
+// `navLabel` (Prompt 565) — short, client-facing sidebar tab name, distinct
+// from the fuller internal `label` (still used by RESULTS_CONTENT/survey and
+// the Overview card headings). Sidebar-only; naming handed to Eagle per the
+// prompt.
 export const AGENT_CATALOG = {
   intake_triage: {
     kind: 'front_runner',
     label: 'Inbound Intake & Triage',
+    navLabel: 'Intake & Triage',
     status: 'placeholder', // 'placeholder' | 'live'
     needsConnect: ['phone_number'],
   },
   missed_call_recovery: {
     kind: 'front_runner',
     label: 'Missed-Call Recovery',
+    navLabel: 'Missed-Call Recovery',
     status: 'placeholder',
     needsConnect: ['phone_number'],
   },
   insurance: {
     kind: 'sub_agent',
     label: 'Insurance / payer verification',
+    navLabel: 'Insurance Verification',
     status: 'placeholder',
     needsConnect: [],
   },
   follow_up: {
     kind: 'sub_agent',
     label: 'Follow-up & nurture',
+    navLabel: 'Follow-Up',
     status: 'placeholder',
     needsConnect: [],
   },
   bed_sync: {
     kind: 'sub_agent',
     label: 'Bed/program availability sync',
+    navLabel: 'Bed Availability',
     status: 'placeholder',
     needsConnect: [],
   },
   reminders: {
     kind: 'sub_agent',
     label: 'Appointment Reminder & No-Show Prevention',
+    navLabel: 'Appointment Reminders',
     status: 'placeholder',
     needsConnect: [],
   },
   referral_reporting: {
     kind: 'sub_agent',
     label: 'Referral-source reporting',
+    navLabel: 'Referral Reporting',
     status: 'placeholder',
     needsConnect: [],
   },

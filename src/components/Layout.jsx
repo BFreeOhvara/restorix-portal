@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, ListChecks, UserPlus, GitBranch, Bug, Smartphone } from 'lucide-react'
+import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, ListChecks, UserPlus, GitBranch, Bug, Smartphone, Bot } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useBrand } from '../hooks/useBrand'
+import { useMyDeal } from '../hooks/useDeals'
+import { catalogEntry } from '../lib/agentCatalog'
 import { supabase, SUPABASE_URL } from '../lib/supabase'
 import ParticleField from './ui/ParticleField'
 import { Avatar } from './ui/Avatar'
@@ -337,6 +339,23 @@ export default function Layout() {
   // negative-margin trick.
   const isFullBleed = location.pathname === '/messages'
 
+  // Prompt 565 — a client gets one sidebar tab per agent their own deal
+  // bought, injected into the TODAY group right after Overview (front-runner
+  // first, then sub_agents, matching the Overview page's card order).
+  // Client-only; useMyDeal is skipped entirely for staff roles.
+  const isClient = profile?.role === 'client'
+  const { data: clientDeal } = useMyDeal({ enabled: isClient })
+  const clientAgentLinks =
+    isClient && clientDeal
+      ? [clientDeal.front_runner, ...(clientDeal.sub_agents || [])]
+          .filter(Boolean)
+          .map((key) => {
+            const entry = catalogEntry(key)
+            return entry ? { to: `/my-agents/${key}`, label: entry.navLabel || entry.label, icon: Bot } : null
+          })
+          .filter(Boolean)
+      : []
+
   return (
     <div className="min-h-screen bg-base">
       {/* Fixed via inset-y-0 rather than height:100vh — top/bottom anchoring
@@ -365,13 +384,17 @@ export default function Layout() {
         <nav className="flex-1 space-y-4 px-3">
           {NAV_GROUPS.map(({ label: groupLabel, items }) => {
             const visible = items.filter((l) => l.roles.includes(profile?.role))
-            if (visible.length === 0) return null
+            const agentLinks = groupLabel === 'TODAY' ? clientAgentLinks : []
+            if (visible.length === 0 && agentLinks.length === 0) return null
             return (
               <div key={groupLabel}>
                 <p className="eyebrow !text-fg-faint px-3 pb-1.5">{groupLabel}</p>
                 <div className="space-y-1">
                   {visible.map((item) => (
                     <NavItemLink key={item.to} {...item} label={item.labelByRole?.[profile?.role] || item.label} />
+                  ))}
+                  {agentLinks.map((item) => (
+                    <NavItemLink key={item.to} {...item} />
                   ))}
                 </div>
               </div>

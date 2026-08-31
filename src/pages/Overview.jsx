@@ -817,9 +817,12 @@ function ClientAgentCard({ entryKey, hero }) {
   if (!entry) return null
   const isLive = entry.status === 'live'
   return (
-    <div
+    // Prompt 565 — each card links to that agent's own full page (the same
+    // page its new sidebar tab opens). Overview is otherwise unchanged.
+    <Link
+      to={`/my-agents/${entryKey}`}
       className={clsx(
-        'rounded-card border bg-elevated p-6',
+        'block rounded-card border bg-elevated p-6 transition-colors hover:border-accent/50',
         hero ? 'border-accent/30' : 'border-line'
       )}
     >
@@ -843,7 +846,7 @@ function ClientAgentCard({ entryKey, hero }) {
           once this is ready.
         </p>
       )}
-    </div>
+    </Link>
   )
 }
 

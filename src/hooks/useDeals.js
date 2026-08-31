@@ -14,9 +14,10 @@ function generateToken() {
 // Prompt 546 — the client's own view of their deal. `client_profile_id =
 // auth.uid()` is enforced by the `deals_select_own` RLS policy; this hook
 // just reads whatever comes back (one deal per client account for MVP).
-export function useMyDeal() {
+export function useMyDeal({ enabled = true } = {}) {
   return useQuery({
     queryKey: ['my-deal'],
+    enabled,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('deals')

@@ -22,14 +22,16 @@ import Settings from './pages/Settings'
 import Survey from './pages/Survey'
 import MyLeads from './pages/MyLeads'
 import MyPipeline from './pages/MyPipeline'
+import MyAgent from './pages/MyAgent'
 import BugReports from './pages/BugReports'
 
 const queryClient = new QueryClient()
 
 // Prompt 546 — routes a `client` account must never reach. `client` gets
-// only /overview (its own dashboard branch inside Overview.jsx), /profile,
-// and /settings; everything else is internal-staff-only. RoleRoute
-// redirects a client hitting these to / → /overview.
+// only /overview (its own dashboard branch inside Overview.jsx), the
+// per-agent /my-agents/:agentKey pages (Prompt 565), /profile, and
+// /settings; everything else is internal-staff-only. RoleRoute redirects a
+// client hitting these to / → /overview.
 const INTERNAL_ROLES = ['setter', 'closer', 'admin']
 
 function Gate({ children }) {
@@ -92,6 +94,14 @@ export default function App() {
                     <Route element={<Layout />}>
                       <Route path="/" element={<Home />} />
                       <Route path="/overview" element={<Overview />} />
+                      <Route
+                        path="/my-agents/:agentKey"
+                        element={
+                          <RoleRoute roles={['client']}>
+                            <MyAgent />
+                          </RoleRoute>
+                        }
+                      />
                       <Route
                         path="/stats"
                         element={
