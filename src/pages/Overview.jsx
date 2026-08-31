@@ -166,9 +166,11 @@ function FinishDayCard() {
 // list on the page is scoped to it; the setter's own /overview passes
 // neither, so `niche` is undefined there and this renders exactly as before.
 // Prompt 555 — the niche selector is gone (one brand per portal now), so
-// `nicheTabs` is unused but kept as harmless shared plumbing. `actionsRow`
-// is a new slot rendered right above the stat strip — My Leads puts its
-// "Request Leads" button there instead of up in `headerRight` by the title.
+// `nicheTabs` is unused but kept as harmless shared plumbing.
+// Prompt 563 — `actionsRow` is gone; My Leads' "Request Leads" button is
+// back in `headerRight` beside the title. `compactStats` (My Leads only)
+// gives TodayStrip the tight `mt-1` top margin Prompts 559/562 landed on,
+// keyed off an explicit prop now that `actionsRow` no longer exists.
 // Prompt 554 — `embedded` drops SetterOverview's own page header (h1 +
 // headerRight slot) so it can be nested as the "Setter" tab inside
 // CloserPipeline without a duplicate title. Everything below the header
@@ -179,7 +181,7 @@ function FinishDayCard() {
 // My Pipeline → Setter (embedded) and the setter's own /overview both leave
 // it off, so they keep showing every Follow-up lead — same "always visible"
 // shape Not Interested has.
-export function SetterOverview({ profile, title = 'Overview', headerRight, actionsRow, niche, nicheTabs, embedded = false, todayFollowUpOnly = false }) {
+export function SetterOverview({ profile, title = 'Overview', headerRight, niche, nicheTabs, embedded = false, todayFollowUpOnly = false, compactStats = false }) {
   const { data: pool, isLoading: poolLoading } = useMyPool(profile.id)
   const tz = profile.timezone || DEFAULT_TIMEZONE
   const { data: followUps, isLoading: followUpsLoading } = useMyFollowUps(profile.id, tz)
@@ -319,16 +321,13 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, actio
         </div>
       )}
 
-      {/* Prompt 562 — My Leads (2nd pass at the gap complaint): the button
-          row + stat tiles pull up tight against the header as one block —
-          near-zero margins (mt-1) so subtitle → button → tiles read as a
-          single unit, no awkward gap anywhere in that span. /overview + the
-          embedded Setter tab are untouched (no actionsRow → TodayStrip mt-4). */}
-      {actionsRow && <div className="mt-1 flex justify-end">{actionsRow}</div>}
-
       {/* Prompt 558 — no stat tiles in the embedded My Pipeline → Setter
-          tracking view (kept on /overview and My Leads). */}
-      {!embedded && <TodayStrip profile={profile} className={actionsRow ? 'mt-1' : 'mt-4'} />}
+          tracking view (kept on /overview and My Leads).
+          Prompt 563 — My Leads passes `compactStats` so the tiles sit tight
+          (mt-1) directly under the header row, keeping the gap Prompts
+          559/562 tuned now that the Request Leads button is back beside the
+          title. /overview keeps its original mt-4. */}
+      {!embedded && <TodayStrip profile={profile} className={compactStats ? 'mt-1' : 'mt-4'} />}
 
       {/* Prompt 547 — "Finish Day" is a setter-only day-end action
           (run_setter_day_end is role-checked to setters), so it's hidden on

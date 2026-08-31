@@ -125,10 +125,11 @@ export default function MyLeads() {
       profile={profile}
       title="My Leads"
       niche={niche}
-      // Prompt 555 — no clock in this slot (My Leads never had one), and the
-      // Request Leads button drops to `actionsRow` just above the stat tiles.
-      headerRight={false}
-      actionsRow={<RequestLeadsButton niche={niche} currentCount={currentNewCount} />}
+      // Prompt 563 — Request Leads is back beside the title (reverses Prompt
+      // 555's move to its own row above the tiles). `compactStats` keeps the
+      // tight header→tiles gap Prompts 559/562 landed on without `actionsRow`.
+      headerRight={<RequestLeadsButton niche={niche} currentCount={currentNewCount} />}
+      compactStats
       // Prompt 559 — Follow-up leads clear from My Leads at local midnight
       // (kept permanently on My Pipeline → Setter).
       todayFollowUpOnly
