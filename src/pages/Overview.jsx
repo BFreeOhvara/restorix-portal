@@ -310,7 +310,11 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
       {/* Prompt 558 — when embedded (My Pipeline → Setter tab) the wrapper
           owns the title + count line, so no header renders here at all. */}
       {!embedded && (
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        // Prompt 564 — My Leads (`compactStats`) bottom-aligns the
+        // title/subtitle stack with the taller Request Leads button so
+        // "N leads in your pool" and the button share a baseline; /overview
+        // keeps `items-start` (its DateClockRow was never part of this).
+        <div className={clsx('flex flex-wrap justify-between gap-4', compactStats ? 'items-end' : 'items-start')}>
           <div>
             <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
             <p className="mt-1 font-sans text-sm text-fg-secondary">
@@ -323,11 +327,10 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
 
       {/* Prompt 558 — no stat tiles in the embedded My Pipeline → Setter
           tracking view (kept on /overview and My Leads).
-          Prompt 563 — My Leads passes `compactStats` so the tiles sit tight
-          (mt-1) directly under the header row, keeping the gap Prompts
-          559/562 tuned now that the Request Leads button is back beside the
-          title. /overview keeps its original mt-4. */}
-      {!embedded && <TodayStrip profile={profile} className={compactStats ? 'mt-1' : 'mt-4'} />}
+          Prompt 563/564 — My Leads passes `compactStats` so the tiles sit
+          tight (mt-0.5, nudged in from Prompt 563's mt-1) directly under the
+          header row. /overview keeps its original mt-4. */}
+      {!embedded && <TodayStrip profile={profile} className={compactStats ? 'mt-0.5' : 'mt-4'} />}
 
       {/* Prompt 547 — "Finish Day" is a setter-only day-end action
           (run_setter_day_end is role-checked to setters), so it's hidden on
