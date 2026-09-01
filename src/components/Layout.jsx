@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, ListChecks, UserPlus, GitBranch, Bug, Smartphone, Bot } from 'lucide-react'
+// Bot stays as the generic fallback icon (used below when a catalog entry
+// has no navIcon of its own); PhoneCall etc. are the NAV_GROUPS icons
+// already in play elsewhere in this file, unrelated to the agent catalog.
 import { useAuth } from '../hooks/useAuth'
 import { useBrand } from '../hooks/useBrand'
 import { useMyDeal } from '../hooks/useDeals'
@@ -107,6 +110,35 @@ const NAV_GROUPS = [
     ],
   },
 ]
+
+// Prompt 567 — replaces Prompt 565's single flat injection into TODAY.
+// Groups the client's own purchased agents (front_runner first, then
+// sub_agents, same order Overview's own card stack uses) by their catalog
+// `navCategory`, one small nav group per category — the same "own small
+// section" shape COMMUNICATION/ACCOUNT already use, instead of one flat
+// list under TODAY. Unknown/stale catalog keys are skipped, same defensive
+// behavior catalogEntry itself already has.
+function buildClientAgentGroups(deal) {
+  if (!deal) return []
+  const keys = [deal.front_runner, ...(deal.sub_agents || [])].filter(Boolean)
+  const byCategory = new Map()
+  for (const key of keys) {
+    const entry = catalogEntry(key)
+    if (!entry) continue
+    const category = entry.navCategory || entry.label
+    if (!byCategory.has(category)) byCategory.set(category, [])
+    byCategory.get(category).push({
+      to: `/my-agents/${key}`,
+      label: entry.navLabel || entry.label,
+      icon: entry.navIcon || Bot,
+      roles: ['client'],
+    })
+  }
+  return Array.from(byCategory.entries()).map(([category, items]) => ({
+    label: category.toUpperCase(),
+    items,
+  }))
+}
 
 function NotificationBell() {
   const [open, setOpen] = useState(false)
@@ -339,22 +371,21 @@ export default function Layout() {
   // negative-margin trick.
   const isFullBleed = location.pathname === '/messages'
 
-  // Prompt 565 — a client gets one sidebar tab per agent their own deal
-  // bought, injected into the TODAY group right after Overview (front-runner
-  // first, then sub_agents, matching the Overview page's card order).
-  // Client-only; useMyDeal is skipped entirely for staff roles.
+  // Prompt 567 — client sidebar: TODAY (Overview) stays first and ACCOUNT
+  // (Settings) stays last, exactly where they already sit; the client's own
+  // purchased-agent categories (buildClientAgentGroups) slot in between,
+  // replacing Prompt 565's single flat injection into TODAY. Every other
+  // NAV_GROUPS group is staff-only and already filters itself out for
+  // `client` below, so non-client roles render NAV_GROUPS untouched.
   const isClient = profile?.role === 'client'
   const { data: clientDeal } = useMyDeal({ enabled: isClient })
-  const clientAgentLinks =
-    isClient && clientDeal
-      ? [clientDeal.front_runner, ...(clientDeal.sub_agents || [])]
-          .filter(Boolean)
-          .map((key) => {
-            const entry = catalogEntry(key)
-            return entry ? { to: `/my-agents/${key}`, label: entry.navLabel || entry.label, icon: Bot } : null
-          })
-          .filter(Boolean)
-      : []
+  const navGroups = isClient
+    ? [
+        NAV_GROUPS.find((g) => g.label === 'TODAY'),
+        ...buildClientAgentGroups(clientDeal),
+        NAV_GROUPS.find((g) => g.label === 'ACCOUNT'),
+      ].filter(Boolean)
+    : NAV_GROUPS
 
   return (
     <div className="min-h-screen bg-base">
@@ -382,19 +413,15 @@ export default function Layout() {
         </div>
 
         <nav className="flex-1 space-y-4 px-3">
-          {NAV_GROUPS.map(({ label: groupLabel, items }) => {
+          {navGroups.map(({ label: groupLabel, items }) => {
             const visible = items.filter((l) => l.roles.includes(profile?.role))
-            const agentLinks = groupLabel === 'TODAY' ? clientAgentLinks : []
-            if (visible.length === 0 && agentLinks.length === 0) return null
+            if (visible.length === 0) return null
             return (
               <div key={groupLabel}>
                 <p className="eyebrow !text-fg-faint px-3 pb-1.5">{groupLabel}</p>
                 <div className="space-y-1">
                   {visible.map((item) => (
                     <NavItemLink key={item.to} {...item} label={item.labelByRole?.[profile?.role] || item.label} />
-                  ))}
-                  {agentLinks.map((item) => (
-                    <NavItemLink key={item.to} {...item} />
                   ))}
                 </div>
               </div>

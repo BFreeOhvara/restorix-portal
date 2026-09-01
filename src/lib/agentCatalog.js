@@ -13,6 +13,7 @@
 // RESULTS_CONTENT in survey.js, keyed identically to these keys, so the
 // Closer Survey and the client dashboard can never drift.
 
+import { PhoneCall, PhoneMissed, ShieldCheck, Repeat, BedDouble, CalendarClock, PieChart } from 'lucide-react'
 import { RESULTS_CONTENT } from './survey'
 
 export const FRONT_RUNNER_KEYS = ['intake_triage', 'missed_call_recovery']
@@ -22,32 +23,48 @@ export const SUB_AGENT_KEYS = ['insurance', 'follow_up', 'bed_sync', 'reminders'
 // from the fuller internal `label` (still used by RESULTS_CONTENT/survey and
 // the Overview card headings). Sidebar-only; naming handed to Eagle per the
 // prompt.
+// Prompt 567 — revises Prompt 565's navLabel wording and adds
+// `navCategory`/`navIcon`. Prompt 565 gave every agent its own sidebar tab
+// but left them all still inside one flat TODAY list — this prompt groups
+// them into small categories (Inbound, Insurance, Follow-Ups, Scheduling,
+// Calendar, Reporting) the way COMMUNICATION/ACCOUNT already read as their
+// own sections, and tightens a couple of navLabel values that still read
+// as internal jargon rather than something a client recognizes (e.g.
+// "Intake & Triage" → "Phone Calls").
 export const AGENT_CATALOG = {
   intake_triage: {
     kind: 'front_runner',
     label: 'Inbound Intake & Triage',
-    navLabel: 'Intake & Triage',
+    navLabel: 'Phone Calls',
+    navCategory: 'Inbound',
+    navIcon: PhoneCall,
     status: 'placeholder', // 'placeholder' | 'live'
     needsConnect: ['phone_number'],
   },
   missed_call_recovery: {
     kind: 'front_runner',
     label: 'Missed-Call Recovery',
-    navLabel: 'Missed-Call Recovery',
+    navLabel: 'Missed Calls',
+    navCategory: 'Inbound',
+    navIcon: PhoneMissed,
     status: 'placeholder',
     needsConnect: ['phone_number'],
   },
   insurance: {
     kind: 'sub_agent',
     label: 'Insurance / payer verification',
-    navLabel: 'Insurance Verification',
+    navLabel: 'Insurance',
+    navCategory: 'Insurance',
+    navIcon: ShieldCheck,
     status: 'placeholder',
     needsConnect: [],
   },
   follow_up: {
     kind: 'sub_agent',
     label: 'Follow-up & nurture',
-    navLabel: 'Follow-Up',
+    navLabel: 'Follow-Ups',
+    navCategory: 'Follow-Ups',
+    navIcon: Repeat,
     status: 'placeholder',
     needsConnect: [],
   },
@@ -55,6 +72,8 @@ export const AGENT_CATALOG = {
     kind: 'sub_agent',
     label: 'Bed/program availability sync',
     navLabel: 'Bed Availability',
+    navCategory: 'Scheduling',
+    navIcon: BedDouble,
     status: 'placeholder',
     needsConnect: [],
   },
@@ -62,13 +81,17 @@ export const AGENT_CATALOG = {
     kind: 'sub_agent',
     label: 'Appointment Reminder & No-Show Prevention',
     navLabel: 'Appointment Reminders',
+    navCategory: 'Calendar',
+    navIcon: CalendarClock,
     status: 'placeholder',
     needsConnect: [],
   },
   referral_reporting: {
     kind: 'sub_agent',
     label: 'Referral-source reporting',
-    navLabel: 'Referral Reporting',
+    navLabel: 'Referral Reports',
+    navCategory: 'Reporting',
+    navIcon: PieChart,
     status: 'placeholder',
     needsConnect: [],
   },

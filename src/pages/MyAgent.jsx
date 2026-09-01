@@ -35,7 +35,14 @@ export default function MyAgent() {
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
-        <h1 className="font-display text-2xl font-medium text-fg-primary">{entry.label}</h1>
+        {/* Prompt 567 — heading now matches the sidebar tab that links here
+            (navLabel, e.g. "Phone Calls") instead of the fuller internal
+            `label` ("Inbound Intake & Triage") — otherwise a client clicks a
+            client-friendly tab and lands on a page titled with the same
+            internal jargon Prompt 565/567 renamed the tab away from.
+            Overview's own cards are untouched; this is the one page they
+            link into. */}
+        <h1 className="font-display text-2xl font-medium text-fg-primary">{entry.navLabel || entry.label}</h1>
         <span
           className={clsx(
             'eyebrow shrink-0 rounded-full px-2.5 py-1',
