@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useParams, Navigate } from 'react-router-dom'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import clsx from 'clsx'
 import { useMyDeal } from '../hooks/useDeals'
 import { useAuth } from '../hooks/useAuth'
@@ -41,6 +43,16 @@ import { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
 // intake_triage / insurance / follow_up no longer all look like the same
 // generic page. insurance + follow_up keep the shared `LivePreview` until
 // each gets its own turn.
+//
+// Prompt 574 — Phone Calls' `intake_triage` preview data went from one flat
+// { avgPickup, funnel, calls } to a `days` array (most-recent-first), each
+// day carrying its own `daysAgo` / `avgPickup` / `funnel` / `calls`.
+// PhoneCallsPreview gained a day navigator (chevrons + label, in the row
+// that already held "Avg pickup") that pages the funnel + call log together
+// through the sample days, and a row of status-filter pills above the log.
+// The "Needs your attention" panel is unaffected by the navigator — it
+// always reads day 0 ("right now"). Real calendar dates are computed from
+// `daysAgo` at render, never hardcoded.
 
 // `test_client` logs in as the username `test_client`, which useAuth.jsx
 // maps to `<username>@restorix.internal`. This is the authenticated
@@ -55,33 +67,102 @@ const TEST_CLIENT_EMAIL = 'test_client@restorix.internal'
 // treatment (Phone Calls' caller numbers); omit it for text refs like
 // payer names.
 const PREVIEW = {
-  // Prompt 573 — reshaped from the old flat tiles+rows into what
-  // PhoneCallsPreview needs: an avg-pickup speed stat, a 3-stage booking
-  // funnel (9 of 24 ≈ the same 38% booking rate the old tile claimed), and
-  // the same 8 calls — unchanged outcomes/timestamps — now tagged with a
-  // `day` group and, for the two that need a human, an `attention` level.
+  // Prompt 574 — `days` array, most-recent-first, one entry per browsable
+  // day. daysAgo 0 + 1 carry the exact numbers + calls shipped in 573
+  // (funnel 24/14/9, avgPickup "Instant", the same rows split onto their
+  // original Today/Yesterday day) — unchanged, just relocated into the new
+  // shape. daysAgo 2/3/4 are three more sample days in the same style,
+  // staying inside the outcome vocabulary (Booked / Routed to staff /
+  // Escalated / In progress → appointment_booked / new / not_interested /
+  // no_answer). Only day 0 carries `attention` rows — the attention panel
+  // always reads day 0 regardless of which day the navigator is showing.
+  // No hardcoded dates: PhoneCallsPreview's dayLabel() derives the real
+  // date from `daysAgo` at render.
   intake_triage: {
-    avgPickup: 'Instant',
-    // Answered → Consult offered → Booked. Conversions: 14/24 = 58%,
-    // 9/14 = 64%; overall 9/24 = 38% (the headline booking rate).
-    funnel: [
-      { label: 'Answered', value: 24 },
-      { label: 'Consult offered', value: 14 },
-      { label: 'Booked', value: 9 },
-    ],
-    // status: appointment_booked=green (booked), new=blue (routed to a
-    // person), not_interested=red (after-hours crisis escalation),
-    // no_answer=gray (still in progress). attention: 'urgent' (red) /
-    // 'callback' (amber) surfaces the row in the callout above the log too.
-    calls: [
-      { ref: '(415) 555-0182', outcome: 'Consult booked for tomorrow 9:00 AM', status: 'appointment_booked', pill: 'Booked', time: '4m ago', day: 'Today' },
-      { ref: '(415) 555-0143', outcome: 'Aetna coverage verified, intake booked', status: 'appointment_booked', pill: 'Booked', time: '21m ago', day: 'Today' },
-      { ref: '(628) 555-0117', outcome: 'Family asking about detox, routed to clinical', status: 'new', pill: 'Routed to staff', time: '39m ago', day: 'Today' },
-      { ref: '(510) 555-0169', outcome: 'Billing question, transferred to front desk', status: 'new', pill: 'Routed to staff', time: '1h ago', day: 'Today' },
-      { ref: '(415) 555-0195', outcome: 'After-hours call, crisis language detected — live clinician paged', status: 'not_interested', pill: 'Escalated', time: '2h ago', day: 'Today', attention: 'urgent', attentionReason: 'Crisis language detected after hours — clinician paged, confirm follow-up' },
-      { ref: '(925) 555-0134', outcome: 'Callback requested, awaiting return call', status: 'no_answer', pill: 'In progress', time: '3h ago', day: 'Today', attention: 'callback', attentionReason: 'Caller asked for a callback — not yet returned' },
-      { ref: '(415) 555-0126', outcome: 'Insurance pre-screen done, consult booked', status: 'appointment_booked', pill: 'Booked', time: '5h ago', day: 'Yesterday' },
-      { ref: '(707) 555-0150', outcome: 'Comparing facilities, follow-up sequence started', status: 'no_answer', pill: 'In progress', time: '6h ago', day: 'Yesterday' },
+    days: [
+      {
+        daysAgo: 0,
+        avgPickup: 'Instant',
+        // Answered → Consult offered → Booked. 14/24 = 58%, 9/14 = 64%;
+        // overall 9/24 = 38% (the headline booking rate).
+        funnel: [
+          { label: 'Answered', value: 24 },
+          { label: 'Consult offered', value: 14 },
+          { label: 'Booked', value: 9 },
+        ],
+        calls: [
+          { ref: '(415) 555-0182', outcome: 'Consult booked for tomorrow 9:00 AM', status: 'appointment_booked', pill: 'Booked', time: '4m ago' },
+          { ref: '(415) 555-0143', outcome: 'Aetna coverage verified, intake booked', status: 'appointment_booked', pill: 'Booked', time: '21m ago' },
+          { ref: '(628) 555-0117', outcome: 'Family asking about detox, routed to clinical', status: 'new', pill: 'Routed to staff', time: '39m ago' },
+          { ref: '(510) 555-0169', outcome: 'Billing question, transferred to front desk', status: 'new', pill: 'Routed to staff', time: '1h ago' },
+          { ref: '(415) 555-0195', outcome: 'After-hours call, crisis language detected — live clinician paged', status: 'not_interested', pill: 'Escalated', time: '2h ago', attention: 'urgent', attentionReason: 'Crisis language detected after hours — clinician paged, confirm follow-up' },
+          { ref: '(925) 555-0134', outcome: 'Callback requested, awaiting return call', status: 'no_answer', pill: 'In progress', time: '3h ago', attention: 'callback', attentionReason: 'Caller asked for a callback — not yet returned' },
+        ],
+      },
+      {
+        daysAgo: 1,
+        avgPickup: 'Instant',
+        funnel: [
+          { label: 'Answered', value: 24 },
+          { label: 'Consult offered', value: 14 },
+          { label: 'Booked', value: 9 },
+        ],
+        calls: [
+          { ref: '(415) 555-0126', outcome: 'Insurance pre-screen done, consult booked', status: 'appointment_booked', pill: 'Booked', time: '5h ago' },
+          { ref: '(707) 555-0150', outcome: 'Comparing facilities, follow-up sequence started', status: 'no_answer', pill: 'In progress', time: '6h ago' },
+        ],
+      },
+      {
+        daysAgo: 2,
+        avgPickup: 'Instant',
+        funnel: [
+          { label: 'Answered', value: 22 },
+          { label: 'Consult offered', value: 13 },
+          { label: 'Booked', value: 8 },
+        ],
+        calls: [
+          { ref: '(415) 555-0177', outcome: 'Consult booked for Friday 2:00 PM', status: 'appointment_booked', pill: 'Booked', time: '9:12 AM' },
+          { ref: '(510) 555-0140', outcome: 'Cigna benefits verified, intake scheduled', status: 'appointment_booked', pill: 'Booked', time: '10:35 AM' },
+          { ref: '(628) 555-0158', outcome: 'Referral from ER, routed to admissions', status: 'new', pill: 'Routed to staff', time: '11:48 AM' },
+          { ref: '(925) 555-0193', outcome: 'Pricing question, transferred to billing', status: 'new', pill: 'Routed to staff', time: '1:20 PM' },
+          { ref: '(707) 555-0121', outcome: 'Prospective patient weighing options, nurture started', status: 'no_answer', pill: 'In progress', time: '3:05 PM' },
+          { ref: '(415) 555-0166', outcome: 'Left voicemail, awaiting callback', status: 'no_answer', pill: 'In progress', time: '4:40 PM' },
+        ],
+      },
+      {
+        daysAgo: 3,
+        avgPickup: 'Instant',
+        funnel: [
+          { label: 'Answered', value: 19 },
+          { label: 'Consult offered', value: 11 },
+          { label: 'Booked', value: 7 },
+        ],
+        calls: [
+          { ref: '(415) 555-0138', outcome: 'Consult booked for Monday 11:00 AM', status: 'appointment_booked', pill: 'Booked', time: '8:50 AM' },
+          { ref: '(628) 555-0104', outcome: 'Aetna verified, intake booked same week', status: 'appointment_booked', pill: 'Booked', time: '10:02 AM' },
+          { ref: '(510) 555-0187', outcome: 'Alumni asking about aftercare, routed to clinical', status: 'new', pill: 'Routed to staff', time: '12:15 PM' },
+          { ref: '(925) 555-0149', outcome: 'After-hours call, safety concern — on-call clinician paged', status: 'not_interested', pill: 'Escalated', time: '9:30 PM' },
+          { ref: '(707) 555-0172', outcome: 'Comparing in-network options, follow-up scheduled', status: 'no_answer', pill: 'In progress', time: '2:25 PM' },
+        ],
+      },
+      {
+        daysAgo: 4,
+        avgPickup: 'Instant',
+        funnel: [
+          { label: 'Answered', value: 26 },
+          { label: 'Consult offered', value: 15 },
+          { label: 'Booked', value: 10 },
+        ],
+        calls: [
+          { ref: '(415) 555-0110', outcome: 'Consult booked for Thursday 9:30 AM', status: 'appointment_booked', pill: 'Booked', time: '8:15 AM' },
+          { ref: '(628) 555-0163', outcome: 'BCBS verified, intake scheduled', status: 'appointment_booked', pill: 'Booked', time: '9:40 AM' },
+          { ref: '(510) 555-0129', outcome: 'UnitedHealthcare verified, consult booked', status: 'appointment_booked', pill: 'Booked', time: '11:05 AM' },
+          { ref: '(925) 555-0155', outcome: 'Employer EAP referral, routed to admissions', status: 'new', pill: 'Routed to staff', time: '12:30 PM' },
+          { ref: '(707) 555-0198', outcome: 'Records request, transferred to front desk', status: 'new', pill: 'Routed to staff', time: '1:55 PM' },
+          { ref: '(415) 555-0141', outcome: 'Family gathering information, nurture sequence started', status: 'no_answer', pill: 'In progress', time: '3:45 PM' },
+          { ref: '(628) 555-0176', outcome: 'Callback requested for insurance details', status: 'no_answer', pill: 'In progress', time: '5:10 PM' },
+        ],
+      },
     ],
   },
   insurance: {
@@ -249,10 +330,43 @@ function CallRow({ call }) {
   )
 }
 
+// Prompt 574 — real date label for a day N days back, computed at render so
+// it's never frozen to the day this was built. 0 → "Today", 1 →
+// "Yesterday", older → a short formatted date ("Mon, Aug 31").
+function dayLabel(daysAgo) {
+  if (daysAgo === 0) return 'Today'
+  if (daysAgo === 1) return 'Yesterday'
+  const d = new Date()
+  d.setDate(d.getDate() - daysAgo)
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
 function PhoneCallsPreview({ entry, data }) {
-  const attention = data.calls.filter((c) => c.attention)
-  const days = ['Today', 'Yesterday'].filter((d) => data.calls.some((c) => c.day === d))
-  const answered = data.funnel[0].value
+  const days = data.days // most-recent-first: index 0 == Today
+  const [idx, setIdx] = useState(0)
+  // Switching days always clears the status filter — a filter picked on one
+  // day silently carrying into a day with different outcomes just looks broken.
+  const [filter, setFilter] = useState(null)
+  const goToDay = (next) => {
+    setIdx(next)
+    setFilter(null)
+  }
+
+  const day = days[idx]
+  const atToday = idx <= 0
+  const atOldest = idx >= days.length - 1
+  const answered = day.funnel[0].value
+
+  // The attention panel is "what needs action right now" — always day 0,
+  // never the browsed day.
+  const attention = (days.find((d) => d.daysAgo === 0)?.calls || []).filter((c) => c.attention)
+
+  // One filter pill per outcome actually present in this day's calls (first
+  // occurrence order), so a day with no escalations shows no "Escalated" pill.
+  const outcomes = []
+  for (const c of day.calls) if (!outcomes.includes(c.status)) outcomes.push(c.status)
+  const pillLabel = (status) => day.calls.find((c) => c.status === status).pill
+  const shownCalls = filter ? day.calls.filter((c) => c.status === filter) : day.calls
 
   return (
     <div className="mt-6 space-y-8">
@@ -277,15 +391,39 @@ function PhoneCallsPreview({ entry, data }) {
       )}
 
       <div>
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="eyebrow !text-fg-faint">Today at a glance</p>
+        <div className="flex items-center justify-between gap-3">
+          {/* Prompt 574 — day navigator replaces the old static "Today at a
+              glance" label. Left = older, right = newer; each end disables at
+              the edge of the sample data. Paging re-renders the funnel + call
+              log below for that day together. */}
+          <div className="flex items-center gap-1 rounded-full border border-line bg-elevated p-1">
+            <button
+              onClick={() => goToDay(idx + 1)}
+              disabled={atOldest}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-fg-secondary transition-colors hover:bg-surface hover:text-fg-primary disabled:opacity-30 disabled:hover:bg-transparent"
+              title="Previous day"
+            >
+              <ChevronLeft size={15} />
+            </button>
+            <span className="min-w-[104px] text-center font-sans text-xs font-medium text-fg-primary">
+              {dayLabel(day.daysAgo)}
+            </span>
+            <button
+              onClick={() => goToDay(idx - 1)}
+              disabled={atToday}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-fg-secondary transition-colors hover:bg-surface hover:text-fg-primary disabled:opacity-30 disabled:hover:bg-transparent"
+              title="Next day"
+            >
+              <ChevronRight size={15} />
+            </button>
+          </div>
           <span className="font-sans text-xs text-fg-faint">
-            Avg pickup <span className="font-medium text-fg-secondary">{data.avgPickup}</span>
+            Avg pickup <span className="font-medium text-fg-secondary">{day.avgPickup}</span>
           </span>
         </div>
         <div className="mt-3 space-y-2">
-          {data.funnel.map((stage, i) => {
-            const conv = i === 0 ? null : Math.round((stage.value / data.funnel[i - 1].value) * 100)
+          {day.funnel.map((stage, i) => {
+            const conv = i === 0 ? null : Math.round((stage.value / day.funnel[i - 1].value) * 100)
             return (
               <div key={stage.label} className="flex items-center gap-4">
                 <span className="w-32 shrink-0 font-sans text-sm text-fg-primary">{stage.label}</span>
@@ -308,16 +446,36 @@ function PhoneCallsPreview({ entry, data }) {
 
       <div>
         <p className="eyebrow !text-fg-faint">Recent calls</p>
-        <div className="mt-2 space-y-4">
-          {days.map((day) => (
-            <div key={day}>
-              <p className="eyebrow !text-fg-faint !text-[0.7rem]">{day}</p>
-              <div className="mt-1">
-                {data.calls.filter((c) => c.day === day).map((c) => (
-                  <CallRow key={c.ref + c.time} call={c} />
-                ))}
-              </div>
-            </div>
+        {/* Prompt 574 — status filter pills. Same selected/unselected
+            treatment as the lead-pipeline pills (STATUS_SOLID / STATUS_TINT);
+            "All" uses the neutral no_answer treatment. Clicking a pill again
+            (or "All") clears the filter. */}
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            onClick={() => setFilter(null)}
+            className={clsx(
+              'eyebrow rounded-full px-3 py-1.5 transition-colors hover:opacity-85',
+              filter === null ? STATUS_SOLID.no_answer : STATUS_TINT.no_answer
+            )}
+          >
+            All
+          </button>
+          {outcomes.map((status) => (
+            <button
+              key={status}
+              onClick={() => setFilter(filter === status ? null : status)}
+              className={clsx(
+                'eyebrow rounded-full px-3 py-1.5 transition-colors hover:opacity-85',
+                filter === status ? STATUS_SOLID[status] : STATUS_TINT[status]
+              )}
+            >
+              {pillLabel(status)}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2">
+          {shownCalls.map((c) => (
+            <CallRow key={c.ref + c.time} call={c} />
           ))}
         </div>
       </div>
