@@ -22,8 +22,15 @@ import { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
 // test_client (front_runner === 'intake_triage').
 
 // Sample data for the ?preview=live layout only — not fetched, not real.
+// Each entry: tiles (4), a log section label, and ~8 rows. `row.status`
+// keys into the shared STATUS_TINT color map (StatusBadge.jsx) so pills
+// reuse the exact status color language the rest of the app already uses —
+// no new colors. `monoRef` renders the row's left value in the mono/phone
+// treatment (Phone Calls' caller numbers); omit it for text refs like
+// payer names.
 const PREVIEW = {
   intake_triage: {
+    monoRef: true,
     tiles: [
       { label: 'Calls answered today', value: '24' },
       { label: 'Avg pickup', value: 'Instant' },
@@ -31,7 +38,6 @@ const PREVIEW = {
       { label: 'Booking rate', value: '38%' },
     ],
     logLabel: 'Recent calls',
-    // status keys map to the shared STATUS_TINT color language:
     // appointment_booked=green (booked), new=blue (routed to a person),
     // not_interested=red (after-hours crisis escalation — Intake &
     // Triage's single strongest differentiator, per its own copy),
@@ -45,6 +51,29 @@ const PREVIEW = {
       { ref: '(925) 555-0134', outcome: 'Callback requested, awaiting return call', status: 'no_answer', pill: 'In progress', time: '3h ago' },
       { ref: '(415) 555-0126', outcome: 'Insurance pre-screen done, consult booked', status: 'appointment_booked', pill: 'Booked', time: '5h ago' },
       { ref: '(707) 555-0150', outcome: 'Comparing facilities, follow-up sequence started', status: 'no_answer', pill: 'In progress', time: '6h ago' },
+    ],
+  },
+  insurance: {
+    tiles: [
+      { label: 'Verifications today', value: '17' },
+      { label: 'Avg turnaround', value: '45 sec' },
+      { label: 'Confirmed in-network', value: '71%' },
+      { label: 'Flagged for staff', value: '3' },
+    ],
+    logLabel: 'Recent verifications',
+    // appointment_booked=green (confirmed, in-network), new=blue (confirmed,
+    // out-of-network), no_answer=gray (no coverage on file / self-pay),
+    // not_interested=red (coverage expired or inactive — the one case
+    // worth surfacing distinctly, parallel to Phone Calls' escalation row).
+    rows: [
+      { ref: 'Aetna', outcome: 'Eligible, in-network — behavioral health covered', status: 'appointment_booked', pill: 'In-network', time: '6m ago' },
+      { ref: 'Blue Cross Blue Shield', outcome: 'Eligible, in-network — deductible met', status: 'appointment_booked', pill: 'In-network', time: '19m ago' },
+      { ref: 'Cigna', outcome: 'Out-of-network benefits only, staff to confirm rate', status: 'new', pill: 'Out-of-network', time: '34m ago' },
+      { ref: 'UnitedHealthcare', outcome: 'Eligible, in-network — prior auth required', status: 'appointment_booked', pill: 'In-network', time: '52m ago' },
+      { ref: 'Humana', outcome: 'Policy inactive as of last month — flagged for staff', status: 'not_interested', pill: 'Coverage expired', time: '1h ago' },
+      { ref: 'Self-pay', outcome: 'No coverage on file, self-pay estimate sent', status: 'no_answer', pill: 'Self-pay', time: '2h ago' },
+      { ref: 'Optum / UMR', outcome: 'Out-of-network, single-case agreement possible', status: 'new', pill: 'Out-of-network', time: '4h ago' },
+      { ref: 'Kaiser Permanente', outcome: 'No behavioral health benefit on this plan', status: 'no_answer', pill: 'No coverage', time: '5h ago' },
     ],
   },
 }
@@ -76,7 +105,14 @@ function LivePreview({ entry, data }) {
               className="flex items-start justify-between gap-4 border-b border-line py-3 last:border-0"
             >
               <div className="min-w-0">
-                <p className="font-mono text-sm text-fg-primary [font-variant-numeric:tabular-nums]">{r.ref}</p>
+                <p
+                  className={clsx(
+                    'text-sm text-fg-primary',
+                    data.monoRef ? 'font-mono [font-variant-numeric:tabular-nums]' : 'font-sans font-medium'
+                  )}
+                >
+                  {r.ref}
+                </p>
                 <p className="mt-0.5 font-sans text-sm text-fg-secondary">{r.outcome}</p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
