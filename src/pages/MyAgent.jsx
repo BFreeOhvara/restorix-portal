@@ -1,6 +1,7 @@
-import { useParams, Navigate, useSearchParams } from 'react-router-dom'
+import { useParams, Navigate } from 'react-router-dom'
 import clsx from 'clsx'
 import { useMyDeal } from '../hooks/useDeals'
+import { useAuth } from '../hooks/useAuth'
 import { catalogEntry, CONNECT_LABELS } from '../lib/agentCatalog'
 import { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
 
@@ -11,17 +12,28 @@ import { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
 // this is just the full-page view of one agent instead of one card among
 // several. Overview itself stays exactly as-is.
 //
-// Prompt 568 — a preview-only look at what a *live* agent page would be,
-// gated behind `?preview=live` (checked with useSearchParams) AND a
-// specific agentKey. Nothing about the catalog changes: every entry stays
-// `status: 'placeholder'`, so every real client — and this same page
-// without the query param — keeps the honest "Coming soon" render below.
-// The preview path is hardcoded sample data, no fetching, no new tables —
-// it only shows the layout the page would take once there's a real system
-// behind it. Reviewed at /my-agents/intake_triage?preview=live as
-// test_client (front_runner === 'intake_triage').
+// Prompt 568/569 — a preview-only look at what a *live* agent page would
+// be, for agents that have a PREVIEW block below. Nothing about the
+// catalog changes: every entry stays `status: 'placeholder'`, so every
+// real client keeps the honest "Coming soon" render below.
+//
+// Prompt 572 — the preview used to be gated behind a `?preview=live` query
+// param (568/569). That was a URL trick Brayden had to remember to type.
+// Replaced with an account-identity check: the preview renders only for
+// the one seeded test account (`test_client`), identified by its
+// authenticated email off the Supabase session (server-issued, not
+// URL-based, not client-editable — a real client can never trigger it).
+// So `test_client` now just sees the preview on normal navigation to
+// /my-agents/intake_triage or /my-agents/insurance; everyone else sees the
+// unchanged placeholder. The preview path is hardcoded sample data, no
+// fetching, no new tables.
 
-// Sample data for the ?preview=live layout only — not fetched, not real.
+// `test_client` logs in as the username `test_client`, which useAuth.jsx
+// maps to `<username>@restorix.internal`. This is the authenticated
+// session email, so it can't be spoofed from the client.
+const TEST_CLIENT_EMAIL = 'test_client@restorix.internal'
+
+// Sample data for the test-account live preview only — not fetched, not real.
 // Each entry: tiles (4), a log section label, and ~8 rows. `row.status`
 // keys into the shared STATUS_TINT color map (StatusBadge.jsx) so pills
 // reuse the exact status color language the rest of the app already uses —
@@ -135,7 +147,7 @@ function LivePreview({ entry, data }) {
 
 export default function MyAgent() {
   const { agentKey } = useParams()
-  const [searchParams] = useSearchParams()
+  const { session } = useAuth()
   const { data: deal, isLoading, isError } = useMyDeal()
 
   if (isLoading) {
@@ -155,11 +167,13 @@ export default function MyAgent() {
   const entry = catalogEntry(agentKey)
   if (!entry) return <Navigate to="/overview" replace />
 
-  // Prompt 568 — preview-only. `?preview=live` + a specific agentKey with a
-  // PREVIEW block renders the live-state layout; nothing else changes and
-  // no real client hits this unless they deliberately add the param.
+  // Prompt 572 — preview renders only for the seeded test account (checked
+  // against the authenticated session email, not a URL param) and only for
+  // an agentKey that has a PREVIEW block. Every real client falls through
+  // to the unchanged placeholder below.
+  const isTestClient = session?.user?.email === TEST_CLIENT_EMAIL
   const previewData = PREVIEW[agentKey]
-  const showLivePreview = searchParams.get('preview') === 'live' && !!previewData
+  const showLivePreview = isTestClient && !!previewData
 
   const isLive = entry.status === 'live' || showLivePreview
 
