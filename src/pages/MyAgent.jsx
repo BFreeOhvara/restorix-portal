@@ -25,8 +25,14 @@ import { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
 // URL-based, not client-editable — a real client can never trigger it).
 // So `test_client` now just sees the preview on normal navigation to any
 // /my-agents/:key that has a PREVIEW block (intake_triage, insurance,
-// follow_up); everyone else sees the unchanged placeholder. The preview
-// path is hardcoded sample data, no fetching, no new tables.
+// follow_up, bed_sync); everyone else sees the unchanged placeholder. The
+// preview path is hardcoded sample data, no fetching, no new tables.
+//
+// Prompt 571 — Bed Availability (`bed_sync`) gets its own render
+// (`BedAvailabilityPreview`) instead of the shared tiles+log `LivePreview`.
+// It's continuously-synced state (open beds per program), not a stream of
+// discrete per-lead outcomes, so an "outcome pill per row" log would
+// misrepresent it — occupancy bars + a light sync-activity feed instead.
 
 // `test_client` logs in as the username `test_client`, which useAuth.jsx
 // maps to `<username>@restorix.internal`. This is the authenticated
@@ -113,13 +119,99 @@ const PREVIEW = {
       { ref: '(628) 555-0109', outcome: 'Day 3 call attempt, left voicemail', status: 'no_answer', pill: 'In sequence', time: '6h ago' },
     ],
   },
+  // Prompt 571 — different shape (see BedAvailabilityPreview): occupancy
+  // state, not an outcome log. `sub` on the first tile renders the "/ 18"
+  // smaller/fainter after the value. Bar fill = open/total per program,
+  // matching the "Occupancy 67%" tile (12/18).
+  bed_sync: {
+    tiles: [
+      { label: 'Beds open', value: '12', sub: '/ 18' },
+      { label: 'Occupancy', value: '67%' },
+      { label: 'Programs synced', value: '3' },
+      { label: 'Last synced', value: '2 min ago' },
+    ],
+    programs: [
+      { name: 'Detox', open: 4, total: 6 },
+      { name: 'Residential', open: 6, total: 9 },
+      { name: 'PHP / day program', open: 2, total: 3 },
+    ],
+    // kind → dot color: released=green (bed opened up), held=blue (bed
+    // reserved/held), staff=gray (manual staff update). Not outcome pills —
+    // this isn't a per-lead win/loss.
+    activity: [
+      { kind: 'released', text: 'Detox wing — 2 beds released after discharge', time: '12m ago' },
+      { kind: 'held', text: 'Residential — 1 bed held for incoming transfer', time: '48m ago' },
+      { kind: 'staff', text: 'PHP — capacity updated by staff', time: '2h ago' },
+      { kind: 'released', text: 'Residential — 1 bed released', time: '3h ago' },
+      { kind: 'held', text: 'Detox — 1 bed reserved for scheduled admit', time: '5h ago' },
+      { kind: 'staff', text: 'Detox — bed count reconciled with EHR', time: '7h ago' },
+    ],
+  },
 }
 
-function PreviewTile({ label, value }) {
+const SYNC_DOT = {
+  released: 'bg-success',
+  held: 'bg-accent-bright',
+  staff: 'bg-fg-faint',
+}
+
+function PreviewTile({ label, value, sub }) {
   return (
     <div className="rounded-card border border-line bg-elevated p-5">
       <p className="eyebrow">{label}</p>
-      <p className="mt-2 font-display text-3xl font-medium text-fg-primary">{value}</p>
+      <p className="mt-2 font-display text-3xl font-medium text-fg-primary">
+        {value}
+        {sub && <span className="ml-1 text-xl text-fg-faint">{sub}</span>}
+      </p>
+    </div>
+  )
+}
+
+function BedAvailabilityPreview({ entry, data }) {
+  return (
+    <div className="mt-6 space-y-8">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {data.tiles.map((t) => (
+          <PreviewTile key={t.label} label={t.label} value={t.value} sub={t.sub} />
+        ))}
+      </div>
+
+      <div>
+        <p className="eyebrow !text-fg-faint">By program</p>
+        <div className="mt-3 space-y-4">
+          {data.programs.map((p) => (
+            <div key={p.name} className="flex items-center gap-4">
+              <span className="w-40 shrink-0 font-sans text-sm text-fg-primary">{p.name}</span>
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-accent"
+                  style={{ width: `${Math.round((p.open / p.total) * 100)}%` }}
+                />
+              </div>
+              <span className="shrink-0 font-mono text-sm text-fg-secondary [font-variant-numeric:tabular-nums]">
+                {p.open} / {p.total} open
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="eyebrow !text-fg-faint">Recent sync activity</p>
+        <div className="mt-2">
+          {data.activity.map((a) => (
+            <div key={a.text} className="flex items-start gap-3 border-b border-line py-3 last:border-0">
+              <span className={clsx('mt-1.5 h-2 w-2 shrink-0 rounded-full', SYNC_DOT[a.kind])} />
+              <span className="min-w-0 flex-1 font-sans text-sm text-fg-secondary">{a.text}</span>
+              <span className="shrink-0 font-sans text-xs text-fg-faint">{a.time}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {entry.copy?.whatItDoes && (
+        <p className="max-w-2xl font-sans text-xs leading-relaxed text-fg-faint">{entry.copy.whatItDoes}</p>
+      )}
     </div>
   )
 }
@@ -223,7 +315,9 @@ export default function MyAgent() {
         </span>
       </div>
 
-      {showLivePreview ? (
+      {showLivePreview && agentKey === 'bed_sync' ? (
+        <BedAvailabilityPreview entry={entry} data={previewData} />
+      ) : showLivePreview ? (
         <LivePreview entry={entry} data={previewData} />
       ) : (
         <div className="mt-6 max-w-2xl space-y-5">
