@@ -53,6 +53,24 @@ import { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
 // The "Needs your attention" panel is unaffected by the navigator — it
 // always reads day 0 ("right now"). Real calendar dates are computed from
 // `daysAgo` at render, never hardcoded.
+//
+// Prompt 575 — visual polish pass on PhoneCallsPreview only (matches a
+// static mockup Brayden signed off on). Pure layout/style, no data change:
+//   • "Recent calls" is now the hero — renders first, in its own card, with
+//     the day navigator in its header row and the filter pills below it.
+//   • The call list is height-capped (max-h-[352px]) with its own scroll,
+//     so the page never reflows on how many sample rows a day carries.
+//   • "Needs your attention" + the funnel share one stretched two-column
+//     row below; the attention panel collapses (funnel goes full-width)
+//     when it has nothing to show.
+//   • Attention rows use a small status dot (SYNC_DOT convention) instead
+//     of the left border-accent bar; timestamp on its own line.
+//   • The funnel is a real tapering graphic (three clip-path trapezoids,
+//     one accent hue at stepped opacity) above a plain text stat list —
+//     no values printed on the fill. Trapezoid widths computed per stage
+//     from the day's own funnel numbers, so the navigator still updates it.
+//   • The bottom `whatItDoes` value-prop line is dropped from this page
+//     only (still on insurance / follow_up / bed_sync).
 
 // `test_client` logs in as the username `test_client`, which useAuth.jsx
 // maps to `<username>@restorix.internal`. This is the authenticated
@@ -315,7 +333,7 @@ function BedAvailabilityPreview({ entry, data }) {
 // STATUS_TINT pill, relative time).
 function CallRow({ call }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-line py-3 last:border-0">
+    <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-3 last:border-0">
       <div className="min-w-0">
         <p className="font-mono text-sm text-fg-primary [font-variant-numeric:tabular-nums]">{call.ref}</p>
         <p className="mt-0.5 font-sans text-sm text-fg-secondary">{call.outcome}</p>
@@ -341,7 +359,7 @@ function dayLabel(daysAgo) {
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-function PhoneCallsPreview({ entry, data }) {
+function PhoneCallsPreview({ data }) {
   const days = data.days // most-recent-first: index 0 == Today
   const [idx, setIdx] = useState(0)
   // Switching days always clears the status filter — a filter picked on one
@@ -368,121 +386,153 @@ function PhoneCallsPreview({ entry, data }) {
   const pillLabel = (status) => day.calls.find((c) => c.status === status).pill
   const shownCalls = filter ? day.calls.filter((c) => c.status === filter) : day.calls
 
+  const navBtn =
+    'flex h-[22px] w-[22px] items-center justify-center rounded-md border border-line text-fg-faint transition-colors hover:bg-surface hover:text-fg-primary disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-fg-faint'
+
   return (
-    <div className="mt-6 space-y-8">
-      {attention.length > 0 && (
-        <div>
-          <p className="eyebrow !text-fg-faint">Needs your attention</p>
-          <div className="mt-3 space-y-3">
-            {attention.map((c) => (
-              <div key={c.ref} className="flex overflow-hidden rounded-card border border-line bg-elevated">
-                <div className={clsx('w-1 shrink-0', c.attention === 'urgent' ? 'bg-danger' : 'bg-yellow-600')} />
-                <div className="flex flex-1 items-start justify-between gap-4 p-4">
-                  <div className="min-w-0">
-                    <p className="font-mono text-sm text-fg-primary [font-variant-numeric:tabular-nums]">{c.ref}</p>
-                    <p className="mt-0.5 font-sans text-sm text-fg-secondary">{c.attentionReason || c.outcome}</p>
-                  </div>
-                  <span className="shrink-0 font-sans text-xs text-fg-faint">{c.time}</span>
-                </div>
-              </div>
+    <div className="mt-6 space-y-5">
+      {/* Prompt 575 — "Recent calls" is the hero: its own card, first on the
+          page. The day navigator (573/574) sits in this card's header row
+          next to the eyebrow; the status-filter pills (574) in a row below. */}
+      <div className="overflow-hidden rounded-card border border-line bg-elevated">
+        <div className="border-b border-line px-5 py-4">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <p className="eyebrow !text-fg-faint">Recent calls</p>
+            <div className="flex items-center gap-1">
+              <button onClick={() => goToDay(idx + 1)} disabled={atOldest} className={navBtn} title="Previous day">
+                <ChevronLeft size={13} />
+              </button>
+              <span className="min-w-[104px] text-center font-display text-[13px] font-medium text-fg-primary">
+                {dayLabel(day.daysAgo)}
+              </span>
+              <button onClick={() => goToDay(idx - 1)} disabled={atToday} className={navBtn} title="Next day">
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              onClick={() => setFilter(null)}
+              className={clsx(
+                'eyebrow rounded-full px-3 py-1.5 transition-colors hover:opacity-85',
+                filter === null ? STATUS_SOLID.no_answer : STATUS_TINT.no_answer
+              )}
+            >
+              All
+            </button>
+            {outcomes.map((status) => (
+              <button
+                key={status}
+                onClick={() => setFilter(filter === status ? null : status)}
+                className={clsx(
+                  'eyebrow rounded-full px-3 py-1.5 transition-colors hover:opacity-85',
+                  filter === status ? STATUS_SOLID[status] : STATUS_TINT[status]
+                )}
+              >
+                {pillLabel(status)}
+              </button>
             ))}
           </div>
         </div>
-      )}
-
-      <div>
-        <div className="flex items-center justify-between gap-3">
-          {/* Prompt 574 — day navigator replaces the old static "Today at a
-              glance" label. Left = older, right = newer; each end disables at
-              the edge of the sample data. Paging re-renders the funnel + call
-              log below for that day together. */}
-          <div className="flex items-center gap-1 rounded-full border border-line bg-elevated p-1">
-            <button
-              onClick={() => goToDay(idx + 1)}
-              disabled={atOldest}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-fg-secondary transition-colors hover:bg-surface hover:text-fg-primary disabled:opacity-30 disabled:hover:bg-transparent"
-              title="Previous day"
-            >
-              <ChevronLeft size={15} />
-            </button>
-            <span className="min-w-[104px] text-center font-sans text-xs font-medium text-fg-primary">
-              {dayLabel(day.daysAgo)}
-            </span>
-            <button
-              onClick={() => goToDay(idx - 1)}
-              disabled={atToday}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-fg-secondary transition-colors hover:bg-surface hover:text-fg-primary disabled:opacity-30 disabled:hover:bg-transparent"
-              title="Next day"
-            >
-              <ChevronRight size={15} />
-            </button>
-          </div>
-          <span className="font-sans text-xs text-fg-faint">
-            Avg pickup <span className="font-medium text-fg-secondary">{day.avgPickup}</span>
-          </span>
-        </div>
-        <div className="mt-3 space-y-2">
-          {day.funnel.map((stage, i) => {
-            const conv = i === 0 ? null : Math.round((stage.value / day.funnel[i - 1].value) * 100)
-            return (
-              <div key={stage.label} className="flex items-center gap-4">
-                <span className="w-32 shrink-0 font-sans text-sm text-fg-primary">{stage.label}</span>
-                <div className="h-8 flex-1 overflow-hidden rounded bg-muted">
-                  <div
-                    className="flex h-full items-center rounded bg-accent px-3"
-                    style={{ width: `${Math.round((stage.value / answered) * 100)}%` }}
-                  >
-                    <span className="font-display text-sm font-medium text-white">{stage.value}</span>
-                  </div>
-                </div>
-                <span className="w-12 shrink-0 text-right font-mono text-xs text-fg-faint [font-variant-numeric:tabular-nums]">
-                  {conv != null ? `${conv}%` : ''}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      <div>
-        <p className="eyebrow !text-fg-faint">Recent calls</p>
-        {/* Prompt 574 — status filter pills. Same selected/unselected
-            treatment as the lead-pipeline pills (STATUS_SOLID / STATUS_TINT);
-            "All" uses the neutral no_answer treatment. Clicking a pill again
-            (or "All") clears the filter. */}
-        <div className="mt-2 flex flex-wrap gap-2">
-          <button
-            onClick={() => setFilter(null)}
-            className={clsx(
-              'eyebrow rounded-full px-3 py-1.5 transition-colors hover:opacity-85',
-              filter === null ? STATUS_SOLID.no_answer : STATUS_TINT.no_answer
-            )}
-          >
-            All
-          </button>
-          {outcomes.map((status) => (
-            <button
-              key={status}
-              onClick={() => setFilter(filter === status ? null : status)}
-              className={clsx(
-                'eyebrow rounded-full px-3 py-1.5 transition-colors hover:opacity-85',
-                filter === status ? STATUS_SOLID[status] : STATUS_TINT[status]
-              )}
-            >
-              {pillLabel(status)}
-            </button>
-          ))}
-        </div>
-        <div className="mt-2">
+        {/* Prompt 575 — hard height cap + own scroll: a short day renders
+            shorter than the cap, a long day scrolls instead of growing the page. */}
+        <div className="max-h-[352px] overflow-y-auto">
           {shownCalls.map((c) => (
             <CallRow key={c.ref + c.time} call={c} />
           ))}
         </div>
       </div>
 
-      {entry.copy?.whatItDoes && (
-        <p className="max-w-2xl font-sans text-xs leading-relaxed text-fg-faint">{entry.copy.whatItDoes}</p>
-      )}
+      {/* Prompt 575 — attention + funnel share one stretched two-column row.
+          Empty attention panel → funnel takes the full width alone. */}
+      <div className={clsx('grid items-stretch gap-5', attention.length > 0 ? 'sm:grid-cols-2' : 'grid-cols-1')}>
+        {attention.length > 0 && (
+          <div className="rounded-card border border-line bg-elevated px-5 py-[18px]">
+            <p className="eyebrow !text-fg-faint">Needs your attention</p>
+            {/* Prompt 575 — small status dot (BedAvailabilityPreview's SYNC_DOT
+                convention) instead of the old left border-accent bar; the
+                timestamp drops onto its own line under the reason. */}
+            <div className="mt-3 flex flex-col">
+              {attention.map((c) => (
+                <div key={c.ref} className="flex items-start gap-2.5 border-b border-line py-2.5 last:border-0">
+                  <span
+                    className={clsx(
+                      'mt-1.5 h-[7px] w-[7px] shrink-0 rounded-full',
+                      c.attention === 'urgent' ? 'bg-danger' : 'bg-yellow-600 dark:bg-yellow-500'
+                    )}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-mono text-sm text-fg-primary [font-variant-numeric:tabular-nums]">{c.ref}</p>
+                    <p className="mt-0.5 font-sans text-[13px] leading-snug text-fg-secondary">
+                      {c.attentionReason || c.outcome}
+                    </p>
+                    <p className="mt-1 font-sans text-[11px] text-fg-faint">{c.time}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Prompt 575 — funnel redone: a tapering three-segment graphic (one
+            accent hue, opacity stepped per stage) above a plain text stat
+            list (label / conversion-from-previous / value) — nothing printed
+            on the fill. Trapezoid edges computed from this day's own funnel
+            values, so the navigator still updates it. "Avg pickup" moves into
+            this card's header row. */}
+        <div className="rounded-card border border-line bg-elevated px-5 py-[18px]">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="eyebrow !text-fg-faint">At a glance</p>
+            <span className="font-sans text-xs text-fg-faint">
+              Avg pickup <span className="font-medium text-fg-secondary">{day.avgPickup}</span>
+            </span>
+          </div>
+
+          <div className="mt-3.5 flex flex-col gap-0.5">
+            {day.funnel.map((stage, i) => {
+              // Each edge sits half the gap between full width and that
+              // stage's value/answered ratio; a segment tapers from its own
+              // stage's width (top) to the next stage's width (bottom).
+              const ti = ((1 - stage.value / answered) / 2) * 100
+              const bi = ((1 - (day.funnel[i + 1]?.value ?? stage.value) / answered) / 2) * 100
+              return (
+                <div
+                  key={stage.label}
+                  className="h-[34px] bg-accent"
+                  style={{
+                    opacity: [1, 0.78, 0.58][i] ?? 0.58,
+                    clipPath: `polygon(${ti.toFixed(2)}% 0%, ${(100 - ti).toFixed(2)}% 0%, ${(100 - bi).toFixed(2)}% 100%, ${bi.toFixed(2)}% 100%)`,
+                  }}
+                />
+              )
+            })}
+          </div>
+
+          <div className="mt-3.5 flex flex-col gap-0.5">
+            {day.funnel.map((stage, i) => {
+              const conv = i === 0 ? null : Math.round((stage.value / day.funnel[i - 1].value) * 100)
+              return (
+                <div
+                  key={stage.label}
+                  className="flex items-center justify-between border-b border-line py-[7px] last:border-0"
+                >
+                  <span className="font-sans text-[13px] text-fg-secondary">{stage.label}</span>
+                  <span className="flex items-baseline gap-[7px]">
+                    {conv != null && (
+                      <span className="font-mono text-[11px] text-fg-faint [font-variant-numeric:tabular-nums]">
+                        {conv}%
+                      </span>
+                    )}
+                    <span className="font-display text-base font-medium text-fg-primary [font-variant-numeric:tabular-nums]">
+                      {stage.value}
+                    </span>
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -587,7 +637,7 @@ export default function MyAgent() {
       </div>
 
       {showLivePreview && agentKey === 'intake_triage' ? (
-        <PhoneCallsPreview entry={entry} data={previewData} />
+        <PhoneCallsPreview data={previewData} />
       ) : showLivePreview && agentKey === 'bed_sync' ? (
         <BedAvailabilityPreview entry={entry} data={previewData} />
       ) : showLivePreview ? (
