@@ -23,10 +23,10 @@ import { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
 // the one seeded test account (`test_client`), identified by its
 // authenticated email off the Supabase session (server-issued, not
 // URL-based, not client-editable — a real client can never trigger it).
-// So `test_client` now just sees the preview on normal navigation to
-// /my-agents/intake_triage or /my-agents/insurance; everyone else sees the
-// unchanged placeholder. The preview path is hardcoded sample data, no
-// fetching, no new tables.
+// So `test_client` now just sees the preview on normal navigation to any
+// /my-agents/:key that has a PREVIEW block (intake_triage, insurance,
+// follow_up); everyone else sees the unchanged placeholder. The preview
+// path is hardcoded sample data, no fetching, no new tables.
 
 // `test_client` logs in as the username `test_client`, which useAuth.jsx
 // maps to `<username>@restorix.internal`. This is the authenticated
@@ -86,6 +86,31 @@ const PREVIEW = {
       { ref: 'Self-pay', outcome: 'No coverage on file, self-pay estimate sent', status: 'no_answer', pill: 'Self-pay', time: '2h ago' },
       { ref: 'Optum / UMR', outcome: 'Out-of-network, single-case agreement possible', status: 'new', pill: 'Out-of-network', time: '4h ago' },
       { ref: 'Kaiser Permanente', outcome: 'No behavioral health benefit on this plan', status: 'no_answer', pill: 'No coverage', time: '5h ago' },
+    ],
+  },
+  follow_up: {
+    monoRef: true,
+    tiles: [
+      { label: 'Active sequences', value: '6' },
+      { label: 'Messages sent today', value: '14' },
+      { label: 'Re-engaged this week', value: '3' },
+      { label: 'Avg days to book', value: '2.4' },
+    ],
+    logLabel: 'Recent activity',
+    // appointment_booked=green (replied, booked), no_answer=gray (in
+    // sequence, awaiting a response), follow_up=yellow (replied but not
+    // ready yet — the app's own "follow-up" color, reused for exactly that
+    // meaning), not_interested=red (opted out — the one standout case,
+    // parallel to Phone Calls' escalation and Insurance's expired coverage).
+    rows: [
+      { ref: '(415) 555-0188', outcome: 'Text 2 of 4 — replied, consult booked Thursday', status: 'appointment_booked', pill: 'Booked', time: '8m ago' },
+      { ref: '(628) 555-0132', outcome: 'Email opened, no reply yet', status: 'no_answer', pill: 'In sequence', time: '25m ago' },
+      { ref: '(510) 555-0175', outcome: 'Call — spoke with spouse, wants to wait a week', status: 'follow_up', pill: 'Nurturing', time: '1h ago' },
+      { ref: '(415) 555-0149', outcome: 'Text 1 of 4 delivered', status: 'no_answer', pill: 'In sequence', time: '2h ago' },
+      { ref: '(925) 555-0117', outcome: 'Replied STOP — removed from sequence', status: 'not_interested', pill: 'Opted out', time: '3h ago' },
+      { ref: '(707) 555-0163', outcome: 'Email 3 of 5 — replied with questions, still deciding', status: 'follow_up', pill: 'Nurturing', time: '4h ago' },
+      { ref: '(415) 555-0154', outcome: 'Text — replied, booked intake for tomorrow', status: 'appointment_booked', pill: 'Booked', time: '5h ago' },
+      { ref: '(628) 555-0109', outcome: 'Day 3 call attempt, left voicemail', status: 'no_answer', pill: 'In sequence', time: '6h ago' },
     ],
   },
 }
