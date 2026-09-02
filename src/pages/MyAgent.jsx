@@ -33,6 +33,14 @@ import { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
 // It's continuously-synced state (open beds per program), not a stream of
 // discrete per-lead outcomes, so an "outcome pill per row" log would
 // misrepresent it — occupancy bars + a light sync-activity feed instead.
+//
+// Prompt 573 — Phone Calls (`intake_triage`) also gets its own render
+// (`PhoneCallsPreview`): a "needs your attention" callout for calls a human
+// has to act on, a booked-consult funnel (Answered → Consult offered →
+// Booked) instead of four flat tiles, and the call log grouped by day. So
+// intake_triage / insurance / follow_up no longer all look like the same
+// generic page. insurance + follow_up keep the shared `LivePreview` until
+// each gets its own turn.
 
 // `test_client` logs in as the username `test_client`, which useAuth.jsx
 // maps to `<username>@restorix.internal`. This is the authenticated
@@ -47,28 +55,33 @@ const TEST_CLIENT_EMAIL = 'test_client@restorix.internal'
 // treatment (Phone Calls' caller numbers); omit it for text refs like
 // payer names.
 const PREVIEW = {
+  // Prompt 573 — reshaped from the old flat tiles+rows into what
+  // PhoneCallsPreview needs: an avg-pickup speed stat, a 3-stage booking
+  // funnel (9 of 24 ≈ the same 38% booking rate the old tile claimed), and
+  // the same 8 calls — unchanged outcomes/timestamps — now tagged with a
+  // `day` group and, for the two that need a human, an `attention` level.
   intake_triage: {
-    monoRef: true,
-    tiles: [
-      { label: 'Calls answered today', value: '24' },
-      { label: 'Avg pickup', value: 'Instant' },
-      { label: 'Consults booked today', value: '9' },
-      { label: 'Booking rate', value: '38%' },
+    avgPickup: 'Instant',
+    // Answered → Consult offered → Booked. Conversions: 14/24 = 58%,
+    // 9/14 = 64%; overall 9/24 = 38% (the headline booking rate).
+    funnel: [
+      { label: 'Answered', value: 24 },
+      { label: 'Consult offered', value: 14 },
+      { label: 'Booked', value: 9 },
     ],
-    logLabel: 'Recent calls',
-    // appointment_booked=green (booked), new=blue (routed to a person),
-    // not_interested=red (after-hours crisis escalation — Intake &
-    // Triage's single strongest differentiator, per its own copy),
-    // no_answer=gray (still in progress).
-    rows: [
-      { ref: '(415) 555-0182', outcome: 'Consult booked for tomorrow 9:00 AM', status: 'appointment_booked', pill: 'Booked', time: '4m ago' },
-      { ref: '(415) 555-0143', outcome: 'Aetna coverage verified, intake booked', status: 'appointment_booked', pill: 'Booked', time: '21m ago' },
-      { ref: '(628) 555-0117', outcome: 'Family asking about detox, routed to clinical', status: 'new', pill: 'Routed to staff', time: '39m ago' },
-      { ref: '(510) 555-0169', outcome: 'Billing question, transferred to front desk', status: 'new', pill: 'Routed to staff', time: '1h ago' },
-      { ref: '(415) 555-0195', outcome: 'After-hours call, crisis language detected — live clinician paged', status: 'not_interested', pill: 'Escalated', time: '2h ago' },
-      { ref: '(925) 555-0134', outcome: 'Callback requested, awaiting return call', status: 'no_answer', pill: 'In progress', time: '3h ago' },
-      { ref: '(415) 555-0126', outcome: 'Insurance pre-screen done, consult booked', status: 'appointment_booked', pill: 'Booked', time: '5h ago' },
-      { ref: '(707) 555-0150', outcome: 'Comparing facilities, follow-up sequence started', status: 'no_answer', pill: 'In progress', time: '6h ago' },
+    // status: appointment_booked=green (booked), new=blue (routed to a
+    // person), not_interested=red (after-hours crisis escalation),
+    // no_answer=gray (still in progress). attention: 'urgent' (red) /
+    // 'callback' (amber) surfaces the row in the callout above the log too.
+    calls: [
+      { ref: '(415) 555-0182', outcome: 'Consult booked for tomorrow 9:00 AM', status: 'appointment_booked', pill: 'Booked', time: '4m ago', day: 'Today' },
+      { ref: '(415) 555-0143', outcome: 'Aetna coverage verified, intake booked', status: 'appointment_booked', pill: 'Booked', time: '21m ago', day: 'Today' },
+      { ref: '(628) 555-0117', outcome: 'Family asking about detox, routed to clinical', status: 'new', pill: 'Routed to staff', time: '39m ago', day: 'Today' },
+      { ref: '(510) 555-0169', outcome: 'Billing question, transferred to front desk', status: 'new', pill: 'Routed to staff', time: '1h ago', day: 'Today' },
+      { ref: '(415) 555-0195', outcome: 'After-hours call, crisis language detected — live clinician paged', status: 'not_interested', pill: 'Escalated', time: '2h ago', day: 'Today', attention: 'urgent', attentionReason: 'Crisis language detected after hours — clinician paged, confirm follow-up' },
+      { ref: '(925) 555-0134', outcome: 'Callback requested, awaiting return call', status: 'no_answer', pill: 'In progress', time: '3h ago', day: 'Today', attention: 'callback', attentionReason: 'Caller asked for a callback — not yet returned' },
+      { ref: '(415) 555-0126', outcome: 'Insurance pre-screen done, consult booked', status: 'appointment_booked', pill: 'Booked', time: '5h ago', day: 'Yesterday' },
+      { ref: '(707) 555-0150', outcome: 'Comparing facilities, follow-up sequence started', status: 'no_answer', pill: 'In progress', time: '6h ago', day: 'Yesterday' },
     ],
   },
   insurance: {
@@ -216,6 +229,106 @@ function BedAvailabilityPreview({ entry, data }) {
   )
 }
 
+// Prompt 573 — one call row, shared by PhoneCallsPreview's day groups.
+// Same treatment LivePreview uses (mono number, one-line outcome,
+// STATUS_TINT pill, relative time).
+function CallRow({ call }) {
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-line py-3 last:border-0">
+      <div className="min-w-0">
+        <p className="font-mono text-sm text-fg-primary [font-variant-numeric:tabular-nums]">{call.ref}</p>
+        <p className="mt-0.5 font-sans text-sm text-fg-secondary">{call.outcome}</p>
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <span className={clsx('eyebrow inline-flex rounded-full px-2.5 py-1', STATUS_TINT[call.status])}>
+          {call.pill}
+        </span>
+        <span className="font-sans text-xs text-fg-faint">{call.time}</span>
+      </div>
+    </div>
+  )
+}
+
+function PhoneCallsPreview({ entry, data }) {
+  const attention = data.calls.filter((c) => c.attention)
+  const days = ['Today', 'Yesterday'].filter((d) => data.calls.some((c) => c.day === d))
+  const answered = data.funnel[0].value
+
+  return (
+    <div className="mt-6 space-y-8">
+      {attention.length > 0 && (
+        <div>
+          <p className="eyebrow !text-fg-faint">Needs your attention</p>
+          <div className="mt-3 space-y-3">
+            {attention.map((c) => (
+              <div key={c.ref} className="flex overflow-hidden rounded-card border border-line bg-elevated">
+                <div className={clsx('w-1 shrink-0', c.attention === 'urgent' ? 'bg-danger' : 'bg-yellow-600')} />
+                <div className="flex flex-1 items-start justify-between gap-4 p-4">
+                  <div className="min-w-0">
+                    <p className="font-mono text-sm text-fg-primary [font-variant-numeric:tabular-nums]">{c.ref}</p>
+                    <p className="mt-0.5 font-sans text-sm text-fg-secondary">{c.attentionReason || c.outcome}</p>
+                  </div>
+                  <span className="shrink-0 font-sans text-xs text-fg-faint">{c.time}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="eyebrow !text-fg-faint">Today at a glance</p>
+          <span className="font-sans text-xs text-fg-faint">
+            Avg pickup <span className="font-medium text-fg-secondary">{data.avgPickup}</span>
+          </span>
+        </div>
+        <div className="mt-3 space-y-2">
+          {data.funnel.map((stage, i) => {
+            const conv = i === 0 ? null : Math.round((stage.value / data.funnel[i - 1].value) * 100)
+            return (
+              <div key={stage.label} className="flex items-center gap-4">
+                <span className="w-32 shrink-0 font-sans text-sm text-fg-primary">{stage.label}</span>
+                <div className="h-8 flex-1 overflow-hidden rounded bg-muted">
+                  <div
+                    className="flex h-full items-center rounded bg-accent px-3"
+                    style={{ width: `${Math.round((stage.value / answered) * 100)}%` }}
+                  >
+                    <span className="font-display text-sm font-medium text-white">{stage.value}</span>
+                  </div>
+                </div>
+                <span className="w-12 shrink-0 text-right font-mono text-xs text-fg-faint [font-variant-numeric:tabular-nums]">
+                  {conv != null ? `${conv}%` : ''}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      <div>
+        <p className="eyebrow !text-fg-faint">Recent calls</p>
+        <div className="mt-2 space-y-4">
+          {days.map((day) => (
+            <div key={day}>
+              <p className="eyebrow !text-fg-faint !text-[0.7rem]">{day}</p>
+              <div className="mt-1">
+                {data.calls.filter((c) => c.day === day).map((c) => (
+                  <CallRow key={c.ref + c.time} call={c} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {entry.copy?.whatItDoes && (
+        <p className="max-w-2xl font-sans text-xs leading-relaxed text-fg-faint">{entry.copy.whatItDoes}</p>
+      )}
+    </div>
+  )
+}
+
 function LivePreview({ entry, data }) {
   return (
     <div className="mt-6 space-y-8">
@@ -315,7 +428,9 @@ export default function MyAgent() {
         </span>
       </div>
 
-      {showLivePreview && agentKey === 'bed_sync' ? (
+      {showLivePreview && agentKey === 'intake_triage' ? (
+        <PhoneCallsPreview entry={entry} data={previewData} />
+      ) : showLivePreview && agentKey === 'bed_sync' ? (
         <BedAvailabilityPreview entry={entry} data={previewData} />
       ) : showLivePreview ? (
         <LivePreview entry={entry} data={previewData} />
