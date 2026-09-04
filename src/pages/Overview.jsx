@@ -4,7 +4,7 @@ import { Phone, Search, ClipboardEdit, CheckCircle2, Video, AlertTriangle, Arrow
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useBrand } from '../hooks/useBrand'
-import { useMyPool, useMyBooked, useMyFollowUps, useMyNotInterested, useFinishDay, usePipelineHealth } from '../hooks/useLeads'
+import { useMyPool, useMyBooked, useMyFollowUps, useMyNotInterested, useMyLoggedBookings, useFinishDay, usePipelineHealth } from '../hooks/useLeads'
 import { useMyDeal } from '../hooks/useDeals'
 import { catalogEntry, CONNECT_LABELS } from '../lib/agentCatalog'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, followUpsDueToday, inRange } from '../hooks/useStats'
@@ -175,46 +175,61 @@ function FinishDayCard() {
 // headerRight slot) so it can be nested as the "Setter" tab inside
 // CloserPipeline without a duplicate title. Everything below the header
 // (stat strip, search, status sub-tabs, lead table) renders unchanged.
-// Prompt 559 — `todayFollowUpOnly` (My Leads only) scopes the Follow-up
-// tabs to leads *marked* follow-up on the viewer's local today, keyed off
-// last_action_at; once local midnight passes they drop out of My Leads.
-// My Pipeline → Setter (embedded) and the setter's own /overview both leave
-// it off, so they keep showing every Follow-up lead — same "always visible"
-// shape Not Interested has.
-export function SetterOverview({ profile, title = 'Overview', headerRight, niche, nicheTabs, embedded = false, todayFollowUpOnly = false, compactStats = false }) {
+// Prompt 559 — `clipMarkedToday` (My Leads only; renamed from
+// `todayFollowUpOnly` by Prompt 576, which widened what it covers — see
+// below) scopes marked-outcome buckets to leads acted on the viewer's local
+// today, keyed off last_action_at; once local midnight passes they drop out
+// of My Leads. My Pipeline → Setter (embedded) and the setter's own
+// /overview both leave it off, so they keep showing every marked lead —
+// the "always visible" shape.
+// Prompt 576 — Brayden's rule: marking an outcome (Not Interested, No
+// Answer, Follow-up, or Appointment Booked) from My Leads must move the
+// lead onto My Pipeline immediately AND keep it visible, in its marked
+// state, on My Leads until local midnight. Before this prompt the prop only
+// clipped follow_up_due/follow_up (Prompt 559 Part C); generalized the same
+// `clip()` pattern to no_answer and not_interested (previously unclipped —
+// forever-visible on My Leads once marked) and to the new
+// appointment_booked bucket below. `new` is deliberately never clipped —
+// unworked pool inventory, not a marked outcome.
+export function SetterOverview({ profile, title = 'Overview', headerRight, niche, nicheTabs, embedded = false, clipMarkedToday = false, compactStats = false }) {
   const { data: pool, isLoading: poolLoading } = useMyPool(profile.id)
   const tz = profile.timezone || DEFAULT_TIMEZONE
   const { data: followUps, isLoading: followUpsLoading } = useMyFollowUps(profile.id, tz)
   const { data: notInterested, isLoading: notInterestedLoading } = useMyNotInterested(profile.id)
+  // Prompt 576 — see useMyLoggedBookings (useLeads.js): appointment_booked
+  // leads have assigned_setter nulled by the DB trigger the same instant
+  // they're marked, so `pool` (assigned_setter-scoped) can never contain
+  // them — this last_action_by-scoped query is the actual source now.
+  const { data: loggedBookings, isLoading: loggedBookingsLoading } = useMyLoggedBookings(profile.id)
   const [callLead, setCallLead] = useState(null)
   const [search, setSearch] = useState('')
   // Prompt 558 — the embedded My Pipeline → Setter tab is a tracking view:
   // no New pill (a closer works New leads from My Leads), so it opens on
   // No Answer instead.
   const [statusFilter, setStatusFilter] = useState(embedded ? 'no_answer' : 'new')
-  const isLoading = poolLoading || followUpsLoading || notInterestedLoading
+  const isLoading = poolLoading || followUpsLoading || notInterestedLoading || loggedBookingsLoading
 
   const leadsByTab = useMemo(() => {
     // Prompt 547 — scope every bucket to the selected niche when the closer's
     // My Leads passes one; identity (no filter) for the setter's /overview.
     const f = (arr) => (niche ? (arr || []).filter((l) => l.niche === niche) : (arr || []))
-    // Prompt 559 — on My Leads, drop Follow-up leads not marked today (local
-    // date of last_action_at — when it was marked, NOT follow_up_at's
-    // scheduled callback date). Identity everywhere else.
+    // Prompt 559/576 — on My Leads, drop marked-outcome leads not acted on
+    // today (local date of last_action_at — when it was marked, NOT e.g.
+    // follow_up_at's scheduled callback date). Identity everywhere else.
     const localToday = zonedDateStr(Date.now(), tz)
-    const fu = (arr) =>
-      todayFollowUpOnly
+    const clip = (arr) =>
+      clipMarkedToday
         ? (arr || []).filter((l) => l.last_action_at && zonedDateStr(new Date(l.last_action_at).getTime(), tz) === localToday)
         : (arr || [])
     return {
       new: f(pool).filter((l) => l.status === 'new'),
-      no_answer: f(pool).filter((l) => l.status === 'no_answer'),
-      appointment_booked: f(pool).filter((l) => l.status === 'appointment_booked'),
-      follow_up_due: f(fu(followUps?.due)),
-      follow_up: f(fu(followUps?.future)),
-      not_interested: f(notInterested),
+      no_answer: clip(f(pool).filter((l) => l.status === 'no_answer')),
+      appointment_booked: f(clip(loggedBookings)),
+      follow_up_due: f(clip(followUps?.due)),
+      follow_up: f(clip(followUps?.future)),
+      not_interested: f(clip(notInterested)),
     }
-  }, [pool, followUps, notInterested, niche, todayFollowUpOnly, tz])
+  }, [pool, followUps, notInterested, loggedBookings, niche, clipMarkedToday, tz])
 
   const poolCount = useMemo(
     () => (niche ? (pool || []).filter((l) => l.niche === niche).length : pool?.length ?? 0),

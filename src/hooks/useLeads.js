@@ -290,6 +290,12 @@ export function useLogCall() {
       queryClient.invalidateQueries({ queryKey: ['my-booked'] })
       queryClient.invalidateQueries({ queryKey: ['my-follow-ups'] })
       queryClient.invalidateQueries({ queryKey: ['my-not-interested'] })
+      // Prompt 576 — was missing, same class of gap as this list's own
+      // 459/520 history: without it, booking a lead updated My Pipeline's
+      // Closer tab (`my-booked`, already invalidated above) but My Leads'
+      // own Appointment Booked tab (`useMyLoggedBookings`) stayed stale
+      // until the unrelated 15s poll caught up.
+      queryClient.invalidateQueries({ queryKey: ['my-logged-bookings'] })
       queryClient.invalidateQueries({ queryKey: ['leads-stats'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-leads'] })
       queryClient.invalidateQueries({ queryKey: ['pipeline-unassigned-niche-counts'] })
@@ -352,6 +358,37 @@ export function useMyNotInterested(setterId) {
         .from('leads')
         .select('*')
         .eq('status', 'not_interested')
+        .eq('last_action_by', setterId)
+        .order('last_action_at', { ascending: false })
+      if (error) throw error
+      return data
+    },
+    enabled: !!setterId,
+    refetchInterval: 15000,
+  })
+}
+
+// Prompt 576 — a rep's (setter or closer) own Appointment Booked leads, for
+// My Leads' / Overview's own "Appointment Booked" tab. `handle_lead_pipeline`
+// nulls `assigned_setter` on the same status transition that sets it (see
+// `new.assigned_setter := null` right alongside `new.last_action_status :=
+// 'appointment_booked'`) — identical to the Not Interested/Follow-up
+// structural bug Prompt 515/535 already fixed, confirmed live here too
+// (queried `leads`: every appointment_booked row has assigned_setter NULL).
+// So `leadsByTab.appointment_booked` sourced from `useMyPool` (Overview.jsx)
+// was silently always empty; this reads from `last_action_by` instead, same
+// shape as useMyNotInterested. Deliberately NOT the same hook as
+// `useMyBooked` (assigned_closer-scoped, drives My Pipeline's Closer tab) —
+// this is "which appointments did I personally book," not "which
+// appointments are assigned to me to work."
+export function useMyLoggedBookings(setterId) {
+  return useQuery({
+    queryKey: ['my-logged-bookings', setterId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('status', 'appointment_booked')
         .eq('last_action_by', setterId)
         .order('last_action_at', { ascending: false })
       if (error) throw error

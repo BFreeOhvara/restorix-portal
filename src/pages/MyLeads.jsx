@@ -130,9 +130,11 @@ export default function MyLeads() {
       // tight header→tiles gap Prompts 559/562 landed on without `actionsRow`.
       headerRight={<RequestLeadsButton niche={niche} currentCount={currentNewCount} />}
       compactStats
-      // Prompt 559 — Follow-up leads clear from My Leads at local midnight
-      // (kept permanently on My Pipeline → Setter).
-      todayFollowUpOnly
+      // Prompt 559/576 — marked-outcome leads (No Answer, Follow-up, Not
+      // Interested, Appointment Booked) clear from My Leads at local
+      // midnight, staying visible in the meantime alongside their
+      // immediate appearance on My Pipeline (kept permanently there).
+      clipMarkedToday
     />
   )
 }
