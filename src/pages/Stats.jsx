@@ -284,7 +284,7 @@ function weekShort(monday) {
 function CloseRateWeeksChart({ weeks }) {
   return (
     <div>
-      <div className="flex items-end gap-2" style={{ height: 150 }}>
+      <div className="flex items-end gap-2">
         {weeks.map((w, i) => {
           const prev = i > 0 ? weeks[i - 1] : null
           const noData = w.rate === null
@@ -298,7 +298,9 @@ function CloseRateWeeksChart({ weeks }) {
             : `${weekShort(w.monday)} — ${Math.round(w.rate * 100)}% (${w.closed}/${w.resolved})`
           return (
             <div key={w.monday} className="flex flex-1 flex-col items-center gap-2">
-              <div className="flex w-full flex-1 items-end justify-center">
+              {/* explicit track height so the bar's `height: N%` resolves —
+                  a flex-1 chain under an items-end row collapses to 0 */}
+              <div className="flex h-[150px] w-full items-end justify-center">
                 {noData ? (
                   <div className="h-2 w-full rounded border border-dashed border-line" title={title} />
                 ) : (
@@ -367,6 +369,29 @@ function mockDayStats(dateStr) {
 
 function mockDays(dateList) {
   return dateList.map((date) => ({ date, ...mockDayStats(date) }))
+}
+
+// Prompt 582 — UI-only sample data for `test_closer`'s Close Rate — Last 8
+// Weeks chart ONLY (its tile row stays real, same as test_setter's own
+// tile row). Same rules as the setter mock path: never written to the DB,
+// username-scoped so it can never touch a real closer, seeded off each
+// week's own Monday string via `seededRandom` so numbers are stable across
+// re-renders. Shape matches closerCloseRateByWeek's real output
+// (`{ monday, closed, lost, resolved, rate }`). Every week has
+// `resolved > 0` on purpose — this path exists to show a populated chart,
+// so it never lands on a "no data" bar (a real closer's chart still can).
+function mockCloseWeeks(currentMonday) {
+  const weeks = []
+  for (let i = 7; i >= 0; i--) {
+    const monday = shiftDay(currentMonday, -7 * i)
+    const rand = seededRandom(monday)
+    const resolved = 3 + Math.floor(rand() * 8) // 3–10 resolved deals
+    const target = 0.35 + rand() * 0.45 // ~35–80% close rate
+    const closed = Math.min(resolved, Math.max(0, Math.round(resolved * target)))
+    const lost = resolved - closed
+    weeks.push({ monday, closed, lost, resolved, rate: closed / resolved })
+  }
+  return weeks
 }
 
 // Prompt 536 reopen round 2 — All Time no longer shows the calendar
@@ -488,6 +513,9 @@ export default function Stats() {
   // account. Scoped by username, not role, so it can never accidentally
   // apply to a real setter.
   const isMockAccount = profile?.username === 'test_setter'
+  // Prompt 582 — same UI-only, username-scoped mock pattern, for
+  // `test_closer`'s Close Rate chart only (its tile row stays real).
+  const isMockCloser = profile?.username === 'test_closer'
 
   // Prompt 450: line chart + heatmap, setter/admin only — closers don't
   // dial, same scoping precedent as the badge row on My Goals ("closers
@@ -516,10 +544,13 @@ export default function Stats() {
   // weeks, off the leads table (closer_outcome / closer_outcome_at), not
   // the `calls` table. Fixed recent window, independent of the top period
   // picker.
-  const closeWeeks = useMemo(
-    () => (isCloser && leads ? closerCloseRateByWeek(leads, profile.id, tz) : []),
-    [isCloser, leads, profile, tz]
-  )
+  const closeWeeks = useMemo(() => {
+    if (!isCloser) return []
+    // Prompt 582 — test_closer only: sample data so the chart isn't 8
+    // empty no-data bars. Not written anywhere; tile row stays real.
+    if (isMockCloser) return mockCloseWeeks(mondayOf(zonedDateStr(Date.now(), tz)))
+    return leads ? closerCloseRateByWeek(leads, profile.id, tz) : []
+  }, [isCloser, isMockCloser, leads, profile, tz])
 
   // Prompt 536 — plain YYYY-MM-DD start/end for whichever period is
   // currently active, still interpreted as calendar days in a given
