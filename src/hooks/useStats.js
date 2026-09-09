@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { displayOutcome } from '../lib/closerOutcome'
+import { mondayOf, shiftDay, zonedDateStr, zonedDayRange } from '../lib/dates'
 
 // Stats are computed client-side from the leads table rather than a DB view
 // or RPC.
@@ -93,45 +94,82 @@ export function followUpsDueToday(leads, userId, start, end) {
   ).length
 }
 
-// Prompt 579 — was `{ assigned }` only. Extended to the same depth the
-// setter's own Stats page and CloserOverview already have, reusing
-// CloserOverview's exact logic and reasoning (Overview.jsx) rather than a
-// second computation:
+// Prompt 581 — reworked from Prompt 579's raw-count model (Brayden: those
+// counts already exist as live filter chips on My Pipeline, the page added
+// no information). Stats for a closer is now about RATE, not counts:
 //   - assigned / pending / noShow  → scoped by strategy_call_at (the
 //     booked strategy call falls in the period)
 //   - closed / lost                → scoped by closer_outcome_at (the
-//     outcome was logged in the period — matches CloserOverview's own
-//     closedThisWeek; a null stamp on an older row is simply not countable
-//     in a date-ranged view, not an error)
-//   - winRate                      → deliberately ALL-TIME regardless of
-//     the selected period (a single period's sample is too small to mean
-//     anything — CloserOverview's own words). closed / (closed + lost),
-//     resolved deals only; pending/no-show are out of the denominator.
+//     outcome was logged in the period); on an UNbounded (All Time) view,
+//     null-stamped rows (closer_outcome_at is forward-only, Prompt 548)
+//     are counted too, so the rates aren't silently understated.
+//   - closeRate  = closed / (closed + lost)  — resolved deals only,
+//     no-shows OUT of the denominator. Deliberately Sold ÷ (Sold + Lost),
+//     not Sold ÷ Taken: isolates selling skill from show-rate (a
+//     scheduling/reminder problem, tracked separately as noShowRate).
+//   - noShowRate = noShow / assigned.
+//   Both rates are period-scoped like every tile (Prompt 581 explicitly
+//   reverses Prompt 579/CloserOverview's "win rate is all-time only" —
+//   Brayden wants one consistent window across all four numbers; do not
+//   "fix" this back to all-time without checking with him). CloserOverview's
+//   own "Win Rate (All Time)" tile is a separate inline computation in
+//   Overview.jsx, untouched by this.
 // No Show goes through displayOutcome, never a raw closer_outcome check —
 // 'no_show' is derived, never stored (lib/closerOutcome.js).
+function pct(num, denom) {
+  return denom > 0 ? `${Math.round((num / denom) * 100)}%` : '—'
+}
+
 export function statsForCloser(leads, closerId, start, end) {
   const mine = leads.filter(
     (l) => l.assigned_closer === closerId && l.status === 'appointment_booked'
   )
 
   const byCall = mine.filter((l) => inRange(l.strategy_call_at, start, end))
+  const assigned = byCall.length
   const pending = byCall.filter((l) => displayOutcome(l) === 'pending').length
   const noShow = byCall.filter((l) => displayOutcome(l) === 'no_show').length
 
-  // Closed/Lost scope by closer_outcome_at (matches CloserOverview's
-  // closedThisWeek) for a bounded period. `closer_outcome_at` is
-  // forward-only (Prompt 548) — older rows can have a null stamp — so on
-  // an UNbounded (All Time) view, count those too rather than silently
-  // dropping them, which would leave Closed/Lost reading 0 while an
-  // all-time Win Rate below shows a real percentage.
   const unbounded = !start && !end
   const outcomeInRange = (iso) => (unbounded ? true : inRange(iso, start, end))
   const closed = mine.filter((l) => l.closer_outcome === 'closed' && outcomeInRange(l.closer_outcome_at)).length
   const lost = mine.filter((l) => l.closer_outcome === 'lost' && outcomeInRange(l.closer_outcome_at)).length
 
-  const allClosed = mine.filter((l) => l.closer_outcome === 'closed').length
-  const allLost = mine.filter((l) => l.closer_outcome === 'lost').length
-  const winRate = allClosed + allLost > 0 ? `${Math.round((allClosed / (allClosed + allLost)) * 100)}%` : '—'
+  return {
+    assigned,
+    pending,
+    noShow,
+    lost,
+    closed,
+    closeRate: pct(closed, closed + lost),
+    noShowRate: pct(noShow, assigned),
+  }
+}
 
-  return { assigned: byCall.length, pending, noShow, lost, closed, winRate }
+// Prompt 581 — Close Rate for each of the last `weekCount` Monday-anchored
+// weeks (oldest first, ending on the current week). Leads-based off
+// closer_outcome / closer_outcome_at, not the `calls` table — mirrors the
+// per-bucket shape of groupCallsByDay. `rate` is a 0–1 number, or null for
+// a week with zero resolved deals (closed + lost === 0) — a no-data week is
+// NOT a 0% week and the chart must render it differently.
+export function closerCloseRateByWeek(leads, closerId, tz, weekCount = 8) {
+  const resolved = leads.filter(
+    (l) =>
+      l.assigned_closer === closerId &&
+      l.status === 'appointment_booked' &&
+      (l.closer_outcome === 'closed' || l.closer_outcome === 'lost')
+  )
+  const currentMonday = mondayOf(zonedDateStr(Date.now(), tz))
+  const weeks = []
+  for (let i = weekCount - 1; i >= 0; i--) {
+    const monday = shiftDay(currentMonday, -7 * i)
+    const start = zonedDayRange(monday, tz).start
+    const end = zonedDayRange(shiftDay(monday, 6), tz).end
+    const inWk = resolved.filter((l) => inRange(l.closer_outcome_at, start, end))
+    const closed = inWk.filter((l) => l.closer_outcome === 'closed').length
+    const lost = inWk.filter((l) => l.closer_outcome === 'lost').length
+    const total = closed + lost
+    weeks.push({ monday, closed, lost, resolved: total, rate: total > 0 ? closed / total : null })
+  }
+  return weeks
 }

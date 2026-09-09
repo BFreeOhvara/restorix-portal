@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
-import { useAllLeadsForStats, useReps, statsForUser, statsForCloser } from '../hooks/useStats'
-import { OUTCOME_LABELS, OUTCOME_TINT, CLOSER_OUTCOME_TILES } from '../components/ui/OutcomeBadge'
+import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, closerCloseRateByWeek } from '../hooks/useStats'
 import { useMyAllCalls, groupCallsByDay, isPerfectDay } from '../hooks/useBadges'
 import { WeekPaginator } from '../components/ui/WeekPaginator'
 import { DayPaginator } from '../components/ui/DayPaginator'
@@ -270,6 +269,60 @@ function ActivityHeatmap({ days }) {
   )
 }
 
+// Prompt 581 — closer-only. Close Rate for each of the last 8 Monday-
+// anchored weeks (fixed recent-trend window, not tied to the top period
+// picker — same "fixed recent window" behaviour the heatmap had). One bar
+// per week; bar height = that week's Close Rate. Colour vs. the previous
+// week: green up / red down / muted flat — the app's own --success /
+// --danger token language, no new hex. The oldest bar has no prior week,
+// so it's muted. A week with zero resolved deals is NOT a 0% week — it
+// renders as a hollow "no data" stub, same honesty as the "—" fallback.
+function weekShort(monday) {
+  return new Date(`${monday}T00:00:00.000Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })
+}
+
+function CloseRateWeeksChart({ weeks }) {
+  return (
+    <div>
+      <div className="flex items-end gap-2" style={{ height: 150 }}>
+        {weeks.map((w, i) => {
+          const prev = i > 0 ? weeks[i - 1] : null
+          const noData = w.rate === null
+          let barClass = 'bg-fg-faint'
+          if (!noData && prev && prev.rate !== null) {
+            if (w.rate > prev.rate) barClass = 'bg-success'
+            else if (w.rate < prev.rate) barClass = 'bg-danger'
+          }
+          const title = noData
+            ? `${weekShort(w.monday)} — no resolved deals`
+            : `${weekShort(w.monday)} — ${Math.round(w.rate * 100)}% (${w.closed}/${w.resolved})`
+          return (
+            <div key={w.monday} className="flex flex-1 flex-col items-center gap-2">
+              <div className="flex w-full flex-1 items-end justify-center">
+                {noData ? (
+                  <div className="h-2 w-full rounded border border-dashed border-line" title={title} />
+                ) : (
+                  <div
+                    className={clsx('w-full rounded-t', barClass)}
+                    style={{ height: `${Math.max(w.rate * 100, 3)}%` }}
+                    title={title}
+                  />
+                )}
+              </div>
+              <span className="font-mono text-[10px] text-fg-faint">{weekShort(w.monday)}</span>
+            </div>
+          )
+        })}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-4 font-sans text-xs text-fg-faint">
+        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" /> Up vs. last week</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-danger" /> Down</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-fg-faint" /> Flat / no prior week</span>
+      </div>
+    </div>
+  )
+}
+
 // Prompt 516 — deterministic per-date PRNG so a mock day's numbers stay
 // stable across re-renders/refetches/week-navigation instead of jittering
 // on every render, while still varying date to date. xmur3 + mulberry32
@@ -459,6 +512,15 @@ export default function Stats() {
     return dates.map((date) => ({ date, ...(byDay.get(date) || { dials: 0, bookings: 0 }) }))
   }, [byDay, tz, isMockAccount])
 
+  // Prompt 581 — closer-only: Close Rate for the last 8 Monday-anchored
+  // weeks, off the leads table (closer_outcome / closer_outcome_at), not
+  // the `calls` table. Fixed recent window, independent of the top period
+  // picker.
+  const closeWeeks = useMemo(
+    () => (isCloser && leads ? closerCloseRateByWeek(leads, profile.id, tz) : []),
+    [isCloser, leads, profile, tz]
+  )
+
   // Prompt 536 — plain YYYY-MM-DD start/end for whichever period is
   // currently active, still interpreted as calendar days in a given
   // timezone downstream (zonedDayRange), same as the old FROM/TO values
@@ -540,17 +602,18 @@ export default function Stats() {
         )}
       </div>
 
-      <div className={clsx('mt-3 grid grid-cols-1 gap-4', isCloser ? 'sm:grid-cols-3 lg:grid-cols-5' : 'sm:grid-cols-3')}>
+      <div className={clsx('mt-3 grid grid-cols-1 gap-4', isCloser ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3')}>
         {isCloser ? (
           <>
-            {/* Prompt 579 — was a single "Strategy Calls Assigned" tile.
-                Same depth the setter's own page has, all period-scoped
-                except Win Rate (all-time, same reasoning as CloserOverview). */}
-            <Tile label="Strategy Calls Assigned" value={myStats.assigned} />
-            <Tile label="Closed" value={myStats.closed} />
-            <Tile label="Lost" value={myStats.lost} />
-            <Tile label="No Show" value={myStats.noShow} />
-            <Tile label="Win Rate (All Time)" value={myStats.winRate} />
+            {/* Prompt 581 — rate, not raw counts (those already live as
+                filter chips on My Pipeline). Close Rate = Sold / (Sold +
+                Lost), no-shows excluded — isolates selling skill from
+                show-rate, which is its own tile. All four share the top
+                period picker (Brayden's explicit call — see statsForCloser). */}
+            <Tile label="Strategy Calls Taken" value={myStats.assigned} />
+            <Tile label="Strategy Calls Sold" value={myStats.closed} />
+            <Tile label="Close Rate" value={myStats.closeRate} />
+            <Tile label="No Show Rate" value={myStats.noShowRate} />
           </>
         ) : (
           <>
@@ -561,51 +624,43 @@ export default function Stats() {
         )}
       </div>
 
-      {/* Prompt 579 — closer-only, read-only outcome breakdown for the
-          selected period. Same four categories / labels / colours as
-          CloserBookedPipeline's filter chips (My Pipeline owns the
-          filtering interaction — Stats is a report, not a working queue). */}
+      {/* Prompt 581 — closer-only: Close Rate trend over the last 8 weeks,
+          replacing Prompt 579's Outcome Mix + the setter-style Weekly
+          Activity / heatmap (which come back below for setters/admin only). */}
       {isCloser && (
-        <div className="mt-6">
-          <p className="eyebrow !text-fg-faint">Outcome Mix</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {CLOSER_OUTCOME_TILES.map((key) => {
-              const count = { pending: myStats.pending, no_show: myStats.noShow, lost: myStats.lost, closed: myStats.closed }[key]
-              return (
-                <span key={key} className={clsx('eyebrow inline-flex rounded-full px-3 py-1.5', OUTCOME_TINT[key])}>
-                  {OUTCOME_LABELS[key]} ({count})
-                </span>
-              )
-            })}
+        <div className="mt-8">
+          <h2 className="font-display text-lg font-medium text-fg-primary">Close Rate — Last 8 Weeks</h2>
+          <div className="mt-3 rounded-card border border-line bg-elevated p-5">
+            <CloseRateWeeksChart weeks={closeWeeks} />
           </div>
         </div>
       )}
 
-      {/* Prompt 579 — was `!isCloser`-gated (Prompt 450: "closers don't
-          dial"). But `calls` already captures closer activity too — the
-          column is named `setter_id` for historical reasons but holds the
-          current user's id whoever logs the call (LogCallModal is shared).
-          So useMyAllCalls(profile.id) already returns a closer's own
-          logged-call history; the gate was hiding real data, not a gap.
-          Admin still also sees the team rollup below. */}
-      <div className="mt-8 space-y-6">
-        <div>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-display text-lg font-medium text-fg-primary">Weekly Activity</h2>
-            <WeekPaginator monday={weekMonday} onChange={setWeekMonday} timezone={tz} />
+      {/* Prompt 450 — setter/admin only ("closers don't dial"). Prompt 579
+          briefly un-gated this for closers; Prompt 581 put it back — a
+          closer's Stats page is about their own close rate, not a dial log
+          (My Pipeline already owns their live counts). Setters/admin keep
+          both sections exactly as before. */}
+      {!isCloser && (
+        <div className="mt-8 space-y-6">
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-display text-lg font-medium text-fg-primary">Weekly Activity</h2>
+              <WeekPaginator monday={weekMonday} onChange={setWeekMonday} timezone={tz} />
+            </div>
+            <div className="mt-3 rounded-card border border-line bg-elevated p-5">
+              <WeeklyBarChart days={weekDays} />
+            </div>
           </div>
-          <div className="mt-3 rounded-card border border-line bg-elevated p-5">
-            <WeeklyBarChart days={weekDays} />
-          </div>
-        </div>
 
-        <div>
-          <h2 className="font-display text-lg font-medium text-fg-primary">Last 21 Business Days</h2>
-          <div className="mt-3 rounded-card border border-line bg-elevated p-5">
-            <ActivityHeatmap days={heatmapDays} />
+          <div>
+            <h2 className="font-display text-lg font-medium text-fg-primary">Last 21 Business Days</h2>
+            <div className="mt-3 rounded-card border border-line bg-elevated p-5">
+              <ActivityHeatmap days={heatmapDays} />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {isAdmin && rollup && (
         <div className="mt-8 space-y-6">
@@ -645,25 +700,25 @@ export default function Stats() {
 
           <div>
             <h2 className="font-display text-lg font-medium text-fg-primary">Closers</h2>
-            {/* Prompt 579 — was Name + "Strategy Calls Assigned" only. Same
-                depth admin already has into setters, from the extended
-                statsForCloser (per rep, same pattern rollup.setters uses). */}
+            {/* Prompt 581 — same 4 metrics a closer sees on their own page
+                (Taken / Sold / Close Rate / No Show Rate), from
+                statsForCloser per rep — so admin sees what closers see, not
+                a stale column set. */}
             <div className="mt-3 overflow-hidden rounded-card border border-line bg-elevated">
               <table className="w-full text-left">
                 <thead className="eyebrow bg-surface">
                   <tr>
                     <th className="px-5 py-3">Name</th>
-                    <th className="px-5 py-3">Assigned</th>
-                    <th className="px-5 py-3">Closed</th>
-                    <th className="px-5 py-3">Lost</th>
-                    <th className="px-5 py-3">No Show</th>
-                    <th className="px-5 py-3">Win Rate</th>
+                    <th className="px-5 py-3">Taken</th>
+                    <th className="px-5 py-3">Sold</th>
+                    <th className="px-5 py-3">Close Rate</th>
+                    <th className="px-5 py-3">No Show Rate</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rollup.closers.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-5 py-6 text-center font-sans text-sm text-fg-secondary">
+                      <td colSpan={5} className="px-5 py-6 text-center font-sans text-sm text-fg-secondary">
                         No closers yet.
                       </td>
                     </tr>
@@ -673,9 +728,8 @@ export default function Stats() {
                         <td className="px-5 py-4 font-medium text-fg-primary">{c.full_name}</td>
                         <td className="px-5 py-4 text-fg-secondary">{c.assigned}</td>
                         <td className="px-5 py-4 text-fg-secondary">{c.closed}</td>
-                        <td className="px-5 py-4 text-fg-secondary">{c.lost}</td>
-                        <td className="px-5 py-4 text-fg-secondary">{c.noShow}</td>
-                        <td className="px-5 py-4 text-fg-secondary">{c.winRate}</td>
+                        <td className="px-5 py-4 text-fg-secondary">{c.closeRate}</td>
+                        <td className="px-5 py-4 text-fg-secondary">{c.noShowRate}</td>
                       </tr>
                     ))
                   )}
