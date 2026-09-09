@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
+import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser } from '../hooks/useStats'
+import { OUTCOME_LABELS, OUTCOME_TINT, CLOSER_OUTCOME_TILES } from '../components/ui/OutcomeBadge'
 import { useMyAllCalls, groupCallsByDay, isPerfectDay } from '../hooks/useBadges'
 import { WeekPaginator } from '../components/ui/WeekPaginator'
 import { DayPaginator } from '../components/ui/DayPaginator'
@@ -538,9 +540,18 @@ export default function Stats() {
         )}
       </div>
 
-      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className={clsx('mt-3 grid grid-cols-1 gap-4', isCloser ? 'sm:grid-cols-3 lg:grid-cols-5' : 'sm:grid-cols-3')}>
         {isCloser ? (
-          <Tile label="Strategy Calls Assigned" value={myStats.assigned} />
+          <>
+            {/* Prompt 579 — was a single "Strategy Calls Assigned" tile.
+                Same depth the setter's own page has, all period-scoped
+                except Win Rate (all-time, same reasoning as CloserOverview). */}
+            <Tile label="Strategy Calls Assigned" value={myStats.assigned} />
+            <Tile label="Closed" value={myStats.closed} />
+            <Tile label="Lost" value={myStats.lost} />
+            <Tile label="No Show" value={myStats.noShow} />
+            <Tile label="Win Rate (All Time)" value={myStats.winRate} />
+          </>
         ) : (
           <>
             <Tile label="Calls Logged" value={myStats.logged} />
@@ -550,26 +561,51 @@ export default function Stats() {
         )}
       </div>
 
-      {!isCloser && (
-        <div className="mt-8 space-y-6">
-          <div>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="font-display text-lg font-medium text-fg-primary">Weekly Activity</h2>
-              <WeekPaginator monday={weekMonday} onChange={setWeekMonday} timezone={tz} />
-            </div>
-            <div className="mt-3 rounded-card border border-line bg-elevated p-5">
-              <WeeklyBarChart days={weekDays} />
-            </div>
-          </div>
-
-          <div>
-            <h2 className="font-display text-lg font-medium text-fg-primary">Last 21 Business Days</h2>
-            <div className="mt-3 rounded-card border border-line bg-elevated p-5">
-              <ActivityHeatmap days={heatmapDays} />
-            </div>
+      {/* Prompt 579 — closer-only, read-only outcome breakdown for the
+          selected period. Same four categories / labels / colours as
+          CloserBookedPipeline's filter chips (My Pipeline owns the
+          filtering interaction — Stats is a report, not a working queue). */}
+      {isCloser && (
+        <div className="mt-6">
+          <p className="eyebrow !text-fg-faint">Outcome Mix</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {CLOSER_OUTCOME_TILES.map((key) => {
+              const count = { pending: myStats.pending, no_show: myStats.noShow, lost: myStats.lost, closed: myStats.closed }[key]
+              return (
+                <span key={key} className={clsx('eyebrow inline-flex rounded-full px-3 py-1.5', OUTCOME_TINT[key])}>
+                  {OUTCOME_LABELS[key]} ({count})
+                </span>
+              )
+            })}
           </div>
         </div>
       )}
+
+      {/* Prompt 579 — was `!isCloser`-gated (Prompt 450: "closers don't
+          dial"). But `calls` already captures closer activity too — the
+          column is named `setter_id` for historical reasons but holds the
+          current user's id whoever logs the call (LogCallModal is shared).
+          So useMyAllCalls(profile.id) already returns a closer's own
+          logged-call history; the gate was hiding real data, not a gap.
+          Admin still also sees the team rollup below. */}
+      <div className="mt-8 space-y-6">
+        <div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-lg font-medium text-fg-primary">Weekly Activity</h2>
+            <WeekPaginator monday={weekMonday} onChange={setWeekMonday} timezone={tz} />
+          </div>
+          <div className="mt-3 rounded-card border border-line bg-elevated p-5">
+            <WeeklyBarChart days={weekDays} />
+          </div>
+        </div>
+
+        <div>
+          <h2 className="font-display text-lg font-medium text-fg-primary">Last 21 Business Days</h2>
+          <div className="mt-3 rounded-card border border-line bg-elevated p-5">
+            <ActivityHeatmap days={heatmapDays} />
+          </div>
+        </div>
+      </div>
 
       {isAdmin && rollup && (
         <div className="mt-8 space-y-6">
@@ -609,18 +645,25 @@ export default function Stats() {
 
           <div>
             <h2 className="font-display text-lg font-medium text-fg-primary">Closers</h2>
+            {/* Prompt 579 — was Name + "Strategy Calls Assigned" only. Same
+                depth admin already has into setters, from the extended
+                statsForCloser (per rep, same pattern rollup.setters uses). */}
             <div className="mt-3 overflow-hidden rounded-card border border-line bg-elevated">
               <table className="w-full text-left">
                 <thead className="eyebrow bg-surface">
                   <tr>
                     <th className="px-5 py-3">Name</th>
-                    <th className="px-5 py-3">Strategy Calls Assigned</th>
+                    <th className="px-5 py-3">Assigned</th>
+                    <th className="px-5 py-3">Closed</th>
+                    <th className="px-5 py-3">Lost</th>
+                    <th className="px-5 py-3">No Show</th>
+                    <th className="px-5 py-3">Win Rate</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rollup.closers.length === 0 ? (
                     <tr>
-                      <td colSpan={2} className="px-5 py-6 text-center font-sans text-sm text-fg-secondary">
+                      <td colSpan={6} className="px-5 py-6 text-center font-sans text-sm text-fg-secondary">
                         No closers yet.
                       </td>
                     </tr>
@@ -629,6 +672,10 @@ export default function Stats() {
                       <tr key={c.id} className="border-t border-line font-sans text-sm">
                         <td className="px-5 py-4 font-medium text-fg-primary">{c.full_name}</td>
                         <td className="px-5 py-4 text-fg-secondary">{c.assigned}</td>
+                        <td className="px-5 py-4 text-fg-secondary">{c.closed}</td>
+                        <td className="px-5 py-4 text-fg-secondary">{c.lost}</td>
+                        <td className="px-5 py-4 text-fg-secondary">{c.noShow}</td>
+                        <td className="px-5 py-4 text-fg-secondary">{c.winRate}</td>
                       </tr>
                     ))
                   )}

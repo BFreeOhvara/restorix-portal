@@ -19,6 +19,12 @@ export const OUTCOME_LABELS = {
   closed: 'Closed',
 }
 
+// The four closer-outcome categories, in display order — the vocabulary
+// My Pipeline's filter chips (CloserBookedPipeline), the Closer Overview
+// tiles, and the Stats page's Outcome Mix / admin rollup all share.
+// 'no_show' is derived, never stored (see lib/closerOutcome.js).
+export const CLOSER_OUTCOME_TILES = ['pending', 'no_show', 'lost', 'closed']
+
 // Prompt 502: the raw (non-token) Tailwind palette/hex strings below
 // don't auto-inherit dark values the way token classes do, so each gets
 // an explicit `dark:` variant chosen for real dark-appropriate contrast —

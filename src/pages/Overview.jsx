@@ -17,7 +17,7 @@ import {
 } from '../lib/clientPreview'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, followUpsDueToday, inRange } from '../hooks/useStats'
 import StatusBadge, { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
-import OutcomeBadge, { OUTCOME_LABELS, OUTCOME_TINT, OUTCOME_SOLID } from '../components/ui/OutcomeBadge'
+import OutcomeBadge, { OUTCOME_LABELS, OUTCOME_TINT, OUTCOME_SOLID, CLOSER_OUTCOME_TILES } from '../components/ui/OutcomeBadge'
 import { LiveClock } from '../components/ui/LiveClock'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 import { Button } from '../components/ui/Button'
@@ -458,9 +458,8 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
   )
 }
 
-// Prompt 540 — 'needs_reschedule' replaced by 'no_show' (derived, see
-// lib/closerOutcome.js) as the second tile.
-const CLOSER_OUTCOME_TILES = ['pending', 'no_show', 'lost', 'closed']
+// Prompt 540 — 'needs_reschedule' replaced by 'no_show'; Prompt 579 —
+// moved to OutcomeBadge.jsx so Stats can share the same four categories.
 
 // Prompt 487 — restructured to match Setter Overview's own established
 // pattern (stat tiles, then a bordered box holding the lead list with a

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { displayOutcome } from '../lib/closerOutcome'
 
 // Stats are computed client-side from the leads table rather than a DB view
 // or RPC.
@@ -26,7 +27,7 @@ export function useAllLeadsForStats() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('leads')
-        .select('id, last_action_by, last_action_status, last_action_at, assigned_closer, status, strategy_call_at, follow_up_at')
+        .select('id, last_action_by, last_action_status, last_action_at, assigned_closer, status, strategy_call_at, follow_up_at, closer_outcome, closer_outcome_at')
       if (error) throw error
       return data
     },
@@ -92,9 +93,45 @@ export function followUpsDueToday(leads, userId, start, end) {
   ).length
 }
 
+// Prompt 579 — was `{ assigned }` only. Extended to the same depth the
+// setter's own Stats page and CloserOverview already have, reusing
+// CloserOverview's exact logic and reasoning (Overview.jsx) rather than a
+// second computation:
+//   - assigned / pending / noShow  → scoped by strategy_call_at (the
+//     booked strategy call falls in the period)
+//   - closed / lost                → scoped by closer_outcome_at (the
+//     outcome was logged in the period — matches CloserOverview's own
+//     closedThisWeek; a null stamp on an older row is simply not countable
+//     in a date-ranged view, not an error)
+//   - winRate                      → deliberately ALL-TIME regardless of
+//     the selected period (a single period's sample is too small to mean
+//     anything — CloserOverview's own words). closed / (closed + lost),
+//     resolved deals only; pending/no-show are out of the denominator.
+// No Show goes through displayOutcome, never a raw closer_outcome check —
+// 'no_show' is derived, never stored (lib/closerOutcome.js).
 export function statsForCloser(leads, closerId, start, end) {
-  const assigned = leads.filter(
-    (l) => l.assigned_closer === closerId && l.status === 'appointment_booked' && inRange(l.strategy_call_at, start, end)
+  const mine = leads.filter(
+    (l) => l.assigned_closer === closerId && l.status === 'appointment_booked'
   )
-  return { assigned: assigned.length }
+
+  const byCall = mine.filter((l) => inRange(l.strategy_call_at, start, end))
+  const pending = byCall.filter((l) => displayOutcome(l) === 'pending').length
+  const noShow = byCall.filter((l) => displayOutcome(l) === 'no_show').length
+
+  // Closed/Lost scope by closer_outcome_at (matches CloserOverview's
+  // closedThisWeek) for a bounded period. `closer_outcome_at` is
+  // forward-only (Prompt 548) — older rows can have a null stamp — so on
+  // an UNbounded (All Time) view, count those too rather than silently
+  // dropping them, which would leave Closed/Lost reading 0 while an
+  // all-time Win Rate below shows a real percentage.
+  const unbounded = !start && !end
+  const outcomeInRange = (iso) => (unbounded ? true : inRange(iso, start, end))
+  const closed = mine.filter((l) => l.closer_outcome === 'closed' && outcomeInRange(l.closer_outcome_at)).length
+  const lost = mine.filter((l) => l.closer_outcome === 'lost' && outcomeInRange(l.closer_outcome_at)).length
+
+  const allClosed = mine.filter((l) => l.closer_outcome === 'closed').length
+  const allLost = mine.filter((l) => l.closer_outcome === 'lost').length
+  const winRate = allClosed + allLost > 0 ? `${Math.round((allClosed / (allClosed + allLost)) * 100)}%` : '—'
+
+  return { assigned: byCall.length, pending, noShow, lost, closed, winRate }
 }
