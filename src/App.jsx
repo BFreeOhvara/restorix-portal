@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { ThemeProvider } from './hooks/useTheme'
@@ -22,17 +22,40 @@ import Settings from './pages/Settings'
 import Survey from './pages/Survey'
 import MyLeads from './pages/MyLeads'
 import MyPipeline from './pages/MyPipeline'
-import MyAgent from './pages/MyAgent'
+import Prospects from './pages/Prospects'
+import Appointments from './pages/Appointments'
+import Reports from './pages/Reports'
 import BugReports from './pages/BugReports'
 
 const queryClient = new QueryClient()
 
 // Prompt 546 — routes a `client` account must never reach. `client` gets
-// only /overview (its own dashboard branch inside Overview.jsx), the
-// per-agent /my-agents/:agentKey pages (Prompt 565), /profile, and
+// only /overview (its own dashboard branch inside Overview.jsx), the CRM
+// pages /prospects, /appointments, /reports (Prompt 578), /profile, and
 // /settings; everything else is internal-staff-only. RoleRoute redirects a
 // client hitting these to / → /overview.
 const INTERNAL_ROLES = ['setter', 'closer', 'admin']
+
+// Prompt 578 — the old per-agent /my-agents/:agentKey route (Prompt 565)
+// is gone; a purchased agent is data on a CRM page now, not its own tab.
+// Keep the path alive as a redirect so no old deep link 404s: intake /
+// missed-call / insurance / follow-up → the Pipeline page (/prospects),
+// bed sync → Overview, reminders → Appointments, referral reporting →
+// Reports.
+const AGENT_REDIRECT = {
+  intake_triage: '/prospects',
+  missed_call_recovery: '/prospects',
+  insurance: '/prospects',
+  follow_up: '/prospects',
+  bed_sync: '/overview',
+  reminders: '/appointments',
+  referral_reporting: '/reports',
+}
+
+function MyAgentRedirect() {
+  const { agentKey } = useParams()
+  return <Navigate to={AGENT_REDIRECT[agentKey] || '/overview'} replace />
+}
 
 function Gate({ children }) {
   const { session, profile, loading } = useAuth()
@@ -94,11 +117,28 @@ export default function App() {
                     <Route element={<Layout />}>
                       <Route path="/" element={<Home />} />
                       <Route path="/overview" element={<Overview />} />
+                      <Route path="/my-agents/:agentKey" element={<MyAgentRedirect />} />
                       <Route
-                        path="/my-agents/:agentKey"
+                        path="/prospects"
                         element={
                           <RoleRoute roles={['client']}>
-                            <MyAgent />
+                            <Prospects />
+                          </RoleRoute>
+                        }
+                      />
+                      <Route
+                        path="/appointments"
+                        element={
+                          <RoleRoute roles={['client']}>
+                            <Appointments />
+                          </RoleRoute>
+                        }
+                      />
+                      <Route
+                        path="/reports"
+                        element={
+                          <RoleRoute roles={['client']}>
+                            <Reports />
                           </RoleRoute>
                         }
                       />

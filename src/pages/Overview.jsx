@@ -6,7 +6,15 @@ import { useAuth } from '../hooks/useAuth'
 import { useBrand } from '../hooks/useBrand'
 import { useMyPool, useMyBooked, useMyFollowUps, useMyNotInterested, useMyLoggedBookings, useFinishDay, usePipelineHealth } from '../hooks/useLeads'
 import { useMyDeal } from '../hooks/useDeals'
-import { catalogEntry, CONNECT_LABELS } from '../lib/agentCatalog'
+import { AGENT_CATALOG } from '../lib/agentCatalog'
+import {
+  isTestClient,
+  ownedAgents,
+  PREVIEW_HEADLINE,
+  PREVIEW_STATS,
+  PREVIEW_ACTIVITY,
+  PREVIEW_ATTENTION,
+} from '../lib/clientPreview'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, followUpsDueToday, inRange } from '../hooks/useStats'
 import StatusBadge, { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusBadge'
 import OutcomeBadge, { OUTCOME_LABELS, OUTCOME_TINT, OUTCOME_SOLID } from '../components/ui/OutcomeBadge'
@@ -820,52 +828,28 @@ export function CloserOverview({ profile, title = 'Overview' }) {
   )
 }
 
-// Prompt 546 — the client's own dashboard. Catalog-driven (Brayden's
-// "build each agent once" model): renders `deals.front_runner` +
-// `deals.sub_agents` as cards, each pulling its copy from the shared
-// catalog and showing an honest status (every entry is 'placeholder'
-// today, so every card reads "Coming soon" — never hidden). RLS scopes
-// `useMyDeal` to this client's own row; there is no other data a client
-// can reach.
-function ClientAgentCard({ entryKey, hero }) {
-  const entry = catalogEntry(entryKey)
-  if (!entry) return null
-  const isLive = entry.status === 'live'
+// Prompt 578 — the client Overview, reframed as the top of a CRM (not the
+// agent catalog it used to be). A row of stat tiles, a same-day-only
+// activity feed (agent-name prefixes stripped — the client sees that a
+// consult was booked, not which agent booked it), and an honest footnote
+// making the bounded-by-design choice explicit. Real clients get real
+// facts where they exist (facility name, how many of their agents are
+// live) and honest empty / "Coming soon" states everywhere else; the
+// seeded test account gets the full mockup-matching preview from
+// clientPreview.js. RLS scopes useMyDeal to this client's own row.
+function AttentionDot({ kind }) {
   return (
-    // Prompt 565 — each card links to that agent's own full page (the same
-    // page its new sidebar tab opens). Overview is otherwise unchanged.
-    <Link
-      to={`/my-agents/${entryKey}`}
+    <span
       className={clsx(
-        'block rounded-card border bg-elevated p-6 transition-colors hover:border-accent/50',
-        hero ? 'border-accent/30' : 'border-line'
+        'mt-1.5 h-[7px] w-[7px] shrink-0 rounded-full',
+        kind === 'urgent' ? 'bg-danger' : 'bg-yellow-600 dark:bg-yellow-500'
       )}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <p className="font-display text-lg font-medium text-fg-primary">{entry.label}</p>
-        <span
-          className={clsx(
-            'eyebrow shrink-0 rounded-full px-2.5 py-1',
-            isLive ? STATUS_SOLID.appointment_booked : 'bg-muted !text-fg-secondary'
-          )}
-        >
-          {isLive ? 'Live' : 'Coming soon'}
-        </span>
-      </div>
-      {entry.copy?.whatItIs && (
-        <p className="mt-2 font-sans text-sm leading-relaxed text-fg-secondary">{entry.copy.whatItIs}</p>
-      )}
-      {!isLive && entry.needsConnect.length > 0 && (
-        <p className="mt-3 font-sans text-xs text-fg-faint">
-          We'll walk you through connecting your {entry.needsConnect.map((c) => CONNECT_LABELS[c] || c).join(', ')}{' '}
-          once this is ready.
-        </p>
-      )}
-    </Link>
+    />
   )
 }
 
 function ClientOverview({ profile }) {
+  const { session } = useAuth()
   const { data: deal, isLoading, isError } = useMyDeal()
 
   if (isLoading) {
@@ -883,19 +867,96 @@ function ClientOverview({ profile }) {
   }
 
   const facility = deal.lead?.facility_name || 'Your facility'
+  const owned = ownedAgents(deal)
+  const liveCount = owned.filter((k) => AGENT_CATALOG[k]?.status === 'live').length
+  const hasBedSync = owned.includes('bed_sync')
+  const preview = isTestClient(session)
+
+  const header = (
+    <div>
+      <h1 className="font-display text-2xl font-medium text-fg-primary">{facility}</h1>
+      <p className="mt-1 font-sans text-sm text-fg-secondary">Your Restorix setup</p>
+    </div>
+  )
+
+  if (!preview) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Tile label="Agents live" value={`${liveCount} of ${owned.length}`} />
+          {hasBedSync && <Tile label="Beds open" value={<span className="text-fg-faint">Coming soon</span>} />}
+        </div>
+        <div>
+          <p className="eyebrow !text-fg-faint">Today's activity</p>
+          <div className="mt-2 rounded-card border border-line bg-elevated p-8 text-center">
+            <p className="font-sans text-sm text-fg-secondary">Nothing yet today.</p>
+          </div>
+          <p className="mt-2.5 font-sans text-xs text-fg-faint">
+            Bounded to today by design — always short, never a scroll-forever log.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div>
-      <div>
-        <h1 className="font-display text-2xl font-medium text-fg-primary">{facility}</h1>
-        <p className="mt-1 font-sans text-sm text-fg-secondary">Your Restorix setup</p>
+    <div className="space-y-[22px]">
+      {header}
+
+      <div className="rounded-card border border-line bg-elevated px-6 py-5">
+        <p className="font-display text-lg font-medium leading-relaxed text-fg-primary">{PREVIEW_HEADLINE}</p>
       </div>
 
-      <div className="mt-6 space-y-4">
-        <ClientAgentCard entryKey={deal.front_runner} hero />
-        {(deal.sub_agents || []).map((key) => (
-          <ClientAgentCard key={key} entryKey={key} />
-        ))}
+      <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 lg:grid-cols-5">
+        <Tile label="Active prospects" value={PREVIEW_STATS.activeProspects} />
+        <Tile label="Booked this week" value={PREVIEW_STATS.bookedThisWeek} />
+        <Tile label="Booking rate" value={PREVIEW_STATS.bookingRate} />
+        <Tile label="Avg response" value={PREVIEW_STATS.avgResponse} />
+        {hasBedSync && (
+          <Tile
+            label="Beds open"
+            value={
+              <>
+                {PREVIEW_STATS.bedsOpen}
+                <span className="ml-1 text-lg font-normal text-fg-faint">/ {PREVIEW_STATS.bedsTotal}</span>
+              </>
+            }
+          />
+        )}
+      </div>
+
+      <div className="grid gap-5 md:grid-cols-2">
+        <div className="rounded-card border border-line bg-elevated px-5 py-[18px]">
+          <p className="eyebrow !text-fg-faint">Needs your attention</p>
+          <div className="mt-3 flex flex-col">
+            {PREVIEW_ATTENTION.map((c) => (
+              <div key={c.id} className="flex items-start gap-2.5 border-b border-line py-2.5 last:border-0">
+                <AttentionDot kind={c.attention} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-sans text-sm font-semibold text-fg-primary">{c.name}</p>
+                  <p className="mt-0.5 font-sans text-[13px] leading-snug text-fg-secondary">{c.attentionReason}</p>
+                  <p className="mt-1 font-sans text-[11px] text-fg-faint">{c.time}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col rounded-card border border-line bg-elevated px-5 py-[18px]">
+          <p className="eyebrow !text-fg-faint">Today's activity</p>
+          <div className="mt-3 flex flex-1 flex-col">
+            {PREVIEW_ACTIVITY.map((a) => (
+              <div key={a.text} className="flex items-center justify-between gap-3 border-b border-line py-2 last:border-0">
+                <span className="min-w-0 truncate font-sans text-sm text-fg-primary">{a.text}</span>
+                <span className="shrink-0 font-sans text-[11px] text-fg-faint">{a.time}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 font-sans text-[11.5px] text-fg-faint">
+            Bounded to today by design — always short, never a scroll-forever log.
+          </p>
+        </div>
       </div>
     </div>
   )

@@ -1,13 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, ListChecks, UserPlus, GitBranch, Bug, Smartphone, Bot } from 'lucide-react'
-// Bot stays as the generic fallback icon (used below when a catalog entry
-// has no navIcon of its own); PhoneCall etc. are the NAV_GROUPS icons
-// already in play elsewhere in this file, unrelated to the agent catalog.
+import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, ListChecks, UserPlus, GitBranch, Bug, Smartphone, CalendarDays, PieChart } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useBrand } from '../hooks/useBrand'
-import { useMyDeal } from '../hooks/useDeals'
-import { catalogEntry } from '../lib/agentCatalog'
 import { supabase, SUPABASE_URL } from '../lib/supabase'
 import ParticleField from './ui/ParticleField'
 import { Avatar } from './ui/Avatar'
@@ -111,34 +106,37 @@ const NAV_GROUPS = [
   },
 ]
 
-// Prompt 567 — replaces Prompt 565's single flat injection into TODAY.
-// Groups the client's own purchased agents (front_runner first, then
-// sub_agents, same order Overview's own card stack uses) by their catalog
-// `navCategory`, one small nav group per category — the same "own small
-// section" shape COMMUNICATION/ACCOUNT already use, instead of one flat
-// list under TODAY. Unknown/stale catalog keys are skipped, same defensive
-// behavior catalogEntry itself already has.
-function buildClientAgentGroups(deal) {
-  if (!deal) return []
-  const keys = [deal.front_runner, ...(deal.sub_agents || [])].filter(Boolean)
-  const byCategory = new Map()
-  for (const key of keys) {
-    const entry = catalogEntry(key)
-    if (!entry) continue
-    const category = entry.navCategory || entry.label
-    if (!byCategory.has(category)) byCategory.set(category, [])
-    byCategory.get(category).push({
-      to: `/my-agents/${key}`,
-      label: entry.navLabel || entry.label,
-      icon: entry.navIcon || Bot,
-      roles: ['client'],
-    })
-  }
-  return Array.from(byCategory.entries()).map(([category, items]) => ({
-    label: category.toUpperCase(),
-    items,
-  }))
-}
+// Prompt 578 — Client Portal CRM reframe. Replaces Prompt 565/567's
+// per-purchased-agent nav (one tab per bought agent) with a FIXED
+// CRM-shaped structure, identical for every client regardless of what
+// they bought — purchase-gating moved inside the pages themselves. A
+// purchased agent now shows up as data on a page (a stat tile, a field
+// on a contact record, a status pill), never as its own named tab.
+// Grouped sections stay (Brayden: "the little side parts by groups stay
+// there"), same visual treatment COMMUNICATION/ACCOUNT already use.
+const CLIENT_NAV_GROUPS = [
+  {
+    label: 'TODAY',
+    items: [{ to: '/overview', label: 'Overview', icon: BarChart2, roles: ['client'] }],
+  },
+  {
+    label: 'WORKSPACE',
+    items: [
+      // /pipeline is admin-only, /my-pipeline is the closer's — client
+      // Pipeline routes to /prospects (Prompt 578).
+      { to: '/prospects', label: 'Pipeline', icon: Users2, roles: ['client'] },
+      { to: '/appointments', label: 'Appointments', icon: CalendarDays, roles: ['client'] },
+    ],
+  },
+  {
+    label: 'INSIGHTS',
+    items: [{ to: '/reports', label: 'Reports', icon: PieChart, roles: ['client'] }],
+  },
+  {
+    label: 'ACCOUNT',
+    items: [{ to: '/settings', label: 'Settings', icon: SettingsIcon, roles: ['client'] }],
+  },
+]
 
 function NotificationBell() {
   const [open, setOpen] = useState(false)
@@ -371,21 +369,12 @@ export default function Layout() {
   // negative-margin trick.
   const isFullBleed = location.pathname === '/messages'
 
-  // Prompt 567 — client sidebar: TODAY (Overview) stays first and ACCOUNT
-  // (Settings) stays last, exactly where they already sit; the client's own
-  // purchased-agent categories (buildClientAgentGroups) slot in between,
-  // replacing Prompt 565's single flat injection into TODAY. Every other
-  // NAV_GROUPS group is staff-only and already filters itself out for
-  // `client` below, so non-client roles render NAV_GROUPS untouched.
+  // Prompt 578 — clients get the fixed CRM-shaped nav (same for everyone);
+  // every other role renders NAV_GROUPS untouched. Nav shape no longer
+  // depends on the client's deal at all — pages call useMyDeal themselves
+  // for their own content.
   const isClient = profile?.role === 'client'
-  const { data: clientDeal } = useMyDeal({ enabled: isClient })
-  const navGroups = isClient
-    ? [
-        NAV_GROUPS.find((g) => g.label === 'TODAY'),
-        ...buildClientAgentGroups(clientDeal),
-        NAV_GROUPS.find((g) => g.label === 'ACCOUNT'),
-      ].filter(Boolean)
-    : NAV_GROUPS
+  const navGroups = isClient ? CLIENT_NAV_GROUPS : NAV_GROUPS
 
   return (
     <div className="min-h-screen bg-base">
