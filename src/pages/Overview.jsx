@@ -20,6 +20,7 @@ import StatusBadge, { STATUS_SOLID, STATUS_TINT } from '../components/ui/StatusB
 import OutcomeBadge, { OUTCOME_LABELS, OUTCOME_TINT, OUTCOME_SOLID, CLOSER_OUTCOME_TILES } from '../components/ui/OutcomeBadge'
 import { LiveClock } from '../components/ui/LiveClock'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
+import { ColoredPillGroup } from '../components/ui/ColoredPillGroup'
 import { Button } from '../components/ui/Button'
 import { formatPhone } from '../lib/phone'
 import { displayOutcome } from '../lib/closerOutcome'
@@ -282,15 +283,44 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
   const canCallFromTab = statusFilter === 'new' || statusFilter === 'follow_up_due'
 
   const filtered = useMemo(() => {
-    const active = leadsByTab[statusFilter] || []
     const q = search.trim().toLowerCase()
-    if (!q) return active
-    return active.filter((lead) =>
+    const match = (lead) =>
       lead.facility_name?.toLowerCase().includes(q) ||
       lead.contact_name?.toLowerCase().includes(q) ||
       lead.phone?.toLowerCase().includes(q)
-    )
-  }, [leadsByTab, search, statusFilter])
+    // Prompt 583 — embedded My Pipeline → Setter tab: an active search
+    // crosses all three visible buckets (No Answer / Follow-up / Not
+    // Interested), not just the selected pill. Every match still renders
+    // its real status badge. Non-embedded (/overview, /my-leads) is
+    // untouched — search there still narrows within the selected status.
+    if (embedded && q) {
+      return [
+        ...leadsByTab.no_answer,
+        ...leadsByTab.follow_up,
+        ...leadsByTab.not_interested,
+      ].filter(match)
+    }
+    const active = leadsByTab[statusFilter] || []
+    if (!q) return active
+    return active.filter(match)
+  }, [leadsByTab, search, statusFilter, embedded])
+
+  // Prompt 583 — while an embedded cross-status search is active the result
+  // rows can mix statuses, so the two status-specific columns (Callback for
+  // follow-up, Releases in for no_answer) stop making sense as fixed
+  // columns; render the plain Business/Phone/Status table instead, revert
+  // the moment the box is cleared. Non-embedded: always the per-status
+  // layout, exactly as before.
+  const embeddedSearching = embedded && search.trim() !== ''
+  const showCallbackCol = !embeddedSearching && (statusFilter === 'follow_up_due' || statusFilter === 'follow_up')
+  const showReleasesCol = !embeddedSearching && statusFilter === 'no_answer'
+  const emptyMessage = embedded
+    ? search.trim()
+      ? 'No leads match your search.'
+      : 'Nothing in this status right now.'
+    : leadsByTab[statusFilter]?.length
+      ? 'No leads match this filter.'
+      : 'Nothing here right now.'
 
   // Prompt 560 — on the embedded My Pipeline → Setter tab the status pills
   // sit ABOVE the search bar; on /overview and My Leads the search bar stays
@@ -311,8 +341,29 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
     </div>
   )
 
-  const pillsRow = (
-    <div className={clsx('flex flex-wrap gap-2', embedded ? 'mt-1' : 'mt-3')}>
+  // Prompt 583 — embedded My Pipeline → Setter tab: pills move into one
+  // bordered group (ColoredPillGroup), no "(N)" on the labels, a plain
+  // count of what's showing on the right of the row, and clicking a pill
+  // clears the search box. Non-embedded (/overview, /my-leads) keeps the
+  // exact standalone chip row with its "(N)" counts — untouched.
+  const pillsRow = embedded ? (
+    <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+      <ColoredPillGroup
+        options={visibleTabs.map((tab) => ({
+          key: tab.key,
+          label: tab.label,
+          tint: STATUS_TINT[tab.styleKey],
+          solid: STATUS_SOLID[tab.styleKey],
+        }))}
+        active={statusFilter}
+        onChange={(key) => { setStatusFilter(key); setSearch('') }}
+      />
+      <p className="font-sans text-sm text-fg-secondary">
+        {filtered.length} lead{filtered.length === 1 ? '' : 's'}
+      </p>
+    </div>
+  ) : (
+    <div className="mt-3 flex flex-wrap gap-2">
       {visibleTabs.map((tab) => (
         <button
           key={tab.key}
@@ -388,9 +439,7 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
         ) : !filtered.length ? (
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">
-            {leadsByTab[statusFilter]?.length
-              ? 'No leads match this filter.'
-              : 'Nothing here right now.'}
+            {emptyMessage}
           </p>
         ) : (
           <div className="max-h-[65vh] overflow-y-auto">
@@ -400,12 +449,10 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
                   <th className="px-5 py-3">Business</th>
                   <th className="px-5 py-3">Phone</th>
                   <th className="px-5 py-3">Status</th>
-                  {(statusFilter === 'follow_up_due' || statusFilter === 'follow_up') && (
-                    <th className="px-5 py-3">Callback</th>
-                  )}
+                  {showCallbackCol && <th className="px-5 py-3">Callback</th>}
                   {/* Prompt 559 Part B — countdown to the 24h No-Answer
                       hold releasing the lead to Unassigned. */}
-                  {statusFilter === 'no_answer' && <th className="px-5 py-3">Releases in</th>}
+                  {showReleasesCol && <th className="px-5 py-3">Releases in</th>}
                   {canCallFromTab && <th className="px-5 py-3"></th>}
                 </tr>
               </thead>
@@ -424,10 +471,10 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
                     <td className="px-5 py-4">
                       <StatusBadge status={lead.status} />
                     </td>
-                    {(statusFilter === 'follow_up_due' || statusFilter === 'follow_up') && (
+                    {showCallbackCol && (
                       <td className="px-5 py-4 text-fg-secondary">{fmt(lead.follow_up_at)}</td>
                     )}
-                    {statusFilter === 'no_answer' && (
+                    {showReleasesCol && (
                       <td className="px-5 py-4 font-mono text-fg-secondary [font-variant-numeric:tabular-nums]">
                         {noAnswerTimeLeft(lead.no_answer_at)}
                       </td>
@@ -554,45 +601,41 @@ function CloserBookedPipeline({ profile }) {
     [allLeads, brand.niche]
   )
 
-  const counts = useMemo(() => {
-    const c = {}
-    for (const key of CLOSER_OUTCOME_TILES) c[key] = 0
-    for (const lead of leads || []) {
-      const outcome = displayOutcome(lead)
-      c[outcome] = (c[outcome] || 0) + 1
-    }
-    return c
-  }, [leads])
-
   // Prompt 542 — restyled to match admin Pipeline's Closer tab: the 4
-  // static Tile counts become clickable OUTCOME_TINT/SOLID filter chips
-  // (same treatment, same displayOutcome-driven counts), plus a search
-  // bar, both reused verbatim from Pipeline.jsx rather than re-implemented
-  // here. No "Assigned Closer" column — unlike admin's rollup, every row
-  // on this page is already this one closer's own lead.
+  // static Tile counts become clickable filter chips. Prompt 583 — chips
+  // move into one bordered group (ColoredPillGroup), no "(N)" on the
+  // labels, and a plain count of what's showing sits on the right.
   const outcomeFiltered = useMemo(
     () => (leads || []).filter((lead) => displayOutcome(lead) === outcomeFilter),
     [leads, outcomeFilter]
   )
-  const filtered = useMemo(() => filterLeads(outcomeFiltered, search), [outcomeFiltered, search])
+  // Prompt 583 — an active search crosses every outcome (all this closer's
+  // booked leads), not just the selected pill; each match still renders its
+  // real outcome badge. Empty search → the selected pill's rows, as before.
+  const searching = search.trim() !== ''
+  const filtered = useMemo(
+    () => filterLeads(searching ? leads : outcomeFiltered, search),
+    [searching, leads, outcomeFiltered, search]
+  )
 
   return (
     <div>
       {/* Prompt 558 — the "N booked leads" line moved up to the CloserPipeline
           wrapper (above the tab switcher). */}
-      <div className="flex flex-wrap gap-2">
-        {CLOSER_OUTCOME_TILES.map((key) => (
-          <button
-            key={key}
-            onClick={() => setOutcomeFilter(key)}
-            className={clsx(
-              'eyebrow rounded-full px-3.5 py-2 transition-colors hover:opacity-85',
-              outcomeFilter === key ? OUTCOME_SOLID[key] : OUTCOME_TINT[key]
-            )}
-          >
-            {OUTCOME_LABELS[key]} ({isLoading ? 0 : counts[key] || 0})
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ColoredPillGroup
+          options={CLOSER_OUTCOME_TILES.map((key) => ({
+            key,
+            label: OUTCOME_LABELS[key],
+            tint: OUTCOME_TINT[key],
+            solid: OUTCOME_SOLID[key],
+          }))}
+          active={outcomeFilter}
+          onChange={(key) => { setOutcomeFilter(key); setSearch('') }}
+        />
+        <p className="font-sans text-sm text-fg-secondary">
+          {filtered.length} lead{filtered.length === 1 ? '' : 's'}
+        </p>
       </div>
 
       <SearchBar value={search} onChange={setSearch} />
@@ -602,10 +645,10 @@ function CloserBookedPipeline({ profile }) {
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
         ) : !filtered.length ? (
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">
-            {outcomeFiltered.length
-              ? 'No leads match this search.'
+            {searching
+              ? 'No booked leads match your search.'
               : leads?.length
-                ? 'No booked leads match this filter.'
+                ? 'No booked leads in this status.'
                 : 'No booked leads yet — Strategy Calls are assigned to you automatically.'}
           </p>
         ) : (
