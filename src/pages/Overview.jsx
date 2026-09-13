@@ -178,8 +178,10 @@ function FinishDayCard() {
 // `nicheTabs` is unused but kept as harmless shared plumbing.
 // Prompt 563 — `actionsRow` is gone; My Leads' "Request Leads" button is
 // back in `headerRight` beside the title. `compactStats` (My Leads only)
-// gives TodayStrip the tight `mt-1` top margin Prompts 559/562 landed on,
-// keyed off an explicit prop now that `actionsRow` no longer exists.
+// keys TodayStrip's own top margin off an explicit prop now that
+// `actionsRow` no longer exists — see the TodayStrip render below for the
+// current value and its history (559/562/564 tightened it, 586 opened it
+// back up).
 // Prompt 554 — `embedded` drops SetterOverview's own page header (h1 +
 // headerRight slot) so it can be nested as the "Setter" tab inside
 // CloserPipeline without a duplicate title. Everything below the header
@@ -394,9 +396,16 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
       {/* Prompt 558 — no stat tiles in the embedded My Pipeline → Setter
           tracking view (kept on /overview and My Leads).
           Prompt 563/564 — My Leads passes `compactStats` so the tiles sit
-          tight (mt-0.5, nudged in from Prompt 563's mt-1) directly under the
-          header row. /overview keeps its original mt-4. */}
-      {!embedded && <TodayStrip profile={profile} className={compactStats ? 'mt-0.5' : 'mt-4'} />}
+          tight directly under the header row (was mt-0.5, nudged in from
+          Prompt 563's mt-1). Prompt 586 — Brayden wanted that tightness
+          reversed into a clear, deliberate gap instead: mt-0.5 → mt-6,
+          matching the section-gap value already used elsewhere on this page
+          (searchRow, nicheTabs, the table wrapper) rather than a new
+          one-off value. Header row itself (title/subtitle/button) is
+          untouched — this only pushes TodayStrip (and everything after it,
+          via normal margin flow) down as a block. /overview keeps its
+          original, already-roomier mt-4 — not part of this ask. */}
+      {!embedded && <TodayStrip profile={profile} className={compactStats ? 'mt-6' : 'mt-4'} />}
 
       {/* Prompt 547 — "Finish Day" is a setter-only day-end action
           (run_setter_day_end is role-checked to setters), so it's hidden on
