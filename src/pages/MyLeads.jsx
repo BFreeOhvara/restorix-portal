@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
@@ -35,17 +35,63 @@ const nicheLabel = (v) => NICHE_LABEL[v] ?? v
 // Prompt 547 — the niche is now fixed by the active tab and passed in as a
 // prop; the in-modal Niche <select> is gone. `currentCount` stays the
 // closer's total New count so the cap math is unchanged.
+// Prompt 587 — a wheel row is ROW_HEIGHT tall; WHEEL_HEIGHT is padded so the
+// first and last rows can still scroll to center (padding = half the
+// leftover space on each side).
+const ROW_HEIGHT = 32
+const WHEEL_HEIGHT = 128
+const WHEEL_PADDING = (WHEEL_HEIGHT - ROW_HEIGHT) / 2
+
 function RequestLeadsForm({ niche, currentCount, onClose }) {
   const requestLeads = useRequestCloserLeads()
-  const [count, setCount] = useState(25)
+  // Prompt 587 — `raw` is the field's live text, kept free of any forced
+  // numeric coercion so backspacing to nothing leaves it genuinely empty
+  // instead of snapping back to "0" (which is what let fresh digits get
+  // appended onto a stray "0"). It's clamped into a real number only at the
+  // checkpoints that need one: blur, submit, and the wheel's derived value.
+  const [raw, setRaw] = useState('25')
   const [result, setResult] = useState(null)
+  const wheelRef = useRef(null)
+  const scrollEndTimeout = useRef(null)
+  const wheelDrivenScroll = useRef(false)
 
   const room = Math.max(0, POOL_CAP - currentCount)
+  const value = raw === '' ? 0 : Math.max(0, Math.min(room, Number(raw) || 0))
+
+  // Keep the wheel in sync when the count changes via typing (not while the
+  // wheel itself is mid-scroll, so it doesn't fight the user's gesture).
+  useEffect(() => {
+    if (wheelDrivenScroll.current) return
+    wheelRef.current?.scrollTo({ top: value * ROW_HEIGHT, behavior: 'smooth' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value])
+
+  useEffect(() => {
+    if (wheelRef.current) wheelRef.current.scrollTop = value * ROW_HEIGHT
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function handleWheelScroll() {
+    wheelDrivenScroll.current = true
+    clearTimeout(scrollEndTimeout.current)
+    scrollEndTimeout.current = setTimeout(() => {
+      const el = wheelRef.current
+      if (el) {
+        const picked = Math.max(0, Math.min(room, Math.round(el.scrollTop / ROW_HEIGHT)))
+        setRaw(String(picked))
+      }
+      wheelDrivenScroll.current = false
+    }, 120)
+  }
+
+  function handleBlur() {
+    setRaw(String(value))
+  }
 
   async function submit(e) {
     e.preventDefault()
     setResult(null)
-    const assigned = await requestLeads.mutateAsync({ count, niche })
+    const assigned = await requestLeads.mutateAsync({ count: value, niche })
     setResult(assigned)
   }
 
@@ -57,16 +103,40 @@ function RequestLeadsForm({ niche, currentCount, onClose }) {
         <span className="font-medium text-fg-primary">{currentCount}</span> of {POOL_CAP} New leads right now
         — room for {room} more.
       </p>
-      <Field label="How many">
-        <input
-          type="number"
-          min={0}
-          max={room}
-          value={count}
-          onChange={(e) => setCount(Math.max(0, Math.min(room, Number(e.target.value) || 0)))}
-          className={inputClass()}
-        />
-      </Field>
+      <div className="flex items-start gap-4">
+        <Field label="How many">
+          <input
+            type="number"
+            min={0}
+            max={room}
+            value={raw}
+            onChange={(e) => setRaw(e.target.value)}
+            onBlur={handleBlur}
+            className={inputClass()}
+          />
+        </Field>
+        <div className="mt-1.5">
+          <div
+            ref={wheelRef}
+            onScroll={handleWheelScroll}
+            className="w-20 overflow-y-auto rounded-lg border border-line bg-base"
+            style={{ height: WHEEL_HEIGHT, scrollSnapType: 'y mandatory', paddingBlock: WHEEL_PADDING }}
+          >
+            {Array.from({ length: room + 1 }, (_, n) => n).map((n) => (
+              <div
+                key={n}
+                style={{ height: ROW_HEIGHT, scrollSnapAlign: 'center' }}
+                className={clsx(
+                  'flex items-center justify-center font-sans text-sm transition-opacity',
+                  n === value ? 'font-semibold text-fg-primary opacity-100' : 'text-fg-secondary opacity-40'
+                )}
+              >
+                {n}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
       {result !== null && (
         <p className={`font-sans text-sm ${result === 0 ? 'text-fg-secondary' : 'text-success'}`}>
           {result === 0
@@ -78,7 +148,7 @@ function RequestLeadsForm({ niche, currentCount, onClose }) {
         <Button type="button" variant="ghost" onClick={onClose}>
           Close
         </Button>
-        <Button type="submit" disabled={room === 0 || count === 0 || requestLeads.isPending}>
+        <Button type="submit" disabled={room === 0 || value === 0 || requestLeads.isPending}>
           {requestLeads.isPending ? 'Requesting…' : 'Request'}
         </Button>
       </div>
