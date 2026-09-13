@@ -51,28 +51,56 @@ function RequestLeadsForm({ niche, currentCount, onClose }) {
   // checkpoints that need one: blur, submit, and the wheel's derived value.
   const [raw, setRaw] = useState('25')
   const [result, setResult] = useState(null)
+  // Prompt 588 — the wheel is a popover, not a permanent fixture: it only
+  // renders while the field group has focus/interaction.
+  const [wheelOpen, setWheelOpen] = useState(false)
+  const containerRef = useRef(null)
   const wheelRef = useRef(null)
   const scrollEndTimeout = useRef(null)
-  const wheelDrivenScroll = useRef(false)
+  // Prompt 588 — set only by a real user gesture on the wheel (mouse wheel,
+  // touch, or a pointer down, e.g. dragging the scrollbar), never by our own
+  // programmatic scrollTop writes below. `handleWheelScroll` only commits a
+  // value back into `raw` while this is true, so syncing the wheel to a
+  // freshly-typed value can't be misread as the user scrolling and echoed
+  // back into the field once the (purely programmatic) scroll settles.
+  const userScrollingRef = useRef(false)
 
   const room = Math.max(0, POOL_CAP - currentCount)
   const value = raw === '' ? 0 : Math.max(0, Math.min(room, Number(raw) || 0))
+  // Mirrors `value` for the outside-click listener below, which is only
+  // (re)attached when `wheelOpen` changes — without this it would close
+  // over whatever `value` was at the moment the popover opened, clamping
+  // to a stale number instead of whatever was last typed/scrolled to.
+  const valueRef = useRef(value)
+  valueRef.current = value
 
-  // Keep the wheel in sync when the count changes via typing (not while the
-  // wheel itself is mid-scroll, so it doesn't fight the user's gesture).
-  useEffect(() => {
-    if (wheelDrivenScroll.current) return
-    wheelRef.current?.scrollTo({ top: value * ROW_HEIGHT, behavior: 'smooth' })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value])
-
+  // Keep the wheel positioned at the current value — both when it changes
+  // via typing and the moment the popover opens.
   useEffect(() => {
     if (wheelRef.current) wheelRef.current.scrollTop = value * ROW_HEIGHT
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [value, wheelOpen])
+
+  function markUserScrolling() {
+    userScrollingRef.current = true
+  }
+
+  // Prompt 588 — a click that never focuses anything (e.g. the modal
+  // backdrop) can't be caught by blur alone, so close on any outside click
+  // too while the popover is open.
+  useEffect(() => {
+    if (!wheelOpen) return
+    function handleDocMouseDown(e) {
+      if (!containerRef.current?.contains(e.target)) {
+        setWheelOpen(false)
+        setRaw(String(valueRef.current))
+      }
+    }
+    document.addEventListener('mousedown', handleDocMouseDown)
+    return () => document.removeEventListener('mousedown', handleDocMouseDown)
+  }, [wheelOpen])
 
   function handleWheelScroll() {
-    wheelDrivenScroll.current = true
+    if (!userScrollingRef.current) return
     clearTimeout(scrollEndTimeout.current)
     scrollEndTimeout.current = setTimeout(() => {
       const el = wheelRef.current
@@ -80,12 +108,28 @@ function RequestLeadsForm({ niche, currentCount, onClose }) {
         const picked = Math.max(0, Math.min(room, Math.round(el.scrollTop / ROW_HEIGHT)))
         setRaw(String(picked))
       }
-      wheelDrivenScroll.current = false
+      userScrollingRef.current = false
     }, 120)
   }
 
   function handleBlur() {
     setRaw(String(value))
+  }
+
+  // Prompt 588 — closes (and clamps) only when focus leaves the whole
+  // field+wheel group, not when it moves from the input to the wheel.
+  function handleGroupBlur(e) {
+    if (containerRef.current?.contains(e.relatedTarget)) return
+    setWheelOpen(false)
+    handleBlur()
+  }
+
+  function handleGroupKeyDown(e) {
+    if (e.key === 'Escape') {
+      setWheelOpen(false)
+      handleBlur()
+      e.currentTarget.querySelector('input')?.blur()
+    }
   }
 
   async function submit(e) {
@@ -103,7 +147,7 @@ function RequestLeadsForm({ niche, currentCount, onClose }) {
         <span className="font-medium text-fg-primary">{currentCount}</span> of {POOL_CAP} New leads right now
         — room for {room} more.
       </p>
-      <div className="flex items-start gap-4">
+      <div ref={containerRef} className="relative" onBlur={handleGroupBlur} onKeyDown={handleGroupKeyDown}>
         <Field label="How many">
           <input
             type="number"
@@ -111,15 +155,18 @@ function RequestLeadsForm({ niche, currentCount, onClose }) {
             max={room}
             value={raw}
             onChange={(e) => setRaw(e.target.value)}
-            onBlur={handleBlur}
+            onFocus={() => setWheelOpen(true)}
             className={inputClass()}
           />
         </Field>
-        <div className="mt-1.5">
+        {wheelOpen && (
           <div
             ref={wheelRef}
             onScroll={handleWheelScroll}
-            className="w-20 overflow-y-auto rounded-lg border border-line bg-base"
+            onWheel={markUserScrolling}
+            onTouchStart={markUserScrolling}
+            onPointerDown={markUserScrolling}
+            className="absolute left-0 top-full z-10 mt-1 w-24 overflow-y-auto rounded-lg border border-line bg-elevated shadow-lg"
             style={{ height: WHEEL_HEIGHT, scrollSnapType: 'y mandatory', paddingBlock: WHEEL_PADDING }}
           >
             {Array.from({ length: room + 1 }, (_, n) => n).map((n) => (
@@ -135,7 +182,7 @@ function RequestLeadsForm({ niche, currentCount, onClose }) {
               </div>
             ))}
           </div>
-        </div>
+        )}
       </div>
       {result !== null && (
         <p className={`font-sans text-sm ${result === 0 ? 'text-fg-secondary' : 'text-success'}`}>
