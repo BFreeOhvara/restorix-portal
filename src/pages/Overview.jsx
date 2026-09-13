@@ -341,13 +341,20 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
     </div>
   )
 
-  // Prompt 583 — embedded My Pipeline → Setter tab: pills move into one
-  // bordered group (ColoredPillGroup), no "(N)" on the labels, a plain
-  // count of what's showing on the right of the row, and clicking a pill
-  // clears the search box. Non-embedded (/overview, /my-leads) keeps the
-  // exact standalone chip row with its "(N)" counts — untouched.
-  const pillsRow = embedded ? (
-    <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
+  // Prompt 583 — embedded My Pipeline → Setter tab: pills in one bordered
+  // group (ColoredPillGroup), no "(N)" on the labels, a plain count of
+  // what's showing on the right of the row, and clicking a pill clears the
+  // search box (the box drives 583's cross-status search there).
+  // Prompt 585 — non-embedded (/overview, /my-leads) gets the same
+  // ColoredPillGroup + right-side count visual treatment (Brayden compared
+  // the two side by side and wanted parity), but deliberately keeps today's
+  // plain behavior: `onChange` only sets the filter, no search-clear and no
+  // cross-status search — those are 583-specific to the embedded tab, not
+  // asked for here. `filtered` already narrows to `leadsByTab[statusFilter]`
+  // + the search query on this branch (see the useMemo above), so the count
+  // stays in sync with the table without any new computation.
+  const pillsRow = (
+    <div className={clsx('flex flex-wrap items-center justify-between gap-3', embedded ? 'mt-1' : 'mt-3')}>
       <ColoredPillGroup
         options={visibleTabs.map((tab) => ({
           key: tab.key,
@@ -356,26 +363,11 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
           solid: STATUS_SOLID[tab.styleKey],
         }))}
         active={statusFilter}
-        onChange={(key) => { setStatusFilter(key); setSearch('') }}
+        onChange={(key) => { setStatusFilter(key); if (embedded) setSearch('') }}
       />
       <p className="font-sans text-sm text-fg-secondary">
         {filtered.length} lead{filtered.length === 1 ? '' : 's'}
       </p>
-    </div>
-  ) : (
-    <div className="mt-3 flex flex-wrap gap-2">
-      {visibleTabs.map((tab) => (
-        <button
-          key={tab.key}
-          onClick={() => setStatusFilter(tab.key)}
-          className={clsx(
-            'eyebrow rounded-full px-3.5 py-2 transition-colors hover:opacity-85',
-            statusFilter === tab.key ? STATUS_SOLID[tab.styleKey] : STATUS_TINT[tab.styleKey]
-          )}
-        >
-          {tab.label} ({counts[tab.key] || 0})
-        </button>
-      ))}
     </div>
   )
 
