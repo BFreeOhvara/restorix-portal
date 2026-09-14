@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
+import { usePageHeader } from '../components/Layout'
 
 // Plain-text content area — Brayden edits SCRIPT_SECTIONS directly to update
 // call scripts. No generation or CMS, per spec (Prompt 433, relocated here
@@ -129,12 +130,10 @@ function ComingSoonTab({ message }) {
 
 export default function Training() {
   const [tab, setTab] = useState('script')
+  usePageHeader({ title: 'Training', subtitle: 'Reference materials for the team' })
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-medium text-fg-primary">Training</h1>
-      <p className="mt-1 font-sans text-sm text-fg-secondary">Reference materials for the team</p>
-
       <div className="mt-6">
         <SegmentedTabs tabs={TABS} active={tab} onChange={setTab} />
       </div>

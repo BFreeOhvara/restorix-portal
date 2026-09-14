@@ -9,20 +9,25 @@ import clsx from 'clsx'
 // STATUS_TINT/SOLID chips use for sub-tab filter rows elsewhere on these
 // same pages, which this component does not touch or replace.
 // Prompt 589 — opt-in `variant="grouped"` renders one continuous bordered
-// pill container (ColoredPillGroup's shell) instead of separately-bordered
-// buttons with a gap. Default (no variant) is unchanged for every existing
-// call site — Training.jsx, Pipeline.jsx's niche/outcome tabs all keep
-// rendering exactly as before.
+// pill container instead of separately-bordered buttons with a gap. Default
+// (no variant) is unchanged for every existing call site — Training.jsx,
+// Pipeline.jsx's niche/outcome tabs all keep rendering exactly as before.
+// Prompt 590 — 589 borrowed ColoredPillGroup's fully-round, row-stretching
+// shell wholesale, but Brayden only wanted the "grouped into one bordered
+// box" idea, not the pill roundness or the full-width stretch. Corners
+// match the plain variant's own `rounded-lg` instead of `rounded-full`, and
+// the container sizes to its own content (`inline-flex`) instead of
+// spanning the row (`flex` inside a block-level parent stretches full width).
 export function SegmentedTabs({ tabs, active, onChange, variant }) {
   if (variant === 'grouped') {
     return (
-      <div className="flex gap-1 rounded-full border border-line bg-elevated p-1">
+      <div className="inline-flex gap-1 rounded-lg border border-line bg-elevated p-1">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => onChange(t.key)}
             className={clsx(
-              'eyebrow rounded-full px-3 py-1.5 transition-colors',
+              'rounded-lg px-3 py-1.5 font-sans text-sm transition-colors',
               active === t.key
                 ? 'bg-accent text-white'
                 : 'text-fg-secondary hover:text-fg-primary'

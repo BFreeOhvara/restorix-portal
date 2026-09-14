@@ -6,6 +6,7 @@ import { Button } from '../components/ui/Button'
 import Modal from '../components/ui/Modal'
 import { Field, inputClass } from '../components/ui/Field'
 import { usePendingInvites, useCreateInvite, useRevokeInvite } from '../hooks/useInvites'
+import { usePageHeader } from '../components/Layout'
 
 function useUsers() {
   return useQuery({
@@ -222,19 +223,17 @@ export default function Users() {
   const { data: zoomConnections } = useZoomConnections()
   const [showCreate, setShowCreate] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
+  usePageHeader({ title: 'Users' })
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-2xl font-medium text-fg-primary">Users</h1>
-        <div className="flex gap-3">
-          <Button variant="secondary" onClick={() => setShowInvite(true)}>
-            <Link2 size={15} /> Invite
-          </Button>
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus size={15} /> Create account
-          </Button>
-        </div>
+      <div className="flex justify-end gap-3">
+        <Button variant="secondary" onClick={() => setShowInvite(true)}>
+          <Link2 size={15} /> Invite
+        </Button>
+        <Button onClick={() => setShowCreate(true)}>
+          <Plus size={15} /> Create account
+        </Button>
       </div>
 
       <PendingInvites />

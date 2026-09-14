@@ -480,10 +480,14 @@ export default function Layout() {
       <div className="relative z-10 ml-60 flex min-h-screen flex-col">
         <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-line bg-elevated px-6">
           {pageHeader ? (
-            <div className="min-w-0">
-              <h1 className="truncate font-display text-xl font-medium text-fg-primary">{pageHeader.title}</h1>
+            // Prompt 590 — title + subtitle render on one line (Ohvara's
+            // "My Policies  Your whole book of business" look), not stacked
+            // as 589 shipped it. Shared here so every page adopting
+            // usePageHeader gets the fix at once, no per-page styling.
+            <div className="flex min-w-0 items-baseline gap-2">
+              <h1 className="truncate font-display text-lg font-medium text-fg-primary">{pageHeader.title}</h1>
               {pageHeader.subtitle && (
-                <p className="truncate font-sans text-xs text-fg-secondary">{pageHeader.subtitle}</p>
+                <p className="truncate font-sans text-sm text-fg-secondary">{pageHeader.subtitle}</p>
               )}
             </div>
           ) : (

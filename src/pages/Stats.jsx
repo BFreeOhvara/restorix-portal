@@ -14,6 +14,7 @@ import {
   monthOf, firstOfMonth, lastOfMonth,
 } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
+import { usePageHeader } from '../components/Layout'
 
 function Tile({ label, value, sub }) {
   return (
@@ -607,19 +608,14 @@ export default function Stats() {
     }
   }, [leads, reps, rawRange])
 
+  usePageHeader({ title: 'Stats', subtitle: isAdmin ? 'Team performance' : 'Your performance' })
+
   if (isLoading) {
     return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
   }
 
   return (
     <div>
-      <div>
-        <h1 className="font-display text-2xl font-medium text-fg-primary">Stats</h1>
-        <p className="mt-1 font-sans text-sm text-fg-secondary">
-          {isAdmin ? 'Team performance' : 'Your performance'}
-        </p>
-      </div>
-
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <PillToggle options={periodTabs} active={periodTab} onChange={setPeriodTab} />
         {periodTab === 'daily' && <DayPaginator date={dayDate} onChange={setDayDate} timezone={tz} />}

@@ -9,6 +9,7 @@ import { useZoomConnection, useConnectZoom } from '../hooks/useZoom'
 import { Field, inputClass } from '../components/ui/Field'
 import { Button } from '../components/ui/Button'
 import { SELECTABLE_TIMEZONES, DEFAULT_TIMEZONE } from '../lib/timezones'
+import { usePageHeader } from '../components/Layout'
 
 // Prompt 453 — Settings got a real nav destination but had nothing genuine
 // to put in it yet. Prompt 458 gives it its first real setting: timezone,
@@ -18,15 +19,11 @@ import { SELECTABLE_TIMEZONES, DEFAULT_TIMEZONE } from '../lib/timezones'
 // one yet.
 export default function Settings() {
   const { profile } = useAuth()
+  usePageHeader({ title: 'Settings', subtitle: 'Account settings — password, name, and role live on Profile.' })
   if (!profile) return null
 
   return (
     <div className="max-w-lg">
-      <h1 className="font-display text-2xl font-medium text-fg-primary">Settings</h1>
-      <p className="mt-1 font-sans text-sm text-fg-secondary">
-        Account settings — password, name, and role live on Profile.
-      </p>
-
       <div className="mt-6 rounded-card border border-line bg-elevated p-6">
         <TimezoneForm profile={profile} />
       </div>

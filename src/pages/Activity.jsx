@@ -6,6 +6,7 @@ import StatusBadge from '../components/ui/StatusBadge'
 import { DayPaginator } from '../components/ui/DayPaginator'
 import { zonedDateStr, zonedDayRange } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
+import { usePageHeader } from '../components/Layout'
 
 // Prompt 451: switched from `leads.last_action_*` to the `calls` table
 // (Prompt 447) — the same reasoning Prompt 443's badge system already
@@ -52,14 +53,11 @@ export default function Activity() {
   const tz = profile?.timezone || DEFAULT_TIMEZONE
   const [date, setDate] = useState(() => zonedDateStr(Date.now(), tz))
   const { data: rows, isLoading } = useMyActivityForDay(profile?.id, date, tz)
+  usePageHeader({ title: 'Activity', subtitle: 'Calls you logged this day' })
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-medium text-fg-primary">Activity</h1>
-          <p className="mt-1 font-sans text-sm text-fg-secondary">Calls you logged this day</p>
-        </div>
+      <div className="flex justify-end">
         <DayPaginator date={date} onChange={setDate} timezone={tz} />
       </div>
 

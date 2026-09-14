@@ -6,6 +6,7 @@ import { Field, inputClass } from '../components/ui/Field'
 import { Button } from '../components/ui/Button'
 import { Avatar } from '../components/ui/Avatar'
 import { useUploadAvatar, useRemoveAvatar } from '../hooks/useAvatar'
+import { usePageHeader } from '../components/Layout'
 
 const AVATAR_SIZE = 56
 
@@ -48,12 +49,11 @@ const ROLE_LABEL = { setter: 'Setter', closer: 'Closer', admin: 'Admin' }
 // block-level shrink-to-fit sizing to happen to match.
 export default function Profile() {
   const { profile } = useAuth()
+  usePageHeader({ title: 'Profile' })
   if (!profile) return null
 
   return (
     <div className="max-w-lg">
-      <h1 className="font-display text-2xl font-medium text-fg-primary">Profile</h1>
-
       <div className="mt-6 rounded-card border border-line bg-elevated p-6">
         <div className="flex items-start gap-4">
           <AvatarUpload profile={profile} />

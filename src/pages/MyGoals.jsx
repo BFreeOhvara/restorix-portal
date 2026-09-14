@@ -9,6 +9,7 @@ import { useMyAllCalls, computeBadgeProgress, tieredProgress, DIAL_TIERS, BOOKIN
 import { totalCommission } from '../lib/commissions'
 import { zonedDateStr, zonedDayRange, mondayOf } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
+import { usePageHeader } from '../components/Layout'
 
 // v1 daily target is hardcoded (150 dials / 2 booked = "perfect day"),
 // weekly/monthly are that same target scaled to a 5-day work week and a
@@ -350,11 +351,10 @@ export default function MyGoals() {
   const target = PERIODS[period]
   const isPerfectDay = period === 'daily' && periodStats.logged >= target.callsTarget && periodStats.booked >= target.bookedTarget
 
+  usePageHeader({ title: 'My Goals', subtitle: 'Progress toward a perfect day' })
+
   return (
     <div>
-      <h1 className="font-display text-2xl font-medium text-fg-primary">My Goals</h1>
-      <p className="mt-1 font-sans text-sm text-fg-secondary">Progress toward a perfect day</p>
-
       {isLoading ? (
         <p className="mt-6 font-sans text-sm text-fg-secondary">Loading…</p>
       ) : (

@@ -3,6 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useCommissionLeads } from '../hooks/useLeads'
 import { useReps } from '../hooks/useStats'
 import { commissionFor, totalCommission } from '../lib/commissions'
+import { usePageHeader } from '../components/Layout'
 
 const CLOSER_COPY = {
   title: 'Revenue',
@@ -32,11 +33,6 @@ function MyCommissions({ leads }) {
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-medium text-fg-primary">My Commissions</h1>
-      <p className="mt-1 font-sans text-sm text-fg-secondary">
-        15% of setup fee + first month, paid once a deal you booked reaches Closed.
-      </p>
-
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Tile label="Total Commission" value={fmt(total)} />
         <Tile label="Deals Closed" value={leads.length} />
@@ -92,11 +88,6 @@ function AdminCommissionRollup({ leads, reps }) {
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-medium text-fg-primary">Commissions</h1>
-      <p className="mt-1 font-sans text-sm text-fg-secondary">
-        15% of setup fee + first month, paid once per Closed deal.
-      </p>
-
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Tile label="Total Owed" value={fmt(grandTotal)} />
         <Tile label="Deals Closed" value={leads.length} />
@@ -134,16 +125,27 @@ function AdminCommissionRollup({ leads, reps }) {
   )
 }
 
+// Prompt 590 — header title/subtitle now render in Layout's shared header
+// bar for all three role variants, computed once here rather than per
+// sub-component so it's already showing during the isLoading branch too.
+const ADMIN_SUBTITLE = '15% of setup fee + first month, paid once per Closed deal.'
+const SETTER_SUBTITLE = '15% of setup fee + first month, paid once a deal you booked reaches Closed.'
+
 export default function Commissions() {
   const { profile } = useAuth()
   const { data: leads, isLoading } = useCommissionLeads()
   const { data: reps } = useReps()
 
-  if (profile?.role === 'closer') {
+  const isCloser = profile?.role === 'closer'
+  const isAdmin = profile?.role === 'admin'
+  usePageHeader({
+    title: isCloser ? CLOSER_COPY.title : isAdmin ? 'Commissions' : 'My Commissions',
+    subtitle: isCloser ? CLOSER_COPY.body : isAdmin ? ADMIN_SUBTITLE : SETTER_SUBTITLE,
+  })
+
+  if (isCloser) {
     return (
       <div>
-        <h1 className="font-display text-2xl font-medium text-fg-primary">{CLOSER_COPY.title}</h1>
-        <p className="mt-1 font-sans text-sm text-fg-secondary">{CLOSER_COPY.body}</p>
         <div className="mt-6 rounded-card border border-line bg-elevated p-8 text-center">
           <p className="font-sans text-sm text-fg-secondary">
             Nothing to show yet — this page will populate once a commission structure exists.
@@ -157,7 +159,7 @@ export default function Commissions() {
     return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
   }
 
-  if (profile?.role === 'admin') {
+  if (isAdmin) {
     return <AdminCommissionRollup leads={leads || []} reps={reps} />
   }
 

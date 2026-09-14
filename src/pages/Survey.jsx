@@ -6,6 +6,7 @@ import { Field, inputClass } from '../components/ui/Field'
 import { useBrand } from '../hooks/useBrand'
 import * as surveyBH from '../lib/survey'
 import * as surveySuretix from '../lib/surveySuretix'
+import { usePageHeader } from '../components/Layout'
 
 // Prompt 551 — the wizard's question tree / branching / state-machine is a
 // single shared implementation; only the *content module* swaps by niche.
@@ -133,7 +134,13 @@ function TextField({ label, value, onChange, placeholder, type = 'text' }) {
 // behavioral_health so CloserLeadModal (which doesn't pass it) is unchanged;
 // the standalone `/survey` page passes useBrand().niche so it follows the
 // portal's brand (verifiable via the ?brand=bail_bonds preview override).
-export function SurveyBody({ onResults, niche = 'behavioral_health' }) {
+// Prompt 590 — `hidePageHeader` lets the standalone `/survey` page hand its
+// title/subtitle up to Layout's shared header (via usePageHeader) instead
+// of this component's own inline block, WITHOUT touching CloserLeadModal's
+// embedded use of this same component (its Survey tab keeps its own
+// in-modal h1/p exactly as before — that's a modal's own heading, not a
+// routed page's, and was never in scope here).
+export function SurveyBody({ onResults, niche = 'behavioral_health', hidePageHeader = false }) {
   const M = SURVEY_MODULES[niche] || surveyBH
   const { COPY, RESULTS_CONTENT } = M
 
@@ -181,11 +188,13 @@ export function SurveyBody({ onResults, niche = 'behavioral_health' }) {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-medium text-fg-primary">{COPY.header.title}</h1>
-          <p className="mt-1 font-sans text-sm text-fg-secondary">{COPY.header.subtitle}</p>
-        </div>
+      <div className={clsx('flex flex-wrap items-center gap-3', hidePageHeader ? 'justify-end' : 'justify-between')}>
+        {!hidePageHeader && (
+          <div>
+            <h1 className="font-display text-2xl font-medium text-fg-primary">{COPY.header.title}</h1>
+            <p className="mt-1 font-sans text-sm text-fg-secondary">{COPY.header.subtitle}</p>
+          </div>
+        )}
         <Button variant="ghost" onClick={restart}>
           <RotateCcw size={14} /> Start over
         </Button>
@@ -489,7 +498,9 @@ export function SurveyBody({ onResults, niche = 'behavioral_health' }) {
 
 export default function Survey() {
   const brand = useBrand()
+  const M = SURVEY_MODULES[brand.niche] || surveyBH
+  usePageHeader({ title: M.COPY.header.title, subtitle: M.COPY.header.subtitle })
   // key forces a clean remount (fresh state from the right module) if the
   // resolved niche changes mid-session, e.g. toggling the ?brand= override.
-  return <SurveyBody key={brand.niche} niche={brand.niche} />
+  return <SurveyBody key={brand.niche} niche={brand.niche} hidePageHeader />
 }

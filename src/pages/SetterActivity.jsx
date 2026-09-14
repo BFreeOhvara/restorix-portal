@@ -5,6 +5,7 @@ import { useSendSetterInviteSms } from '../hooks/useInvites'
 import { Field, inputClass } from '../components/ui/Field'
 import { Button } from '../components/ui/Button'
 import Modal from '../components/ui/Modal'
+import { usePageHeader } from '../components/Layout'
 
 // Prompt 533 reopen — moved off Settings onto this page (where a closer
 // already looks at their setters), top-right button same visual weight as
@@ -78,13 +79,11 @@ export default function SetterActivity() {
       .map((s) => ({ ...s, ...statsForUser(leads, s.id, start, end) }))
   }, [leads, reps, start, end])
 
+  usePageHeader({ title: 'Setter Activity', subtitle: 'See who\'s feeding your pipeline' })
+
   return (
     <div>
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-medium text-fg-primary">Setter Activity</h1>
-          <p className="mt-1 font-sans text-sm text-fg-secondary">See who's feeding your pipeline</p>
-        </div>
+      <div className="flex justify-end">
         <Button variant="secondary" onClick={() => setShowInvite(true)}>
           <Send size={15} /> Invite Setter
         </Button>

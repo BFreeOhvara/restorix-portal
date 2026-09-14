@@ -12,6 +12,7 @@ import {
   PREVIEW_CONTACTS,
   initials,
 } from '../lib/clientPreview'
+import { usePageHeader } from '../components/Layout'
 
 // Prompt 578 — the client Pipeline (nav label "Pipeline", path /prospects
 // since /pipeline is admin-only and /my-pipeline is the closer's). A CRM
@@ -145,17 +146,14 @@ export default function Prospects() {
 
   const selected = visible.find((c) => c.id === selectedId) || visible[0] || null
 
+  usePageHeader({ title: 'Pipeline', subtitle: "Everyone who's reached out, and where they stand." })
+
   if (isLoading) {
     return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
   }
 
   return (
     <div className="flex flex-col gap-[18px]">
-      <div>
-        <h1 className="font-display text-2xl font-medium text-fg-primary">Pipeline</h1>
-        <p className="mt-1 font-sans text-sm text-fg-secondary">Everyone who's reached out, and where they stand.</p>
-      </div>
-
       {isError || !deal || !preview ? (
         <EmptyPipeline deal={deal} />
       ) : (

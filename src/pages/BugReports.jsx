@@ -1,5 +1,6 @@
 import { useBugReports, useResolveBugReport } from '../hooks/useBugReports'
 import { Button } from '../components/ui/Button'
+import { usePageHeader } from '../components/Layout'
 
 function fmt(dt) {
   return new Date(dt).toLocaleString(undefined, {
@@ -14,14 +15,10 @@ function fmt(dt) {
 export default function BugReports() {
   const { data: reports, isLoading } = useBugReports()
   const resolve = useResolveBugReport()
+  usePageHeader({ title: 'Bug Reports', subtitle: "Submitted from the sidebar's Report a Bug button" })
 
   return (
     <div>
-      <div>
-        <h1 className="font-display text-2xl font-medium text-fg-primary">Bug Reports</h1>
-        <p className="mt-1 font-sans text-sm text-fg-secondary">Submitted from the sidebar's Report a Bug button</p>
-      </div>
-
       <div className="mt-6 overflow-hidden rounded-card border border-line bg-elevated">
         {isLoading ? (
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>

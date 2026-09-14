@@ -19,6 +19,7 @@ import AddLeadModal from '../components/AddLeadModal'
 import CsvImportModal from '../components/CsvImportModal'
 import { formatPhone } from '../lib/phone'
 import { displayOutcome } from '../lib/closerOutcome'
+import { usePageHeader } from '../components/Layout'
 
 function fmt(dt) {
   if (!dt) return '—'
@@ -535,11 +536,10 @@ const TABS = [
 
 export default function Pipeline() {
   const [tab, setTab] = useState('setter')
+  usePageHeader({ title: 'Pipeline' })
 
   return (
     <div>
-      <h1 className="font-display text-2xl font-medium text-fg-primary">Pipeline</h1>
-
       <div className="mt-4">
         <SegmentedTabs tabs={TABS} active={tab} onChange={setTab} />
       </div>

@@ -7,6 +7,7 @@ import { STATUS_TINT } from '../components/ui/StatusBadge'
 import { zonedDateStr, shiftDay } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 import { isTestClient, PREVIEW_APPOINTMENTS, initials } from '../lib/clientPreview'
+import { usePageHeader } from '../components/Layout'
 
 // Prompt 578 — the client Appointments page: the facility's own
 // patient/consult appointments (NOT the closer-side send-appointment-
@@ -46,17 +47,15 @@ export default function Appointments() {
 
   const rows = preview && daysAgo === 0 ? PREVIEW_APPOINTMENTS : []
 
+  usePageHeader({ title: 'Appointments', subtitle: "Who's booked, and whether they've confirmed." })
+
   if (isLoading) {
     return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-medium text-fg-primary">Appointments</h1>
-          <p className="mt-1 font-sans text-sm text-fg-secondary">Who's booked, and whether they've confirmed.</p>
-        </div>
+      <div className="flex justify-end">
         <DayPaginator date={date} onChange={setDate} timezone={tz} />
       </div>
 

@@ -31,6 +31,17 @@ import { DEFAULT_TIMEZONE } from '../lib/timezones'
 import { SearchBar, filterLeads } from './Pipeline'
 import { usePageHeader } from '../components/Layout'
 
+// Prompt 590 — a hook can't be called conditionally inside a component's
+// own body (Rules of Hooks), but mounting/unmounting a child component
+// conditionally is normal React — so where a page's header only applies in
+// one branch of a stable, per-mount condition (SetterOverview's `embedded`
+// prop below never changes for a given mount), this wraps the hook call in
+// its own component instead.
+function PageHeaderRegistrar({ title, subtitle }) {
+  usePageHeader({ title, subtitle })
+  return null
+}
+
 function fmt(dt) {
   if (!dt) return '—'
   return new Date(dt).toLocaleString(undefined, {
@@ -374,22 +385,22 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
     </div>
   )
 
+  const subtitle = `${poolCount} lead${poolCount === 1 ? '' : 's'} in your pool`
+
   return (
     <div>
       {/* Prompt 558 — when embedded (My Pipeline → Setter tab) the wrapper
-          owns the title + count line, so no header renders here at all. */}
+          owns the title + count line, so no header renders here at all.
+          Prompt 590 — non-embedded now hands title/subtitle up to Layout's
+          shared header via usePageHeader (PageHeaderRegistrar, since
+          `embedded` gates whether the hook fires at all — see its own
+          comment above); the sibling action (headerRight: DateClockRow on
+          /overview, the Request Leads button on My Leads) stays in the page
+          body, right-aligned alone now that it no longer shares a row with
+          the title. */}
+      {!embedded && <PageHeaderRegistrar title={title} subtitle={subtitle} />}
       {!embedded && (
-        // Prompt 564 — My Leads (`compactStats`) bottom-aligns the
-        // title/subtitle stack with the taller Request Leads button so
-        // "N leads in your pool" and the button share a baseline; /overview
-        // keeps `items-start` (its DateClockRow was never part of this).
-        <div className={clsx('flex flex-wrap justify-between gap-4', compactStats ? 'items-end' : 'items-start')}>
-          <div>
-            <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
-            <p className="mt-1 font-sans text-sm text-fg-secondary">
-              {poolCount} lead{poolCount === 1 ? '' : 's'} in your pool
-            </p>
-          </div>
+        <div className="flex justify-end">
           {headerRight ?? <DateClockRow timezone={tz} />}
         </div>
       )}
@@ -545,24 +556,18 @@ export function CloserPipeline({ profile, title = 'My Pipeline' }) {
   const brand = useBrand()
   const [view, setView] = useState('closer')
 
-  // Prompt 558 — the count line moves up here (under the title, above the
-  // tab switcher) and switches wording with the active tab, matching how
-  // every other page stacks title+count. The wrapper reads the same two
-  // queries the children do (react-query dedupes identical keys — no extra
-  // fetch), niche-filtered the same way, so the children can stop rendering
-  // their own copy of this line.
-  const { data: bookedLeads } = useMyBooked(profile.id)
-  const { data: poolLeads } = useMyPool(profile.id)
-  const bookedCount = (bookedLeads || []).filter((l) => l.niche === brand.niche).length
-  const poolCount = (poolLeads || []).filter((l) => l.niche === brand.niche).length
-  const subtitle =
-    view === 'closer'
-      ? `${bookedCount} booked lead${bookedCount === 1 ? '' : 's'}`
-      : `${poolCount} lead${poolCount === 1 ? '' : 's'} in your pool`
+  // Prompt 590 — Brayden dropped the live count (558/589's subtitle): the
+  // Closer tab's "N booked leads" was wrong since that count included
+  // Lost/No-Show leads too, not just booked ones, and he didn't want a
+  // number here at all — a short static description instead, Ohvara's
+  // "Your whole book of business" style. Exact copy is a judgment call
+  // (not specified beyond "no number, more like what the page really is")
+  // — flag for Brayden to tweak if it's not quite right.
+  const subtitle = view === 'closer' ? 'Your appointment outcomes' : 'Your working lead pool'
 
   // Prompt 589 — title/subtitle now render in Layout's header bar instead
   // of this page's own body; re-registers whenever the subtitle's wording
-  // changes with the active tab or live counts.
+  // changes with the active tab.
   usePageHeader({ title, subtitle })
 
   return (
@@ -802,13 +807,11 @@ export function CloserOverview({ profile, title = 'Overview' }) {
     [leads]
   )
 
+  usePageHeader({ title, subtitle: 'Your day at a glance' })
+
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
-          <p className="mt-1 font-sans text-sm text-fg-secondary">Your day at a glance</p>
-        </div>
+      <div className="flex justify-end">
         <DateClockRow timezone={tz} />
       </div>
 
@@ -896,37 +899,32 @@ function ClientOverview({ profile }) {
   const { session } = useAuth()
   const { data: deal, isLoading, isError } = useMyDeal()
 
+  // Prompt 590 — two mutually-exclusive header states (was two separately-
+  // rendered h1/p blocks, one per early-return branch): the loading/no-deal
+  // state shows "Welcome[, name]", the normal state shows the facility
+  // name. Computed once, before either early return, so both branches
+  // register the right one via usePageHeader.
+  const showWelcome = isLoading || isError || !deal
+  usePageHeader({
+    title: showWelcome ? `Welcome${profile.full_name ? `, ${profile.full_name}` : ''}` : deal.lead?.facility_name || 'Your facility',
+    subtitle: showWelcome ? 'Your dashboard is being set up. Check back shortly.' : 'Your Restorix setup',
+  })
+
   if (isLoading) {
     return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
   }
   if (isError || !deal) {
-    return (
-      <div>
-        <h1 className="font-display text-2xl font-medium text-fg-primary">Welcome{profile.full_name ? `, ${profile.full_name}` : ''}</h1>
-        <p className="mt-2 font-sans text-sm text-fg-secondary">
-          Your dashboard is being set up. Check back shortly.
-        </p>
-      </div>
-    )
+    return null
   }
 
-  const facility = deal.lead?.facility_name || 'Your facility'
   const owned = ownedAgents(deal)
   const liveCount = owned.filter((k) => AGENT_CATALOG[k]?.status === 'live').length
   const hasBedSync = owned.includes('bed_sync')
   const preview = isTestClient(session)
 
-  const header = (
-    <div>
-      <h1 className="font-display text-2xl font-medium text-fg-primary">{facility}</h1>
-      <p className="mt-1 font-sans text-sm text-fg-secondary">Your Restorix setup</p>
-    </div>
-  )
-
   if (!preview) {
     return (
       <div className="space-y-6">
-        {header}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Tile label="Agents live" value={`${liveCount} of ${owned.length}`} />
           {hasBedSync && <Tile label="Beds open" value={<span className="text-fg-faint">Coming soon</span>} />}
@@ -946,8 +944,6 @@ function ClientOverview({ profile }) {
 
   return (
     <div className="space-y-[22px]">
-      {header}
-
       <div className="rounded-card border border-line bg-elevated px-6 py-5">
         <p className="font-display text-lg font-medium leading-relaxed text-fg-primary">{PREVIEW_HEADLINE}</p>
       </div>
@@ -1022,13 +1018,11 @@ function AdminOverview({ profile }) {
     }
   }, [leads, reps])
 
+  usePageHeader({ title: 'Overview', subtitle: 'Team performance and pipeline health' })
+
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-2xl font-medium text-fg-primary">Overview</h1>
-          <p className="mt-1 font-sans text-sm text-fg-secondary">Team performance and pipeline health</p>
-        </div>
+      <div className="flex justify-end">
         <DateClockRow timezone={tz} />
       </div>
 

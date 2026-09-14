@@ -7,6 +7,7 @@ import { DayPaginator } from '../components/ui/DayPaginator'
 import Modal from '../components/ui/Modal'
 import { zonedDateStr } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
+import { usePageHeader } from '../components/Layout'
 
 function fmt(dt) {
   return new Date(dt).toLocaleString(undefined, {
@@ -101,16 +102,14 @@ export default function MyCalls() {
   // and closer (561) both read "My Recordings"; only admin keeps "My Calls".
   // Same route/data either way.
   const heading = isAdmin ? 'My Calls' : 'My Recordings'
+  usePageHeader({
+    title: heading,
+    subtitle: isAdmin ? 'Every call placed through the dashboard, this day' : 'Calls you\'ve placed through the dashboard, this day',
+  })
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-medium text-fg-primary">{heading}</h1>
-          <p className="mt-1 font-sans text-sm text-fg-secondary">
-            {isAdmin ? 'Every call placed through the dashboard, this day' : 'Calls you\'ve placed through the dashboard, this day'}
-          </p>
-        </div>
+      <div className="flex justify-end">
         <DayPaginator date={date} onChange={setDate} timezone={tz} />
       </div>
 

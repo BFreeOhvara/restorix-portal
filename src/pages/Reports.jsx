@@ -1,5 +1,6 @@
 import { useMyDeal } from '../hooks/useDeals'
 import { ownedAgents } from '../lib/clientPreview'
+import { usePageHeader } from '../components/Layout'
 
 // Prompt 578 — the client Reports page. Ties to `referral_reporting`
 // (still a bare placeholder in the catalog). There is no sample content
@@ -11,6 +12,8 @@ import { ownedAgents } from '../lib/clientPreview'
 export default function Reports() {
   const { data: deal, isLoading } = useMyDeal()
 
+  usePageHeader({ title: 'Reports', subtitle: 'Which channels and referral sources turn into real admissions.' })
+
   if (isLoading) {
     return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
   }
@@ -19,11 +22,6 @@ export default function Reports() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="font-display text-2xl font-medium text-fg-primary">Reports</h1>
-        <p className="mt-1 font-sans text-sm text-fg-secondary">Which channels and referral sources turn into real admissions.</p>
-      </div>
-
       <div className="rounded-card border border-line bg-elevated p-10 text-center">
         <p className="eyebrow !text-fg-faint">{purchased ? 'Coming soon' : 'Not in your plan'}</p>
         <p className="mx-auto mt-2 max-w-md font-sans text-sm leading-relaxed text-fg-secondary">
