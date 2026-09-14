@@ -29,6 +29,7 @@ import CloserLeadModal from '../components/CloserLeadModal'
 import { zonedDateStr, zonedDayRange, mondayOf, shiftDay } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 import { SearchBar, filterLeads } from './Pipeline'
+import { usePageHeader } from '../components/Layout'
 
 function fmt(dt) {
   if (!dt) return '—'
@@ -559,19 +560,19 @@ export function CloserPipeline({ profile, title = 'My Pipeline' }) {
       ? `${bookedCount} booked lead${bookedCount === 1 ? '' : 's'}`
       : `${poolCount} lead${poolCount === 1 ? '' : 's'} in your pool`
 
+  // Prompt 589 — title/subtitle now render in Layout's header bar instead
+  // of this page's own body; re-registers whenever the subtitle's wording
+  // changes with the active tab or live counts.
+  usePageHeader({ title, subtitle })
+
   return (
     <div>
-      {/* Prompt 558 — no date on this page at all (Prompt 553 dropped the
-          clock, this drops the date too). */}
-      <h1 className="font-display text-2xl font-medium text-fg-primary">{title}</h1>
-      <p className="mt-1 font-sans text-sm text-fg-secondary">{subtitle}</p>
-
       {/* Prompt 554 — Closer = booked appointments (setter-booked + own);
           Setter = leads this closer personally dials via My Leads, i.e.
           SetterOverview scoped to their own id. Empty Setter tab for a
           closer who never self-dials. No Unassigned — admin-only concept. */}
       <div className="mt-4">
-        <SegmentedTabs tabs={MY_PIPELINE_TABS} active={view} onChange={setView} />
+        <SegmentedTabs tabs={MY_PIPELINE_TABS} active={view} onChange={setView} variant="grouped" />
       </div>
 
       <div className="mt-6">
@@ -653,7 +654,7 @@ function CloserBookedPipeline({ profile }) {
                 : 'No booked leads yet — Strategy Calls are assigned to you automatically.'}
           </p>
         ) : (
-          <div className="max-h-[65vh] overflow-y-auto">
+          <div className="h-[65vh] overflow-y-auto">
             <table className="w-full text-left">
               <thead className="eyebrow sticky top-0 z-10 bg-surface">
                 <tr>

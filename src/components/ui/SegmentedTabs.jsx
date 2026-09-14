@@ -8,7 +8,33 @@ import clsx from 'clsx'
 // deliberately distinct from the full-pill treatment StatusBadge's
 // STATUS_TINT/SOLID chips use for sub-tab filter rows elsewhere on these
 // same pages, which this component does not touch or replace.
-export function SegmentedTabs({ tabs, active, onChange }) {
+// Prompt 589 — opt-in `variant="grouped"` renders one continuous bordered
+// pill container (ColoredPillGroup's shell) instead of separately-bordered
+// buttons with a gap. Default (no variant) is unchanged for every existing
+// call site — Training.jsx, Pipeline.jsx's niche/outcome tabs all keep
+// rendering exactly as before.
+export function SegmentedTabs({ tabs, active, onChange, variant }) {
+  if (variant === 'grouped') {
+    return (
+      <div className="flex gap-1 rounded-full border border-line bg-elevated p-1">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => onChange(t.key)}
+            className={clsx(
+              'eyebrow rounded-full px-3 py-1.5 transition-colors',
+              active === t.key
+                ? 'bg-accent text-white'
+                : 'text-fg-secondary hover:text-fg-primary'
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div className="flex gap-2">
       {tabs.map((t) => (

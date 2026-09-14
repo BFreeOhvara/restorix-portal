@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useContext, createContext } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, ListChecks, UserPlus, GitBranch, Bug, Smartphone, CalendarDays, PieChart } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
@@ -348,9 +348,24 @@ function HeaderName({ profile }) {
   return (
     <div className="flex items-center gap-3">
       <span aria-hidden="true" className="h-6 w-px bg-line" />
+      <Avatar profile={profile} size={28} />
       <p className="font-sans text-sm font-medium text-fg-primary">{profile?.full_name}</p>
     </div>
   )
+}
+
+// Prompt 589 — lets a page hand its title/subtitle up to Layout's own
+// header bar instead of rendering its own <h1> in the page body. Only
+// My Pipeline uses this for now; every other page never calls the hook,
+// so `pageHeader` stays null and the header's left slot renders nothing.
+const PageHeaderContext = createContext(() => {})
+
+export function usePageHeader({ title, subtitle }) {
+  const setPageHeader = useContext(PageHeaderContext)
+  useEffect(() => {
+    setPageHeader({ title, subtitle })
+    return () => setPageHeader(null)
+  }, [setPageHeader, title, subtitle])
 }
 
 export default function Layout() {
@@ -376,7 +391,12 @@ export default function Layout() {
   const isClient = profile?.role === 'client'
   const navGroups = isClient ? CLIENT_NAV_GROUPS : NAV_GROUPS
 
+  // Prompt 589 — registered by a page via usePageHeader; null on every
+  // page that doesn't call it, which is every page except My Pipeline.
+  const [pageHeader, setPageHeader] = useState(null)
+
   return (
+    <PageHeaderContext.Provider value={setPageHeader}>
     <div className="min-h-screen bg-base">
       {/* Fixed via inset-y-0 rather than height:100vh — top/bottom anchoring
           avoids the sidebar's height disagreeing with the viewport by a
@@ -458,9 +478,21 @@ export default function Layout() {
       </div>
 
       <div className="relative z-10 ml-60 flex min-h-screen flex-col">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-end gap-3 border-b border-line bg-elevated px-6">
-          <NotificationBell />
-          <HeaderName profile={profile} />
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-line bg-elevated px-6">
+          {pageHeader ? (
+            <div className="min-w-0">
+              <h1 className="truncate font-display text-xl font-medium text-fg-primary">{pageHeader.title}</h1>
+              {pageHeader.subtitle && (
+                <p className="truncate font-sans text-xs text-fg-secondary">{pageHeader.subtitle}</p>
+              )}
+            </div>
+          ) : (
+            <div />
+          )}
+          <div className="flex items-center gap-3">
+            <NotificationBell />
+            <HeaderName profile={profile} />
+          </div>
         </header>
         {isFullBleed ? (
           // Prompt 456: flex container, not just a sizing wrapper — a
@@ -481,5 +513,6 @@ export default function Layout() {
         )}
       </div>
     </div>
+    </PageHeaderContext.Provider>
   )
 }
