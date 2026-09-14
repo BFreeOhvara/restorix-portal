@@ -449,7 +449,7 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
           above the table and only fits 4 before the page itself would need
           to scroll. Matches CloserBookedPipeline's own fixed height below,
           which is always in the embedded-equivalent (My Pipeline) context. */}
-      <div className={clsx('mt-6 overflow-hidden rounded-card border border-line bg-elevated', embedded ? 'h-[403px]' : 'h-[331px]')}>
+      <div className={clsx('mt-6 overflow-hidden rounded-card border border-line bg-elevated', embedded ? 'h-[619px]' : 'h-[547px]')}>
         <div className="h-full overflow-y-auto">
           {/* Prompt 593 — border-b closes off the last row with a line,
               matching every other row's border-t (which only draws lines
@@ -479,13 +479,13 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
                       near the top; a bare `<td>` only takes the height of
                       its own padding, leaving the rest of the fixed-height
                       box as empty space below it. */}
-                  <td colSpan={99} className={clsx('px-8 text-center align-middle font-sans text-sm text-fg-secondary', embedded ? 'h-[360px]' : 'h-[288px]')}>
+                  <td colSpan={99} className={clsx('px-8 text-center align-middle font-sans text-sm text-fg-secondary', embedded ? 'h-[576px]' : 'h-[504px]')}>
                     Loading…
                   </td>
                 </tr>
               ) : !filtered.length ? (
                 <tr>
-                  <td colSpan={99} className={clsx('px-8 text-center align-middle font-sans text-sm text-fg-secondary', embedded ? 'h-[360px]' : 'h-[288px]')}>
+                  <td colSpan={99} className={clsx('px-8 text-center align-middle font-sans text-sm text-fg-secondary', embedded ? 'h-[576px]' : 'h-[504px]')}>
                     {emptyMessage}
                   </td>
                 </tr>
@@ -681,7 +681,7 @@ function CloserBookedPipeline({ profile }) {
           embedded (My Pipeline → Setter tab) height so the Closer and
           Setter tabs read identically; checked live against a 1366×768
           viewport (591's original "no page scroll" target). */}
-      <div className="mt-4 h-[403px] overflow-hidden rounded-card border border-line bg-elevated">
+      <div className="mt-4 h-[619px] overflow-hidden rounded-card border border-line bg-elevated">
         <div className="h-full overflow-y-auto">
           {/* Prompt 593 — border-b closes off the last row with a line,
               matching every other row's border-t (which only draws lines
@@ -708,13 +708,13 @@ function CloserBookedPipeline({ profile }) {
                       near the top; a bare `<td>` only takes the height of
                       its own padding, leaving the rest of the fixed-height
                       box as empty space below it. */}
-                  <td colSpan={5} className="h-[360px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
+                  <td colSpan={5} className="h-[576px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
                     Loading…
                   </td>
                 </tr>
               ) : !filtered.length ? (
                 <tr>
-                  <td colSpan={5} className="h-[360px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
+                  <td colSpan={5} className="h-[576px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
                     {searching
                       ? 'No booked leads match your search.'
                       : leads?.length
