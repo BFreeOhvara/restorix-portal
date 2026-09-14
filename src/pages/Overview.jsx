@@ -444,8 +444,14 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
             {emptyMessage}
           </p>
         ) : (
-          <div className="max-h-[65vh] overflow-y-auto">
-            <table className="w-full text-left">
+          <div className="h-[65vh] overflow-y-auto">
+            {/* Prompt 593 — border-b closes off the last row with a line,
+                matching every other row's border-t (which only draws lines
+                between rows, not after the final one). Sits on the table
+                itself, right at the end of its real content, not the
+                bottom of the h-[65vh] box, so it doesn't float in empty
+                scroll space below a short list. */}
+            <table className="w-full border-b border-line text-left">
               <thead className="eyebrow sticky top-0 z-10 bg-surface">
                 <tr>
                   <th className="px-5 py-3">Business</th>
@@ -649,7 +655,13 @@ function CloserBookedPipeline({ profile }) {
           </p>
         ) : (
           <div className="h-[65vh] overflow-y-auto">
-            <table className="w-full text-left">
+            {/* Prompt 593 — border-b closes off the last row with a line,
+                matching every other row's border-t (which only draws lines
+                between rows, not after the final one). Sits on the table
+                itself, right at the end of its real content, not the
+                bottom of the h-[65vh] box, so it doesn't float in empty
+                scroll space below a short list. */}
+            <table className="w-full border-b border-line text-left">
               <thead className="eyebrow sticky top-0 z-10 bg-surface">
                 <tr>
                   <th className="px-5 py-3">Business</th>
