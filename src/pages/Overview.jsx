@@ -436,19 +436,27 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
       {/* Own scroll region for the row list, bounded height so the strip/
           search/filters above stay pinned while scrolling a 150-lead pool
           (Prompt 440) — sticky thead so column headers travel with it.
-          Prompt 594 — box keeps its full h-[65vh] height and header row even
-          on an empty status tab; the "nothing here" message becomes the
-          scroll region's content instead of replacing header+box (loading
-          keeps its own simple full-box treatment too, for the same reason:
-          no more collapsing to a bare centered message). */}
-      <div className="mt-6 h-[65vh] overflow-hidden rounded-card border border-line bg-elevated">
+          Prompt 595 — box height quantized to the sticky header's own
+          height (43px, identical markup on this table and
+          CloserBookedPipeline's) plus a whole number of 72px rows, so the
+          box's bottom edge always lands on a row's own bottom border
+          instead of bisecting the last visible row (h-[65vh] had no
+          relationship to the 72px row height). Row count differs by
+          context, checked live against a 1366×768 viewport (591's original
+          "no page scroll" target): embedded (My Pipeline's Setter tab) sits
+          higher on the page with no stat tiles above it, so 5 rows fits;
+          non-embedded (/overview, /my-leads) carries TodayStrip's tiles
+          above the table and only fits 4 before the page itself would need
+          to scroll. Matches CloserBookedPipeline's own fixed height below,
+          which is always in the embedded-equivalent (My Pipeline) context. */}
+      <div className={clsx('mt-6 overflow-hidden rounded-card border border-line bg-elevated', embedded ? 'h-[403px]' : 'h-[331px]')}>
         <div className="h-full overflow-y-auto">
           {/* Prompt 593 — border-b closes off the last row with a line,
               matching every other row's border-t (which only draws lines
               between rows, not after the final one). Sits on the table
               itself, right at the end of its real content, not the
-              bottom of the h-[65vh] box, so it doesn't float in empty
-              scroll space below a short list. */}
+              bottom of the box, so it doesn't float in empty scroll space
+              below a short list. */}
           <table className={clsx('w-full text-left', filtered.length > 0 && 'border-b border-line')}>
             <thead className="eyebrow sticky top-0 z-10 bg-surface">
               <tr>
@@ -465,13 +473,19 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={99} className="p-8 text-center font-sans text-sm text-fg-secondary">
+                  {/* Prompt 595 — explicit height (= the box's row-list
+                      space, header excluded) + align-middle vertically
+                      centers the message in the box instead of it sitting
+                      near the top; a bare `<td>` only takes the height of
+                      its own padding, leaving the rest of the fixed-height
+                      box as empty space below it. */}
+                  <td colSpan={99} className={clsx('px-8 text-center align-middle font-sans text-sm text-fg-secondary', embedded ? 'h-[360px]' : 'h-[288px]')}>
                     Loading…
                   </td>
                 </tr>
               ) : !filtered.length ? (
                 <tr>
-                  <td colSpan={99} className="p-8 text-center font-sans text-sm text-fg-secondary">
+                  <td colSpan={99} className={clsx('px-8 text-center align-middle font-sans text-sm text-fg-secondary', embedded ? 'h-[360px]' : 'h-[288px]')}>
                     {emptyMessage}
                   </td>
                 </tr>
@@ -657,17 +671,24 @@ function CloserBookedPipeline({ profile }) {
 
       <SearchBar value={search} onChange={setSearch} />
 
-      {/* Prompt 594 — box keeps its full h-[65vh] height and header row even
-          on an empty status/outcome tab; the "nothing here" message becomes
-          the scroll region's content instead of replacing header+box. */}
-      <div className="mt-4 h-[65vh] overflow-hidden rounded-card border border-line bg-elevated">
+      {/* Prompt 595 — box height quantized to the sticky header's own
+          height (43px, identical markup on this table and
+          SetterOverview's) plus a whole number of 72px rows, so the box's
+          bottom edge always lands on a row's own bottom border instead of
+          bisecting the last visible row (h-[65vh] had no relationship to
+          the 72px row height). Fixed 5-row height — this table only ever
+          renders in the My Pipeline context, matching SetterOverview's own
+          embedded (My Pipeline → Setter tab) height so the Closer and
+          Setter tabs read identically; checked live against a 1366×768
+          viewport (591's original "no page scroll" target). */}
+      <div className="mt-4 h-[403px] overflow-hidden rounded-card border border-line bg-elevated">
         <div className="h-full overflow-y-auto">
           {/* Prompt 593 — border-b closes off the last row with a line,
               matching every other row's border-t (which only draws lines
               between rows, not after the final one). Sits on the table
               itself, right at the end of its real content, not the
-              bottom of the h-[65vh] box, so it doesn't float in empty
-              scroll space below a short list. */}
+              bottom of the box, so it doesn't float in empty scroll space
+              below a short list. */}
           <table className={clsx('w-full text-left', filtered.length > 0 && 'border-b border-line')}>
             <thead className="eyebrow sticky top-0 z-10 bg-surface">
               <tr>
@@ -681,13 +702,19 @@ function CloserBookedPipeline({ profile }) {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center font-sans text-sm text-fg-secondary">
+                  {/* Prompt 595 — explicit height (= the box's row-list
+                      space, header excluded) + align-middle vertically
+                      centers the message in the box instead of it sitting
+                      near the top; a bare `<td>` only takes the height of
+                      its own padding, leaving the rest of the fixed-height
+                      box as empty space below it. */}
+                  <td colSpan={5} className="h-[360px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
                     Loading…
                   </td>
                 </tr>
               ) : !filtered.length ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center font-sans text-sm text-fg-secondary">
+                  <td colSpan={5} className="h-[360px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
                     {searching
                       ? 'No booked leads match your search.'
                       : leads?.length
