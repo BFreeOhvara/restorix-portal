@@ -435,42 +435,57 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
 
       {/* Own scroll region for the row list, bounded height so the strip/
           search/filters above stay pinned while scrolling a 150-lead pool
-          (Prompt 440) — sticky thead so column headers travel with it. */}
-      <div className="mt-6 overflow-hidden rounded-card border border-line bg-elevated">
-        {isLoading ? (
-          <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
-        ) : !filtered.length ? (
-          <p className="p-8 text-center font-sans text-sm text-fg-secondary">
-            {emptyMessage}
-          </p>
-        ) : (
-          <div className="h-[65vh] overflow-y-auto">
-            {/* Prompt 593 — border-b closes off the last row with a line,
-                matching every other row's border-t (which only draws lines
-                between rows, not after the final one). Sits on the table
-                itself, right at the end of its real content, not the
-                bottom of the h-[65vh] box, so it doesn't float in empty
-                scroll space below a short list. */}
-            <table className="w-full border-b border-line text-left">
-              <thead className="eyebrow sticky top-0 z-10 bg-surface">
+          (Prompt 440) — sticky thead so column headers travel with it.
+          Prompt 594 — box keeps its full h-[65vh] height and header row even
+          on an empty status tab; the "nothing here" message becomes the
+          scroll region's content instead of replacing header+box (loading
+          keeps its own simple full-box treatment too, for the same reason:
+          no more collapsing to a bare centered message). */}
+      <div className="mt-6 h-[65vh] overflow-hidden rounded-card border border-line bg-elevated">
+        <div className="h-full overflow-y-auto">
+          {/* Prompt 593 — border-b closes off the last row with a line,
+              matching every other row's border-t (which only draws lines
+              between rows, not after the final one). Sits on the table
+              itself, right at the end of its real content, not the
+              bottom of the h-[65vh] box, so it doesn't float in empty
+              scroll space below a short list. */}
+          <table className={clsx('w-full text-left', filtered.length > 0 && 'border-b border-line')}>
+            <thead className="eyebrow sticky top-0 z-10 bg-surface">
+              <tr>
+                <th className="px-5 py-3">Business</th>
+                <th className="px-5 py-3">Phone</th>
+                <th className="px-5 py-3">Status</th>
+                {showCallbackCol && <th className="px-5 py-3">Callback</th>}
+                {/* Prompt 559 Part B — countdown to the 24h No-Answer
+                    hold releasing the lead to Unassigned. */}
+                {showReleasesCol && <th className="px-5 py-3">Releases in</th>}
+                {canCallFromTab && <th className="px-5 py-3"></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
                 <tr>
-                  <th className="px-5 py-3">Business</th>
-                  <th className="px-5 py-3">Phone</th>
-                  <th className="px-5 py-3">Status</th>
-                  {showCallbackCol && <th className="px-5 py-3">Callback</th>}
-                  {/* Prompt 559 Part B — countdown to the 24h No-Answer
-                      hold releasing the lead to Unassigned. */}
-                  {showReleasesCol && <th className="px-5 py-3">Releases in</th>}
-                  {canCallFromTab && <th className="px-5 py-3"></th>}
+                  <td colSpan={99} className="p-8 text-center font-sans text-sm text-fg-secondary">
+                    Loading…
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtered.map((lead) => (
+              ) : !filtered.length ? (
+                <tr>
+                  <td colSpan={99} className="p-8 text-center font-sans text-sm text-fg-secondary">
+                    {emptyMessage}
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((lead) => (
                   <tr
                     key={lead.id}
                     onClick={canCallFromTab ? () => setCallLead(lead) : undefined}
                     className={clsx(
-                      'border-t border-line font-sans text-sm',
+                      // Prompt 594 — explicit row height so a badge-only row
+                      // (most tabs) renders the same size as a row with the
+                      // Call button (New/Follow-Up Due), matching parity with
+                      // CloserBookedPipeline's own explicit row height below.
+                      'h-[72px] border-t border-line font-sans text-sm',
                       canCallFromTab && 'cursor-pointer hover:bg-surface'
                     )}
                   >
@@ -501,11 +516,11 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
                       </td>
                     )}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {callLead && <LogCallModal lead={callLead} onClose={() => setCallLead(null)} />}
@@ -642,41 +657,54 @@ function CloserBookedPipeline({ profile }) {
 
       <SearchBar value={search} onChange={setSearch} />
 
-      <div className="mt-4 overflow-hidden rounded-card border border-line bg-elevated">
-        {isLoading ? (
-          <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
-        ) : !filtered.length ? (
-          <p className="p-8 text-center font-sans text-sm text-fg-secondary">
-            {searching
-              ? 'No booked leads match your search.'
-              : leads?.length
-                ? 'No booked leads in this status.'
-                : 'No booked leads yet — Strategy Calls are assigned to you automatically.'}
-          </p>
-        ) : (
-          <div className="h-[65vh] overflow-y-auto">
-            {/* Prompt 593 — border-b closes off the last row with a line,
-                matching every other row's border-t (which only draws lines
-                between rows, not after the final one). Sits on the table
-                itself, right at the end of its real content, not the
-                bottom of the h-[65vh] box, so it doesn't float in empty
-                scroll space below a short list. */}
-            <table className="w-full border-b border-line text-left">
-              <thead className="eyebrow sticky top-0 z-10 bg-surface">
+      {/* Prompt 594 — box keeps its full h-[65vh] height and header row even
+          on an empty status/outcome tab; the "nothing here" message becomes
+          the scroll region's content instead of replacing header+box. */}
+      <div className="mt-4 h-[65vh] overflow-hidden rounded-card border border-line bg-elevated">
+        <div className="h-full overflow-y-auto">
+          {/* Prompt 593 — border-b closes off the last row with a line,
+              matching every other row's border-t (which only draws lines
+              between rows, not after the final one). Sits on the table
+              itself, right at the end of its real content, not the
+              bottom of the h-[65vh] box, so it doesn't float in empty
+              scroll space below a short list. */}
+          <table className={clsx('w-full text-left', filtered.length > 0 && 'border-b border-line')}>
+            <thead className="eyebrow sticky top-0 z-10 bg-surface">
+              <tr>
+                <th className="px-5 py-3">Business</th>
+                <th className="px-5 py-3">Contact</th>
+                <th className="px-5 py-3">Strategy Call</th>
+                <th className="px-5 py-3">Outcome</th>
+                <th className="px-5 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
                 <tr>
-                  <th className="px-5 py-3">Business</th>
-                  <th className="px-5 py-3">Contact</th>
-                  <th className="px-5 py-3">Strategy Call</th>
-                  <th className="px-5 py-3">Outcome</th>
-                  <th className="px-5 py-3"></th>
+                  <td colSpan={5} className="p-8 text-center font-sans text-sm text-fg-secondary">
+                    Loading…
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtered.map((lead) => (
+              ) : !filtered.length ? (
+                <tr>
+                  <td colSpan={5} className="p-8 text-center font-sans text-sm text-fg-secondary">
+                    {searching
+                      ? 'No booked leads match your search.'
+                      : leads?.length
+                        ? 'No booked leads in this status.'
+                        : 'No booked leads yet — Strategy Calls are assigned to you automatically.'}
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((lead) => (
                   <tr
                     key={lead.id}
                     onClick={() => setActiveLead(lead)}
-                    className="cursor-pointer border-t border-line font-sans text-sm hover:bg-surface"
+                    // Prompt 594 — explicit row height matches
+                    // SetterOverview's own explicit row height, so Closer-tab
+                    // and Setter-tab rows on My Pipeline render at the same
+                    // size (same row count visible before scrolling).
+                    className="h-[72px] cursor-pointer border-t border-line font-sans text-sm hover:bg-surface"
                   >
                     <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
                     <td className="px-5 py-4 text-fg-secondary">
@@ -695,11 +723,11 @@ function CloserBookedPipeline({ profile }) {
                       </button>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {activeLead && <CloserLeadModal lead={activeLead} onClose={() => setActiveLead(null)} />}
