@@ -18,7 +18,7 @@ const SCRIPT_SECTIONS = [
   {
     title: '1. The Opener',
     guidance: 'Pattern interrupt — sound confused/different, not "salesy"',
-    body: `Yeah hey — it's Roos, Roos from Restorix... does that ring a bell? This is [Company Name], right?
+    body: `Yeah hey — it's [Your Name], [Your Name] from Restorix... does that ring a bell? This is [Company Name], right?
 
 Oh okay perfect, yeah — I don't want to waste your time, I was wondering if you could help me out real quick?
 
