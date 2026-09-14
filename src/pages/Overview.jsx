@@ -254,11 +254,6 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
     }
   }, [pool, followUps, notInterested, loggedBookings, niche, clipMarkedToday, tz])
 
-  const poolCount = useMemo(
-    () => (niche ? (pool || []).filter((l) => l.niche === niche).length : pool?.length ?? 0),
-    [pool, niche]
-  )
-
   const counts = useMemo(() => {
     const c = {}
     for (const tab of STATUS_TABS) c[tab.key] = leadsByTab[tab.key]?.length || 0
@@ -336,10 +331,10 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
       ? 'No leads match this filter.'
       : 'Nothing here right now.'
 
-  // Prompt 560 — on the embedded My Pipeline → Setter tab the status pills
-  // sit ABOVE the search bar; on /overview and My Leads the search bar stays
-  // above the pills (unchanged). Purely a render-order swap — whichever row
-  // comes first owns the tight top margin under whatever sits above it.
+  // Prompt 560 — status pills render above the search bar on the embedded
+  // My Pipeline → Setter tab. Prompt 591 — /overview and My Leads now match
+  // that order too (was search-then-pills, backwards from My Pipeline);
+  // every non-embedded caller renders pills first, same as embedded.
   const searchRow = (
     <div className={clsx('flex flex-wrap items-center gap-3', embedded ? 'mt-3' : 'mt-6')}>
       <div className="relative flex-1 min-w-[220px]">
@@ -385,7 +380,11 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
     </div>
   )
 
-  const subtitle = `${poolCount} lead${poolCount === 1 ? '' : 's'} in your pool`
+  // Prompt 591 — dropped the live pool count in favor of a static
+  // description, same treatment 590 gave My Pipeline's subtitle. Shared by
+  // /overview (setter) and /my-leads (closer, non-embedded) — fixing here
+  // fixes both at once. Exact wording is a judgment call; flag for Brayden.
+  const subtitle = 'Your active lead pool'
 
   return (
     <div>
@@ -429,20 +428,10 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
 
       {/* Prompt 558 — embedded has no header/stats/nicheTabs above it, so
           the first control row sits right under the wrapper's own tab
-          switcher (tight top margin). Prompt 560 — that first row is the
-          status pills on the embedded Setter tab, the search bar everywhere
-          else. */}
-      {embedded ? (
-        <>
-          {pillsRow}
-          {searchRow}
-        </>
-      ) : (
-        <>
-          {searchRow}
-          {pillsRow}
-        </>
-      )}
+          switcher (tight top margin). Prompt 560/591 — status pills always
+          render first, search bar second, embedded or not. */}
+      {pillsRow}
+      {searchRow}
 
       {/* Own scroll region for the row list, bounded height so the strip/
           search/filters above stay pinned while scrolling a 150-lead pool

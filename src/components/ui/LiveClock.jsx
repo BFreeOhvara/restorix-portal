@@ -19,7 +19,11 @@ export function LiveClock({ timezone }) {
   })
 
   return (
-    <span className="inline-block rounded-lg bg-accent px-4 py-2 font-mono text-3xl font-semibold text-white [font-variant-numeric:tabular-nums]">
+    // Prompt 591 — shrunk from text-3xl/px-4 py-2: this chip is purely
+    // decorative (a digital-clock display), and reclaiming its size was the
+    // cheapest way to reclaim vertical space above the Overview lead table
+    // without touching the table's own max-h-[65vh] cap.
+    <span className="inline-block rounded-lg bg-accent px-3 py-1.5 font-mono text-xl font-semibold text-white [font-variant-numeric:tabular-nums]">
       {time}
     </span>
   )
