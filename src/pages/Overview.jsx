@@ -595,7 +595,12 @@ export function CloserPipeline({ profile, title = 'My Pipeline' }) {
   usePageHeader({ title, subtitle })
 
   return (
-    <div>
+    <div className="-mt-4">
+      {/* Prompt 597 — page-scoped negative top margin, cancels part of
+          Layout's shared <main> py-8 for this route only (that padding
+          itself is untouched — every other page still gets its full 32px).
+          Brings the toggle to ~1-2 lines below the header instead of the
+          larger gap left over since 589 moved the title into the header. */}
       {/* Prompt 554 — Closer = booked appointments (setter-booked + own);
           Setter = leads this closer personally dials via My Leads, i.e.
           SetterOverview scoped to their own id. Empty Setter tab for a
