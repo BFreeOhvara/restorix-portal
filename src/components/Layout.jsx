@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useContext, createContext } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, ListChecks, UserPlus, GitBranch, Bug, Smartphone, CalendarDays, PieChart } from 'lucide-react'
+import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, UserPlus, GitBranch, Bug, Smartphone, CalendarDays, PieChart } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useBrand } from '../hooks/useBrand'
 import { supabase, SUPABASE_URL } from '../lib/supabase'
@@ -59,14 +59,11 @@ const NAV_GROUPS = [
       // extends it to closers (setter + closer are the only roles with this
       // item; admin doesn't get it). Same route, same data, label only.
       { to: '/my-calls', label: 'My Recordings', icon: PhoneCall, roles: ['setter', 'closer'] },
-      // Prompt 469 — live-call talk-track tool, closer's own working
-      // tool same as My Calls is the setter's, so it lives in WORK too.
-      { to: '/survey', label: 'Closer Survey', icon: ListChecks, roles: ['closer', 'admin'] },
       // Prompt 509 — closer self-dial: My Leads (request + work leads from
       // the shared pool, reusing the setter Pipeline UI) and My Pipeline
       // (outcome tracking, same content shape as Overview already has for
       // closers — confirmed with Brayden as a separate addition, not a
-      // replacement). Closer-only, same as Closer Survey above.
+      // replacement). Closer-only.
       { to: '/my-leads', label: 'My Leads', icon: UserPlus, roles: ['closer'] },
       { to: '/my-pipeline', label: 'My Pipeline', icon: GitBranch, roles: ['closer'] },
     ],

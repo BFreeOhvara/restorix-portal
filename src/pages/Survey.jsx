@@ -3,10 +3,8 @@ import clsx from 'clsx'
 import { RotateCcw, ChevronDown } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Field, inputClass } from '../components/ui/Field'
-import { useBrand } from '../hooks/useBrand'
 import * as surveyBH from '../lib/survey'
 import * as surveySuretix from '../lib/surveySuretix'
-import { usePageHeader } from '../components/Layout'
 
 // Prompt 551 — the wizard's question tree / branching / state-machine is a
 // single shared implementation; only the *content module* swaps by niche.
@@ -496,11 +494,3 @@ export function SurveyBody({ onResults, niche = 'behavioral_health', hidePageHea
   )
 }
 
-export default function Survey() {
-  const brand = useBrand()
-  const M = SURVEY_MODULES[brand.niche] || surveyBH
-  usePageHeader({ title: M.COPY.header.title, subtitle: M.COPY.header.subtitle })
-  // key forces a clean remount (fresh state from the right module) if the
-  // resolved niche changes mid-session, e.g. toggling the ?brand= override.
-  return <SurveyBody key={brand.niche} niche={brand.niche} hidePageHeader />
-}

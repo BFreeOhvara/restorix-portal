@@ -19,7 +19,6 @@ import Messages from './pages/Messages'
 import MyCalls from './pages/MyCalls'
 import Profile from './pages/Profile'
 import Settings from './pages/Settings'
-import Survey from './pages/Survey'
 import MyLeads from './pages/MyLeads'
 import MyPipeline from './pages/MyPipeline'
 import Prospects from './pages/Prospects'
@@ -221,14 +220,6 @@ export default function App() {
                         element={
                           <RoleRoute roles={['setter', 'admin']}>
                             <MyGoals />
-                          </RoleRoute>
-                        }
-                      />
-                      <Route
-                        path="/survey"
-                        element={
-                          <RoleRoute roles={['closer', 'admin']}>
-                            <Survey />
                           </RoleRoute>
                         }
                       />

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 import { usePageHeader } from '../components/Layout'
+import { SurveyBody } from './Survey'
+import { useBrand } from '../hooks/useBrand'
 
 // Plain-text content area — Brayden edits SCRIPT_SECTIONS directly to update
 // call scripts. No generation or CMS, per spec (Prompt 433, relocated here
@@ -95,7 +97,11 @@ Good question — honestly it depends on your call volume, which is exactly why 
 const TABS = [
   { key: 'script', label: 'Script' },
   { key: 'videos', label: 'Videos' },
-  { key: 'roleplay', label: 'AI Voice Roleplay' },
+]
+
+const SCRIPT_ROLE_TABS = [
+  { key: 'closer', label: 'Closer' },
+  { key: 'setter', label: 'Setter' },
 ]
 
 function ScriptTab() {
@@ -130,18 +136,32 @@ function ComingSoonTab({ message }) {
 
 export default function Training() {
   const [tab, setTab] = useState('script')
+  const [scriptRole, setScriptRole] = useState('closer')
+  const { niche } = useBrand()
   usePageHeader({ title: 'Training', subtitle: 'Reference materials for the team' })
 
   return (
     <div>
       <div className="mt-6">
-        <SegmentedTabs tabs={TABS} active={tab} onChange={setTab} />
+        <SegmentedTabs tabs={TABS} active={tab} onChange={setTab} variant="grouped" />
       </div>
 
       <div className="mt-6">
-        {tab === 'script' && <ScriptTab />}
+        {tab === 'script' && (
+          <div>
+            <SegmentedTabs
+              tabs={SCRIPT_ROLE_TABS}
+              active={scriptRole}
+              onChange={setScriptRole}
+              variant="grouped"
+            />
+            <div className="mt-6">
+              {scriptRole === 'closer' && <SurveyBody niche={niche} hidePageHeader />}
+              {scriptRole === 'setter' && <ScriptTab />}
+            </div>
+          </div>
+        )}
         {tab === 'videos' && <ComingSoonTab message="Training videos are coming soon." />}
-        {tab === 'roleplay' && <ComingSoonTab message="AI voice roleplay is coming soon." />}
       </div>
     </div>
   )
