@@ -214,7 +214,7 @@ function FinishDayCard() {
 // forever-visible on My Leads once marked) and to the new
 // appointment_booked bucket below. `new` is deliberately never clipped —
 // unworked pool inventory, not a marked outcome.
-export function SetterOverview({ profile, title = 'Overview', headerRight, niche, nicheTabs, embedded = false, clipMarkedToday = false, compactStats = false }) {
+export function SetterOverview({ profile, title = 'Overview', headerRight, niche, nicheTabs, embedded = false, clipMarkedToday = false, compactStats = false, showHeaderRow = true }) {
   const { data: pool, isLoading: poolLoading } = useMyPool(profile.id)
   const tz = profile.timezone || DEFAULT_TIMEZONE
   const { data: followUps, isLoading: followUpsLoading } = useMyFollowUps(profile.id, tz)
@@ -398,7 +398,11 @@ export function SetterOverview({ profile, title = 'Overview', headerRight, niche
           body, right-aligned alone now that it no longer shares a row with
           the title. */}
       {!embedded && <PageHeaderRegistrar title={title} subtitle={subtitle} />}
-      {!embedded && (
+      {/* Prompt 598 — `showHeaderRow=false` (My Leads only) drops this row
+          entirely so its vertical space is reclaimed; My Leads' Request
+          Leads trigger moves to a floating bubble instead. `/overview`
+          doesn't pass the prop, so it defaults `true` and is untouched. */}
+      {!embedded && showHeaderRow && (
         <div className="flex justify-end">
           {headerRight ?? <DateClockRow timezone={tz} />}
         </div>

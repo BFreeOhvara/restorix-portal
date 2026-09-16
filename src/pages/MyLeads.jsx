@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useBrand } from '../hooks/useBrand'
@@ -203,20 +203,46 @@ function RequestLeadsForm({ niche, currentCount, onClose }) {
   )
 }
 
-function RequestLeadsButton({ niche, currentCount }) {
+// Prompt 598 — the header-row button (566-563 era) is gone; My Leads'
+// Request Leads trigger is now a fixed-position circular bubble in the
+// bottom-right corner (styled after the restorix.co chat-bubble widget),
+// with a small dismissible tooltip callout on first load. Same modal/form
+// underneath, unchanged — only the trigger's look/position changed.
+function RequestLeadsBubble({ niche, currentCount }) {
   const [open, setOpen] = useState(false)
+  const [tooltipOpen, setTooltipOpen] = useState(true)
+
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={clsx(
-          'inline-flex items-center gap-2 rounded-full px-4 py-2 font-sans text-sm font-semibold transition-colors hover:opacity-90',
-          STATUS_SOLID.new
+      <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-2">
+        {tooltipOpen && !open && (
+          <div className="flex max-w-[220px] items-start gap-2 rounded-xl border border-line bg-elevated px-3 py-2 shadow-lg">
+            <p className="font-sans text-xs text-fg-secondary">This is where you request leads.</p>
+            <button
+              type="button"
+              onClick={() => setTooltipOpen(false)}
+              className="shrink-0 rounded-full p-0.5 text-fg-secondary hover:text-fg-primary"
+              aria-label="Dismiss"
+            >
+              <X size={13} />
+            </button>
+          </div>
         )}
-      >
-        <Plus size={15} /> Request Leads
-      </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(true)
+            setTooltipOpen(false)
+          }}
+          aria-label="Request Leads"
+          className={clsx(
+            'flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-transform hover:scale-105',
+            STATUS_SOLID.new
+          )}
+        >
+          <Plus size={26} />
+        </button>
+      </div>
       {open && (
         <Modal title={`Request ${nicheLabel(niche)} Leads`} onClose={() => setOpen(false)}>
           <RequestLeadsForm niche={niche} currentCount={currentCount} onClose={() => setOpen(false)} />
@@ -238,20 +264,33 @@ export default function MyLeads() {
   const currentNewCount = pool.filter((l) => l.status === 'new').length
 
   return (
-    <SetterOverview
-      profile={profile}
-      title="My Leads"
-      niche={niche}
-      // Prompt 563 — Request Leads is back beside the title (reverses Prompt
-      // 555's move to its own row above the tiles). `compactStats` keeps the
-      // tight header→tiles gap Prompts 559/562 landed on without `actionsRow`.
-      headerRight={<RequestLeadsButton niche={niche} currentCount={currentNewCount} />}
-      compactStats
-      // Prompt 559/576 — marked-outcome leads (No Answer, Follow-up, Not
-      // Interested, Appointment Booked) clear from My Leads at local
-      // midnight, staying visible in the meantime alongside their
-      // immediate appearance on My Pipeline (kept permanently there).
-      clipMarkedToday
-    />
+    <>
+      {/* Prompt 598 — page-scoped negative top margin, same technique 597
+          used on My Pipeline: cancels part of Layout's shared <main> py-8
+          for this route only (that padding itself is untouched — every
+          other page, including /overview, still gets its full 32px).
+          Removing the header row alone didn't fully close My Leads' page
+          scroll, so this recovers the rest of the reclaimed space. */}
+      <div className="-mt-4">
+        <SetterOverview
+          profile={profile}
+          title="My Leads"
+          niche={niche}
+          // Prompt 598 — the header-right button row is gone; Request Leads
+          // moved to a floating bubble (below), reclaiming that row's
+          // vertical space. `compactStats` keeps the tight header→tiles gap
+          // Prompts 559/562 landed on now that there's no header-right row
+          // at all.
+          showHeaderRow={false}
+          compactStats
+          // Prompt 559/576 — marked-outcome leads (No Answer, Follow-up, Not
+          // Interested, Appointment Booked) clear from My Leads at local
+          // midnight, staying visible in the meantime alongside their
+          // immediate appearance on My Pipeline (kept permanently there).
+          clipMarkedToday
+        />
+      </div>
+      <RequestLeadsBubble niche={niche} currentCount={currentNewCount} />
+    </>
   )
 }
