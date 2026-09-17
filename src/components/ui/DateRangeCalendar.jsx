@@ -145,7 +145,7 @@ export function DateRangeCalendar({ range, onChange, initialMonth, today }) {
               disabled={future}
               className={clsx(
                 'aspect-square rounded-md font-sans text-xs transition-colors',
-                future && 'cursor-not-allowed text-fg-faint/50 hover:bg-transparent',
+                future && 'cursor-not-allowed bg-muted text-fg-faint hover:bg-muted',
                 !future && state === 'none' && 'text-fg-primary hover:bg-surface',
                 !future && state === 'inRange' && 'bg-accent/15 text-fg-primary',
                 !future && state === 'selected' && 'bg-accent font-semibold text-white',

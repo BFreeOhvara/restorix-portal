@@ -60,7 +60,7 @@ export function DateCalendar({ selected, onChange, initialMonth, today }) {
               disabled={future}
               className={clsx(
                 'aspect-square rounded-md font-sans text-xs transition-colors',
-                future && 'cursor-not-allowed text-fg-faint/50 hover:bg-transparent',
+                future && 'cursor-not-allowed bg-muted text-fg-faint hover:bg-muted',
                 !future && dateStr === selected && 'bg-accent font-semibold text-white',
                 !future && dateStr !== selected && 'text-fg-primary hover:bg-surface',
                 isToday && dateStr !== selected && 'ring-1 ring-inset ring-accent'

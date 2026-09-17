@@ -136,7 +136,10 @@ export default function MyCalls() {
             onLabelClick={() => setCalendarOpen((v) => !v)}
           />
           {calendarOpen && (
-            <div className="absolute right-0 top-full z-20 mt-2 shadow-lg">
+            <div className="absolute right-0 top-full z-20 mt-2 w-72 shadow-lg">
+              <p className="mb-2 rounded-card border border-line bg-elevated px-3 py-2 font-sans text-[11px] text-fg-secondary">
+                Select a date.
+              </p>
               <DateCalendar
                 selected={date}
                 onChange={(d) => { setDate(d); setCalendarOpen(false) }}
@@ -150,22 +153,21 @@ export default function MyCalls() {
 
       {/* Own scroll region, same treatment as Overview's lead table
           (Prompt 440). Prompt 602 — box quantized to the sticky header's
-          own height (~43px) plus a whole number of this table's own
-          measured row height (63px, live-measured — not the same as
-          Overview's 72px rows), so the box's bottom edge always lands on a
-          row's own bottom border and the page itself never needs to
-          scroll, same approach 595/596 used for Overview's tables. 8 rows
-          (547px total) fits a 1366×768 viewport with room to spare.
-          Prompt 603 — tried bumping to 9 rows (610px) per Brayden's ask
-          for 2-3 more visible rows; live-measured (docScrollHeight vs
-          docClientHeight at 1366×768) and reverted: 8 rows already uses
-          all available room once `main`'s own 32px bottom padding
-          (`py-8`, shared by every page, not this component) is preserved
-          — the visible gap below the box was ~31px, not a full 63px row.
-          A 9th row overflows the viewport by 32px, a real scroll. Left at
-          8 rows; flagged for Brayden — the only way to fit more rows is
-          shrinking spacing outside this component's own scope. */}
-      <div className="mt-6 h-[547px] overflow-hidden rounded-card border border-line bg-elevated">
+          own height (~43px) plus a whole number of rows, so the box's
+          bottom edge always lands on a row's own bottom border and the
+          page itself never needs to scroll, same approach 595/596 used
+          for Overview's tables.
+          Prompt 603 — 9 rows at the old 63px row height (610px) was
+          measured to overflow by 32px; left at 8 rows (547px), flagged
+          that the only way to fit more was shrinking the row height
+          itself, not `main`'s shared bottom padding.
+          Prompt 604 — did that: row height 63px→53px (cell padding
+          py-4→py-2 to keep content from feeling cramped) buys 10 rows
+          (43px header + 10×53px = 573px) in the same footprint 602/603
+          already measured as available (578px before `main`'s own
+          untouched 32px bottom padding), live-verified at 1366×768 with
+          zero page scroll. */}
+      <div className="mt-6 h-[573px] overflow-hidden rounded-card border border-line bg-elevated">
         <div className="h-full overflow-y-auto">
           <table className={clsx('w-full text-left', calls?.length > 0 && 'border-b border-line')}>
             <thead className="eyebrow sticky top-0 z-10 bg-surface">
@@ -181,27 +183,27 @@ export default function MyCalls() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={99} className="h-[504px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
+                  <td colSpan={99} className="h-[530px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
                     Loading…
                   </td>
                 </tr>
               ) : !calls?.length ? (
                 <tr>
-                  <td colSpan={99} className="h-[504px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
+                  <td colSpan={99} className="h-[530px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
                     No calls logged this day.
                   </td>
                 </tr>
               ) : (
                 calls.map((c) => (
-                  <tr key={c.id} className="h-[63px] border-t border-line font-sans text-sm">
-                    <td className="px-5 py-4 font-medium text-fg-primary">{c.leads?.facility_name || '—'}</td>
-                    {isAdmin && <td className="px-5 py-4 text-fg-secondary">{c.profiles?.full_name || '—'}</td>}
-                    <td className="px-5 py-4 text-fg-secondary">{fmt(c.created_at)}</td>
-                    <td className="px-5 py-4 text-fg-secondary">{fmtDuration(c.duration_seconds)}</td>
-                    <td className="px-5 py-4">
+                  <tr key={c.id} className="h-[53px] border-t border-line font-sans text-sm">
+                    <td className="px-5 py-2 font-medium text-fg-primary">{c.leads?.facility_name || '—'}</td>
+                    {isAdmin && <td className="px-5 py-2 text-fg-secondary">{c.profiles?.full_name || '—'}</td>}
+                    <td className="px-5 py-2 text-fg-secondary">{fmt(c.created_at)}</td>
+                    <td className="px-5 py-2 text-fg-secondary">{fmtDuration(c.duration_seconds)}</td>
+                    <td className="px-5 py-2">
                       <StatusBadge status={c.outcome} />
                     </td>
-                    <td className="px-5 py-4">
+                    <td className="px-5 py-2">
                       {c.recording_url ? (
                         <RecordingCell callId={c.id} />
                       ) : (

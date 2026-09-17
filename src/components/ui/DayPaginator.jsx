@@ -33,7 +33,7 @@ export function DayPaginator({ date, onChange, timezone, onLabelClick }) {
       {onLabelClick ? (
         <button
           onClick={onLabelClick}
-          className="min-w-[110px] text-center font-sans text-xs font-medium text-fg-primary transition-colors hover:text-accent"
+          className="min-w-[110px] rounded-full px-2 py-1 text-center font-sans text-xs font-medium text-fg-primary transition-colors hover:bg-surface"
           title="Jump to date"
         >
           {formatDayLabel(date)}{isToday ? ' · Today' : ''}
