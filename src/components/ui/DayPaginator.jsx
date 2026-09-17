@@ -14,7 +14,11 @@ function formatDayLabel(dateStr) {
 // (Overview, My Goals) already treats "today" as the forward edge.
 // Prompt 458: `timezone` decides what "today" means — the caller's own
 // saved timezone, not UTC.
-export function DayPaginator({ date, onChange, timezone }) {
+// Prompt 602 — optional `onLabelClick` (e.g. My Recordings' jump-to-date
+// calendar) turns the label into a button instead of a plain span. Strictly
+// opt-in: every other caller (Stats' Daily tab, Activity) omits it and gets
+// pixel-identical behavior to before.
+export function DayPaginator({ date, onChange, timezone, onLabelClick }) {
   const tz = timezone || DEFAULT_TIMEZONE
   const isToday = date === zonedDateStr(Date.now(), tz)
   return (
@@ -26,9 +30,19 @@ export function DayPaginator({ date, onChange, timezone }) {
       >
         <ChevronLeft size={15} />
       </button>
-      <span className="min-w-[110px] text-center font-sans text-xs font-medium text-fg-primary">
-        {formatDayLabel(date)}{isToday ? ' · Today' : ''}
-      </span>
+      {onLabelClick ? (
+        <button
+          onClick={onLabelClick}
+          className="min-w-[110px] text-center font-sans text-xs font-medium text-fg-primary transition-colors hover:text-accent"
+          title="Jump to date"
+        >
+          {formatDayLabel(date)}{isToday ? ' · Today' : ''}
+        </button>
+      ) : (
+        <span className="min-w-[110px] text-center font-sans text-xs font-medium text-fg-primary">
+          {formatDayLabel(date)}{isToday ? ' · Today' : ''}
+        </span>
+      )}
       <button
         onClick={() => onChange(shiftDay(date, 1))}
         disabled={isToday}

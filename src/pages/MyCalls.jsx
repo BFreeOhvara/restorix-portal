@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import clsx from 'clsx'
 import { Play, Loader2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useMyCallsForDay, fetchRecordingUrl } from '../hooks/useCalls'
 import StatusBadge from '../components/ui/StatusBadge'
 import { DayPaginator } from '../components/ui/DayPaginator'
+import { DateCalendar } from '../components/ui/DateCalendar'
 import Modal from '../components/ui/Modal'
-import { zonedDateStr } from '../lib/dates'
+import { zonedDateStr, monthOf } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 import { usePageHeader } from '../components/Layout'
 
@@ -107,38 +109,81 @@ export default function MyCalls() {
     subtitle: isAdmin ? 'Every call placed through the dashboard, this day' : 'Calls you\'ve placed through the dashboard, this day',
   })
 
+  // Prompt 602 — jump-to-date popover next to the day-paginator arrows.
+  // Single-date only (DateCalendar, not the range-picking
+  // DateRangeCalendar) — wired straight to the same date/setDate state the
+  // arrows already drive.
+  const [calendarOpen, setCalendarOpen] = useState(false)
+  const calendarRef = useRef(null)
+
+  useEffect(() => {
+    if (!calendarOpen) return
+    function handleClick(e) {
+      if (calendarRef.current && !calendarRef.current.contains(e.target)) setCalendarOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [calendarOpen])
+
   return (
     <div>
       <div className="flex justify-end">
-        <DayPaginator date={date} onChange={setDate} timezone={tz} />
+        <div ref={calendarRef} className="relative">
+          <DayPaginator
+            date={date}
+            onChange={setDate}
+            timezone={tz}
+            onLabelClick={() => setCalendarOpen((v) => !v)}
+          />
+          {calendarOpen && (
+            <div className="absolute right-0 top-full z-20 mt-2 shadow-lg">
+              <DateCalendar
+                selected={date}
+                onChange={(d) => { setDate(d); setCalendarOpen(false) }}
+                initialMonth={monthOf(date)}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Own scroll region, same treatment as Overview's lead table
-          (Prompt 440) — fixed-height box with its own scrollbar rather
-          than the whole page scrolling. */}
-      <div className="mt-6 overflow-hidden rounded-card border border-line bg-elevated">
-        {isLoading ? (
-          <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
-        ) : !calls?.length ? (
-          <p className="p-8 text-center font-sans text-sm text-fg-secondary">
-            No calls logged this day.
-          </p>
-        ) : (
-          <div className="max-h-[65vh] overflow-y-auto">
-            <table className="w-full text-left">
-              <thead className="eyebrow sticky top-0 z-10 bg-surface">
+          (Prompt 440). Prompt 602 — box quantized to the sticky header's
+          own height (~43px) plus a whole number of this table's own
+          measured row height (63px, live-measured — not the same as
+          Overview's 72px rows), so the box's bottom edge always lands on a
+          row's own bottom border and the page itself never needs to
+          scroll, same approach 595/596 used for Overview's tables. 8 rows
+          (547px total) fits a 1366×768 viewport with room to spare. */}
+      <div className="mt-6 h-[547px] overflow-hidden rounded-card border border-line bg-elevated">
+        <div className="h-full overflow-y-auto">
+          <table className={clsx('w-full text-left', calls?.length > 0 && 'border-b border-line')}>
+            <thead className="eyebrow sticky top-0 z-10 bg-surface">
+              <tr>
+                <th className="px-5 py-3">Lead</th>
+                {isAdmin && <th className="px-5 py-3">Setter</th>}
+                <th className="px-5 py-3">When</th>
+                <th className="px-5 py-3">Duration</th>
+                <th className="px-5 py-3">Outcome</th>
+                <th className="px-5 py-3">Recording</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
                 <tr>
-                  <th className="px-5 py-3">Lead</th>
-                  {isAdmin && <th className="px-5 py-3">Setter</th>}
-                  <th className="px-5 py-3">When</th>
-                  <th className="px-5 py-3">Duration</th>
-                  <th className="px-5 py-3">Outcome</th>
-                  <th className="px-5 py-3">Recording</th>
+                  <td colSpan={99} className="h-[504px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
+                    Loading…
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {calls.map((c) => (
-                  <tr key={c.id} className="border-t border-line font-sans text-sm">
+              ) : !calls?.length ? (
+                <tr>
+                  <td colSpan={99} className="h-[504px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
+                    No calls logged this day.
+                  </td>
+                </tr>
+              ) : (
+                calls.map((c) => (
+                  <tr key={c.id} className="h-[63px] border-t border-line font-sans text-sm">
                     <td className="px-5 py-4 font-medium text-fg-primary">{c.leads?.facility_name || '—'}</td>
                     {isAdmin && <td className="px-5 py-4 text-fg-secondary">{c.profiles?.full_name || '—'}</td>}
                     <td className="px-5 py-4 text-fg-secondary">{fmt(c.created_at)}</td>
@@ -156,11 +201,11 @@ export default function MyCalls() {
                       )}
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )

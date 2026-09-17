@@ -5,17 +5,20 @@ import { shiftMonth } from '../../lib/dates'
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
-function daysInMonth(monthStr) {
+// Prompt 602 — exported so DateCalendar.jsx (My Recordings' single-date
+// jump calendar) can reuse this month grid's date math instead of
+// re-deriving it.
+export function daysInMonth(monthStr) {
   const [y, m] = monthStr.split('-').map(Number)
   return new Date(Date.UTC(y, m, 0)).getUTCDate()
 }
 
-function firstWeekday(monthStr) {
+export function firstWeekday(monthStr) {
   const [y, m] = monthStr.split('-').map(Number)
   return new Date(Date.UTC(y, m - 1, 1)).getUTCDay()
 }
 
-function formatMonthLabel(monthStr) {
+export function formatMonthLabel(monthStr) {
   const [y, m] = monthStr.split('-').map(Number)
   return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString(undefined, {
     month: 'long', year: 'numeric', timeZone: 'UTC',
