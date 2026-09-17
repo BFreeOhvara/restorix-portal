@@ -50,7 +50,15 @@ export function formatMonthLabel(monthStr) {
 // just `pendingStart` alone (matches the old single-dot-selected look).
 // Cleared on mouse-leave so wandering off the grid doesn't leave a stale
 // preview sitting there.
-export function DateRangeCalendar({ range, onChange, initialMonth }) {
+// Prompt 603 — `today` (a 'YYYY-MM-DD' string, caller's own zoned "today",
+// same convention as DayPaginator) gates three things at once: the
+// next-month arrow disables once the grid is already showing the month
+// that contains today (mirrors DayPaginator's "Next disabled at today"),
+// any date after today renders grayed out and inert (present, not
+// hidden — Brayden's ask), and today's own cell gets a ring marker.
+// Optional/backward-compatible — omitting it (no caller currently does)
+// restores the old no-limit behavior.
+export function DateRangeCalendar({ range, onChange, initialMonth, today }) {
   const [viewMonth, setViewMonth] = useState(initialMonth)
   const [pendingStart, setPendingStart] = useState(null)
   const [hoverDate, setHoverDate] = useState(null)
@@ -58,8 +66,14 @@ export function DateRangeCalendar({ range, onChange, initialMonth }) {
   const count = daysInMonth(viewMonth)
   const leadBlanks = firstWeekday(viewMonth)
   const dates = Array.from({ length: count }, (_, i) => `${viewMonth}-${String(i + 1).padStart(2, '0')}`)
+  const atCurrentMonth = today != null && viewMonth >= today.slice(0, 7)
+
+  function isFuture(dateStr) {
+    return today != null && dateStr > today
+  }
 
   function handleClick(dateStr, e) {
+    if (isFuture(dateStr)) return
     if (e.detail >= 2) {
       setPendingStart(null)
       setHoverDate(null)
@@ -106,7 +120,8 @@ export function DateRangeCalendar({ range, onChange, initialMonth }) {
         <span className="font-sans text-sm font-medium text-fg-primary">{formatMonthLabel(viewMonth)}</span>
         <button
           onClick={() => setViewMonth((m) => shiftMonth(m, 1))}
-          className="flex h-7 w-7 items-center justify-center rounded-full text-fg-secondary transition-colors hover:bg-surface hover:text-fg-primary"
+          disabled={atCurrentMonth}
+          className="flex h-7 w-7 items-center justify-center rounded-full text-fg-secondary transition-colors hover:bg-surface hover:text-fg-primary disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent"
           title="Next month"
         >
           <ChevronRight size={15} />
@@ -120,16 +135,21 @@ export function DateRangeCalendar({ range, onChange, initialMonth }) {
         {Array.from({ length: leadBlanks }).map((_, i) => <div key={`blank-${i}`} />)}
         {dates.map((dateStr) => {
           const state = cellState(dateStr)
+          const future = isFuture(dateStr)
+          const isToday = dateStr === today
           return (
             <button
               key={dateStr}
               onClick={(e) => handleClick(dateStr, e)}
-              onMouseEnter={() => { if (pendingStart) setHoverDate(dateStr) }}
+              onMouseEnter={() => { if (pendingStart && !future) setHoverDate(dateStr) }}
+              disabled={future}
               className={clsx(
                 'aspect-square rounded-md font-sans text-xs transition-colors',
-                state === 'none' && 'text-fg-primary hover:bg-surface',
-                state === 'inRange' && 'bg-accent/15 text-fg-primary',
-                state === 'selected' && 'bg-accent font-semibold text-white'
+                future && 'cursor-not-allowed text-fg-faint/50 hover:bg-transparent',
+                !future && state === 'none' && 'text-fg-primary hover:bg-surface',
+                !future && state === 'inRange' && 'bg-accent/15 text-fg-primary',
+                !future && state === 'selected' && 'bg-accent font-semibold text-white',
+                isToday && state !== 'selected' && 'ring-1 ring-inset ring-accent'
               )}
             >
               {Number(dateStr.slice(-2))}

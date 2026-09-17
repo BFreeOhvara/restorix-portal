@@ -425,7 +425,7 @@ function mockCloseWeeks(currentMonday) {
 // noticeably") is a stricter bar than round 3's animation cleared —
 // matching the existing paginators' own technique is both simpler and
 // exactly what he pointed at as the reference.
-function CustomDatePicker({ range, onChange, initialMonth }) {
+function CustomDatePicker({ range, onChange, initialMonth, today }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const label = range ? formatRangeLabel(range) : 'Custom Date'
@@ -471,6 +471,7 @@ function CustomDatePicker({ range, onChange, initialMonth }) {
             range={range}
             onChange={(r) => { onChange(r); setOpen(false) }}
             initialMonth={initialMonth}
+            today={today}
           />
         </div>
       )}
@@ -488,6 +489,10 @@ export default function Stats() {
   // FROM/TO range. Each tab keeps its own independent nav state so
   // switching tabs doesn't lose where you were in the other two.
   const [periodTab, setPeriodTab] = useState('daily')
+  // Prompt 603 — the same zoned "today" DayPaginator/heatmapDays already
+  // compute, passed down to gate the All Time custom-date calendar against
+  // picking a future date.
+  const today = zonedDateStr(Date.now(), tz)
   const [dayDate, setDayDate] = useState(() => zonedDateStr(Date.now(), tz))
   const [monthStr, setMonthStr] = useState(() => monthOf(zonedDateStr(Date.now(), tz)))
   const [customRange, setCustomRange] = useState(null)
@@ -625,6 +630,7 @@ export default function Stats() {
             range={customRange}
             onChange={setCustomRange}
             initialMonth={monthOf(customRange?.start || dayDate)}
+            today={today}
           />
         )}
       </div>

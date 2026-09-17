@@ -141,6 +141,7 @@ export default function MyCalls() {
                 selected={date}
                 onChange={(d) => { setDate(d); setCalendarOpen(false) }}
                 initialMonth={monthOf(date)}
+                today={zonedDateStr(Date.now(), tz)}
               />
             </div>
           )}
@@ -154,7 +155,16 @@ export default function MyCalls() {
           Overview's 72px rows), so the box's bottom edge always lands on a
           row's own bottom border and the page itself never needs to
           scroll, same approach 595/596 used for Overview's tables. 8 rows
-          (547px total) fits a 1366×768 viewport with room to spare. */}
+          (547px total) fits a 1366×768 viewport with room to spare.
+          Prompt 603 — tried bumping to 9 rows (610px) per Brayden's ask
+          for 2-3 more visible rows; live-measured (docScrollHeight vs
+          docClientHeight at 1366×768) and reverted: 8 rows already uses
+          all available room once `main`'s own 32px bottom padding
+          (`py-8`, shared by every page, not this component) is preserved
+          — the visible gap below the box was ~31px, not a full 63px row.
+          A 9th row overflows the viewport by 32px, a real scroll. Left at
+          8 rows; flagged for Brayden — the only way to fit more rows is
+          shrinking spacing outside this component's own scope. */}
       <div className="mt-6 h-[547px] overflow-hidden rounded-card border border-line bg-elevated">
         <div className="h-full overflow-y-auto">
           <table className={clsx('w-full text-left', calls?.length > 0 && 'border-b border-line')}>
