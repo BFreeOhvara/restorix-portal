@@ -150,7 +150,9 @@ export default function Training() {
       <div className="mt-6">
         {tab === 'script' && (
           <div>
-            <PillToggle options={SCRIPT_ROLE_TABS} active={scriptRole} onChange={setScriptRole} />
+            <div className="flex">
+              <PillToggle options={SCRIPT_ROLE_TABS} active={scriptRole} onChange={setScriptRole} />
+            </div>
             <div className="mt-6">
               {scriptRole === 'closer' && <SurveyBody niche={niche} hidePageHeader />}
               {scriptRole === 'setter' && <ScriptTab />}
