@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus, X } from 'lucide-react'
+import { UserPlus, X } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useBrand } from '../hooks/useBrand'
@@ -214,18 +214,22 @@ function RequestLeadsBubble({ niche, currentCount }) {
 
   return (
     <>
-      <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-2">
+      <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-3">
         {tooltipOpen && !open && (
-          <div className="flex max-w-[220px] items-start gap-2 rounded-xl border border-line bg-elevated px-3 py-2 shadow-lg">
-            <p className="font-sans text-xs text-fg-secondary">This is where you request leads.</p>
+          <div className="relative flex max-w-[260px] items-start gap-3 rounded-xl border border-line bg-elevated px-4 py-3 shadow-lg">
+            <p className="font-sans text-sm text-fg-secondary">Request more leads for your queue</p>
             <button
               type="button"
               onClick={() => setTooltipOpen(false)}
               className="shrink-0 rounded-full p-0.5 text-fg-secondary hover:text-fg-primary"
               aria-label="Dismiss"
             >
-              <X size={13} />
+              <X size={14} />
             </button>
+            <div
+              className="absolute -bottom-1.5 right-6 h-3 w-3 rotate-45 border-b border-r border-line bg-elevated"
+              aria-hidden="true"
+            />
           </div>
         )}
         <button
@@ -240,7 +244,7 @@ function RequestLeadsBubble({ niche, currentCount }) {
             STATUS_SOLID.new
           )}
         >
-          <Plus size={26} />
+          <UserPlus size={26} />
         </button>
       </div>
       {open && (

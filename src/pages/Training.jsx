@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
+import { PillToggle } from '../components/ui/PillToggle'
 import { usePageHeader } from '../components/Layout'
 import { SurveyBody } from './Survey'
 import { useBrand } from '../hooks/useBrand'
@@ -149,12 +150,7 @@ export default function Training() {
       <div className="mt-6">
         {tab === 'script' && (
           <div>
-            <SegmentedTabs
-              tabs={SCRIPT_ROLE_TABS}
-              active={scriptRole}
-              onChange={setScriptRole}
-              variant="grouped"
-            />
+            <PillToggle options={SCRIPT_ROLE_TABS} active={scriptRole} onChange={setScriptRole} />
             <div className="mt-6">
               {scriptRole === 'closer' && <SurveyBody niche={niche} hidePageHeader />}
               {scriptRole === 'setter' && <ScriptTab />}
