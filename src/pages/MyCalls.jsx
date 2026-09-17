@@ -158,16 +158,22 @@ export default function MyCalls() {
           page itself never needs to scroll, same approach 595/596 used
           for Overview's tables.
           Prompt 603 — 9 rows at the old 63px row height (610px) was
-          measured to overflow by 32px; left at 8 rows (547px), flagged
-          that the only way to fit more was shrinking the row height
-          itself, not `main`'s shared bottom padding.
-          Prompt 604 — did that: row height 63px→53px (cell padding
-          py-4→py-2 to keep content from feeling cramped) buys 10 rows
-          (43px header + 10×53px = 573px) in the same footprint 602/603
-          already measured as available (578px before `main`'s own
-          untouched 32px bottom padding), live-verified at 1366×768 with
-          zero page scroll. */}
-      <div className="mt-6 h-[573px] overflow-hidden rounded-card border border-line bg-elevated">
+          measured to overflow by 32px; left at 8 rows (547px).
+          Prompt 604 — shrank rows 63px→53px to buy 10 rows; reverted by
+          605 (below) — Brayden's own live screenshot showed real slack
+          604's synthetic-viewport measurement missed, so the box grows
+          instead of the rows shrinking.
+          Prompt 605 — row height/padding back to original (63px /
+          py-4), box grown to 11 rows (43px header + 11×63px = 736px),
+          `mt-6` left untouched. At the 1366×768 viewport 602/603 tested,
+          this box alone (736px) already exceeds that viewport's whole
+          content height, so 11 rows only fits if Brayden's real window
+          is taller than that synthetic check — which his screenshot
+          says it is. NOT live-verified against real data this session:
+          the local checkout has no `.env.local`, so the dev server
+          can't authenticate — flagged for Brayden rather than guessing
+          at numbers. */}
+      <div className="mt-6 h-[736px] overflow-hidden rounded-card border border-line bg-elevated">
         <div className="h-full overflow-y-auto">
           <table className={clsx('w-full text-left', calls?.length > 0 && 'border-b border-line')}>
             <thead className="eyebrow sticky top-0 z-10 bg-surface">
@@ -183,27 +189,27 @@ export default function MyCalls() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={99} className="h-[530px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
+                  <td colSpan={99} className="h-[693px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
                     Loading…
                   </td>
                 </tr>
               ) : !calls?.length ? (
                 <tr>
-                  <td colSpan={99} className="h-[530px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
+                  <td colSpan={99} className="h-[693px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
                     No calls logged this day.
                   </td>
                 </tr>
               ) : (
                 calls.map((c) => (
-                  <tr key={c.id} className="h-[53px] border-t border-line font-sans text-sm">
-                    <td className="px-5 py-2 font-medium text-fg-primary">{c.leads?.facility_name || '—'}</td>
-                    {isAdmin && <td className="px-5 py-2 text-fg-secondary">{c.profiles?.full_name || '—'}</td>}
-                    <td className="px-5 py-2 text-fg-secondary">{fmt(c.created_at)}</td>
-                    <td className="px-5 py-2 text-fg-secondary">{fmtDuration(c.duration_seconds)}</td>
-                    <td className="px-5 py-2">
+                  <tr key={c.id} className="h-[63px] border-t border-line font-sans text-sm">
+                    <td className="px-5 py-4 font-medium text-fg-primary">{c.leads?.facility_name || '—'}</td>
+                    {isAdmin && <td className="px-5 py-4 text-fg-secondary">{c.profiles?.full_name || '—'}</td>}
+                    <td className="px-5 py-4 text-fg-secondary">{fmt(c.created_at)}</td>
+                    <td className="px-5 py-4 text-fg-secondary">{fmtDuration(c.duration_seconds)}</td>
+                    <td className="px-5 py-4">
                       <StatusBadge status={c.outcome} />
                     </td>
-                    <td className="px-5 py-2">
+                    <td className="px-5 py-4">
                       {c.recording_url ? (
                         <RecordingCell callId={c.id} />
                       ) : (
