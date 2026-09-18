@@ -18,6 +18,13 @@
 // Client-facing copy is NOT duplicated here — it's pulled from
 // RESULTS_CONTENT in survey.js, keyed identically to these keys, so the
 // Closer Survey and the client dashboard can never drift.
+//
+// Prompt 610 — every entry also carries `price: { setupFee, monthlyFee }`
+// so a closer's agent picks can compute a suggested deal price instead of
+// being typed in from nothing. THESE ARE PLACEHOLDER NUMBERS, not
+// Brayden's real pricing — front-runners priced higher than sub-agents
+// since they're the core product, but flag clearly for Brayden to tune
+// once he sees them live against real deals.
 
 import { RESULTS_CONTENT } from './survey'
 
@@ -30,43 +37,65 @@ export const AGENT_CATALOG = {
     label: 'Inbound Intake & Triage',
     status: 'placeholder', // 'placeholder' | 'live'
     needsConnect: ['phone_number'],
+    price: { setupFee: 297, monthlyFee: 599 },
   },
   missed_call_recovery: {
     kind: 'front_runner',
     label: 'Missed-Call Recovery',
     status: 'placeholder',
     needsConnect: ['phone_number'],
+    price: { setupFee: 297, monthlyFee: 549 },
   },
   insurance: {
     kind: 'sub_agent',
     label: 'Insurance / payer verification',
     status: 'placeholder',
     needsConnect: [],
+    price: { setupFee: 0, monthlyFee: 199 },
   },
   follow_up: {
     kind: 'sub_agent',
     label: 'Follow-up & nurture',
     status: 'placeholder',
     needsConnect: [],
+    price: { setupFee: 0, monthlyFee: 149 },
   },
   bed_sync: {
     kind: 'sub_agent',
     label: 'Bed/program availability sync',
     status: 'placeholder',
     needsConnect: [],
+    price: { setupFee: 0, monthlyFee: 179 },
   },
   reminders: {
     kind: 'sub_agent',
     label: 'Appointment Reminder & No-Show Prevention',
     status: 'placeholder',
     needsConnect: [],
+    price: { setupFee: 0, monthlyFee: 129 },
   },
   referral_reporting: {
     kind: 'sub_agent',
     label: 'Referral-source reporting',
     status: 'placeholder',
     needsConnect: [],
+    price: { setupFee: 0, monthlyFee: 149 },
   },
+}
+
+// Prompt 610 — sums a front-runner + its selected sub-agents into one
+// suggested price. Safe to call with an empty/unknown front-runner key
+// (returns zeros) so callers can compute this before a pick is made.
+export function priceForSelection(frontRunnerKey, subAgentKeys = []) {
+  const front = AGENT_CATALOG[frontRunnerKey]?.price
+  const total = { setupFee: front?.setupFee ?? 0, monthlyFee: front?.monthlyFee ?? 0 }
+  for (const key of subAgentKeys) {
+    const price = AGENT_CATALOG[key]?.price
+    if (!price) continue
+    total.setupFee += price.setupFee
+    total.monthlyFee += price.monthlyFee
+  }
+  return total
 }
 
 export const CONNECT_LABELS = {

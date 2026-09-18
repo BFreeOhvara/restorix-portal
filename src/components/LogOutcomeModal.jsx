@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import clsx from 'clsx'
 import Modal from './ui/Modal'
 import { Field, inputClass } from './ui/Field'
 import { Button } from './ui/Button'
+import { AgentPicker } from './AgentPicker'
 import { OUTCOME_LABELS, OUTCOME_SOLID, OUTCOME_TINT } from './ui/OutcomeBadge'
 import { useLogCloserOutcome } from '../hooks/useLeads'
+import { priceForSelection } from '../lib/agentCatalog'
 
 // Prompt 540 — 'needs_reschedule' retired as a manual pick: No Show is now
 // a derived display state (lib/closerOutcome.js) and a real Reschedule
@@ -31,17 +33,50 @@ const OUTCOMES = ['pending', 'lost', 'closed']
 // duplicating the outcome-picker/deal-value logic. `LogOutcomeModal`
 // itself is unchanged for its existing standalone callers (Pipeline.jsx,
 // the admin Closer tab) — same props, same behavior.
-export function LogOutcomeForm({ lead, onClose }) {
+//
+// Prompt 610 — `frontRunner`/`subAgents`/`onFrontRunnerChange`/
+// `onToggleSubAgent` are optional and only ever passed by CloserLeadModal
+// (the shared agent-selection state lives there, same precedent as
+// `surveyResults`). When they're present and the outcome is Closed, the
+// same AgentPicker used by the Client Portal tab renders here too, and
+// its selection computes a suggested setup/first-month fee. Standalone
+// `LogOutcomeModal` callers pass none of this, so `hasPicker` is false
+// and behavior is unchanged for them.
+export function LogOutcomeForm({ lead, onClose, frontRunner, subAgents, onFrontRunnerChange, onToggleSubAgent }) {
   const [outcome, setOutcome] = useState(lead.closer_outcome || 'pending')
   const [notes, setNotes] = useState(lead.closer_notes || '')
   const [setupFee, setSetupFee] = useState(lead.deal_setup_fee ?? '')
   const [firstMonthFee, setFirstMonthFee] = useState(lead.deal_first_month_fee ?? '')
+  // Already has a value (re-opening a logged deal) counts as "adjusted" —
+  // don't let a later agent pick silently overwrite it.
+  const [feesTouched, setFeesTouched] = useState(
+    () => lead.deal_setup_fee != null || lead.deal_first_month_fee != null
+  )
   const logOutcome = useLogCloserOutcome()
 
   const isClosed = outcome === 'closed'
+  const hasPicker = typeof onFrontRunnerChange === 'function'
   const setupFeeValid = setupFee !== '' && Number(setupFee) >= 0
   const firstMonthFeeValid = firstMonthFee !== '' && Number(firstMonthFee) >= 0
   const canSubmit = !isClosed || (setupFeeValid && firstMonthFeeValid)
+
+  useEffect(() => {
+    if (!isClosed || !hasPicker || feesTouched || !frontRunner) return
+    const price = priceForSelection(frontRunner, [...subAgents])
+    setSetupFee(String(price.setupFee))
+    setFirstMonthFee(String(price.monthlyFee))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isClosed, hasPicker, feesTouched, frontRunner, subAgents])
+
+  function handleSetupFeeChange(e) {
+    setFeesTouched(true)
+    setSetupFee(e.target.value)
+  }
+
+  function handleFirstMonthFeeChange(e) {
+    setFeesTouched(true)
+    setFirstMonthFee(e.target.value)
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -76,6 +111,15 @@ export function LogOutcomeForm({ lead, onClose }) {
         </div>
       </Field>
 
+      {isClosed && hasPicker && (
+        <AgentPicker
+          frontRunner={frontRunner}
+          onFrontRunnerChange={onFrontRunnerChange}
+          subAgents={subAgents}
+          onToggleSubAgent={onToggleSubAgent}
+        />
+      )}
+
       {isClosed && (
         <div className="grid grid-cols-2 gap-4">
           <Field label="Setup fee ($)">
@@ -85,7 +129,7 @@ export function LogOutcomeForm({ lead, onClose }) {
               step="0.01"
               className={inputClass()}
               value={setupFee}
-              onChange={(e) => setSetupFee(e.target.value)}
+              onChange={handleSetupFeeChange}
               required
             />
           </Field>
@@ -96,7 +140,7 @@ export function LogOutcomeForm({ lead, onClose }) {
               step="0.01"
               className={inputClass()}
               value={firstMonthFee}
-              onChange={(e) => setFirstMonthFee(e.target.value)}
+              onChange={handleFirstMonthFeeChange}
               required
             />
           </Field>

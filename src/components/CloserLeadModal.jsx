@@ -5,11 +5,12 @@ import Modal from './ui/Modal'
 import { Field, inputClass } from './ui/Field'
 import { Button } from './ui/Button'
 import { LogOutcomeForm } from './LogOutcomeModal'
+import { AgentPicker } from './AgentPicker'
 import { SurveyBody } from '../pages/Survey'
 import { useRescheduleLead } from '../hooks/useLeads'
 import { useConfirmDeal, useDealForLead } from '../hooks/useDeals'
 import { displayOutcome } from '../lib/closerOutcome'
-import { FRONT_RUNNER_KEYS, SUB_AGENT_KEYS, AGENT_CATALOG } from '../lib/agentCatalog'
+import { AGENT_CATALOG } from '../lib/agentCatalog'
 
 const BASE_TABS = [
   { key: 'outcome', label: 'Log Outcome' },
@@ -62,39 +63,18 @@ function RescheduleForm({ lead, onClose }) {
 
 // Prompt 546 — the confirm-the-Stack step. Shown once a deal is logged
 // Closed: the closer confirms the exact front-runner + sub-agents the
-// client agreed to (pre-filled from the Closer Survey's recommendation if
-// that tab was used this session, fully editable per North Star's "closer
-// can adjust live"), plus the client's phone. Submitting writes the
+// client agreed to, plus the client's phone. Submitting writes the
 // `deals` row and fires the SMS invite in one action — no manual step,
-// per Brayden's own description. `surveyResults` comes from SurveyBody's
-// onResults callback, held one level up in CloserLeadModal.
-function ClientPortalForm({ lead, surveyResults }) {
+// per Brayden's own description.
+// Prompt 610 — `frontRunner`/`subAgents` (and their setters) are no longer
+// local state here: they're lifted to CloserLeadModal and shared with the
+// Log Outcome tab's picker (same precedent as `surveyResults`), so picking
+// agents once carries over instead of being re-picked per tab. The survey
+// prefill effect moved up to CloserLeadModal for the same reason.
+function ClientPortalForm({ lead, frontRunner, onFrontRunnerChange, subAgents, onToggleSubAgent }) {
   const existing = useDealForLead(lead.id)
   const confirmDeal = useConfirmDeal()
-  const [frontRunner, setFrontRunner] = useState('')
-  const [subAgents, setSubAgents] = useState(() => new Set())
   const [phone, setPhone] = useState(lead.phone || '')
-  const [prefilled, setPrefilled] = useState(false)
-
-  // Pre-fill once from the survey recommendation if it's available and the
-  // closer hasn't already touched the form.
-  useEffect(() => {
-    if (prefilled || !surveyResults) return
-    if (surveyResults.frontRunnerKey) setFrontRunner(surveyResults.frontRunnerKey)
-    if (surveyResults.subAgents?.length) {
-      setSubAgents(new Set(surveyResults.subAgents.map((a) => a.key)))
-    }
-    setPrefilled(true)
-  }, [surveyResults, prefilled])
-
-  function toggleSub(key) {
-    setSubAgents((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
 
   if (existing.isLoading) {
     return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
@@ -156,44 +136,12 @@ function ClientPortalForm({ lead, surveyResults }) {
         it can't be undone from here.
       </p>
 
-      <Field label="Front-runner agent">
-        <div className="grid gap-2 sm:grid-cols-2">
-          {FRONT_RUNNER_KEYS.map((key) => (
-            <button
-              type="button"
-              key={key}
-              onClick={() => setFrontRunner(key)}
-              className={clsx(
-                'rounded-lg border px-4 py-3 text-left font-sans text-sm font-medium transition-colors',
-                frontRunner === key
-                  ? 'border-accent bg-accent text-white'
-                  : 'border-line bg-surface text-fg-primary hover:border-fg-primary/40'
-              )}
-            >
-              {AGENT_CATALOG[key].label}
-            </button>
-          ))}
-        </div>
-      </Field>
-
-      <Field label="Sub-agents">
-        <div className="space-y-2">
-          {SUB_AGENT_KEYS.map((key) => (
-            <label
-              key={key}
-              className="flex cursor-pointer items-center gap-3 rounded-lg border border-line bg-surface px-4 py-2.5"
-            >
-              <input
-                type="checkbox"
-                checked={subAgents.has(key)}
-                onChange={() => toggleSub(key)}
-                className="h-4 w-4 accent-accent"
-              />
-              <span className="font-sans text-sm text-fg-primary">{AGENT_CATALOG[key].label}</span>
-            </label>
-          ))}
-        </div>
-      </Field>
+      <AgentPicker
+        frontRunner={frontRunner}
+        onFrontRunnerChange={onFrontRunnerChange}
+        subAgents={subAgents}
+        onToggleSubAgent={onToggleSubAgent}
+      />
 
       <Field label="Client phone (for the SMS invite)">
         <input
@@ -234,6 +182,11 @@ function ClientPortalForm({ lead, surveyResults }) {
 // logged the close and reopened lands straight on the provisioning step.
 // `surveyResults` is lifted here so the Survey tab's recommendation can
 // pre-fill the Client Portal form.
+// Prompt 610 — `frontRunner`/`subAgents` are also lifted here (same
+// pattern) so the Log Outcome tab's picker and the Client Portal tab's
+// picker are the same selection, not two independent ones. The survey
+// prefill only applies if the closer hasn't already picked a front-runner
+// on the Log Outcome tab — "whichever came first" precedence.
 export default function CloserLeadModal({ lead, onClose }) {
   const canReschedule = ['pending', 'no_show'].includes(displayOutcome(lead))
   const existingDeal = useDealForLead(lead.id)
@@ -241,6 +194,28 @@ export default function CloserLeadModal({ lead, onClose }) {
   const [tab, setTab] = useState(
     lead.closer_outcome === 'closed' && !existingDeal.data ? 'client_portal' : 'outcome'
   )
+  const [frontRunner, setFrontRunner] = useState('')
+  const [subAgents, setSubAgents] = useState(() => new Set())
+  const [agentsPrefilled, setAgentsPrefilled] = useState(false)
+
+  useEffect(() => {
+    if (agentsPrefilled || !surveyResults) return
+    if (!frontRunner && surveyResults.frontRunnerKey) setFrontRunner(surveyResults.frontRunnerKey)
+    if (subAgents.size === 0 && surveyResults.subAgents?.length) {
+      setSubAgents(new Set(surveyResults.subAgents.map((a) => a.key)))
+    }
+    setAgentsPrefilled(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surveyResults, agentsPrefilled])
+
+  function toggleSubAgent(key) {
+    setSubAgents((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   const tabs = [
     ...BASE_TABS,
@@ -269,10 +244,27 @@ export default function CloserLeadModal({ lead, onClose }) {
       </div>
 
       <div className="mt-5 max-h-[70vh] overflow-y-auto pr-1">
-        {tab === 'outcome' && <LogOutcomeForm lead={lead} onClose={onClose} />}
+        {tab === 'outcome' && (
+          <LogOutcomeForm
+            lead={lead}
+            onClose={onClose}
+            frontRunner={frontRunner}
+            onFrontRunnerChange={setFrontRunner}
+            subAgents={subAgents}
+            onToggleSubAgent={toggleSubAgent}
+          />
+        )}
         {tab === 'survey' && <SurveyBody onResults={setSurveyResults} />}
         {tab === 'reschedule' && <RescheduleForm lead={lead} onClose={onClose} />}
-        {tab === 'client_portal' && <ClientPortalForm lead={lead} surveyResults={surveyResults} />}
+        {tab === 'client_portal' && (
+          <ClientPortalForm
+            lead={lead}
+            frontRunner={frontRunner}
+            onFrontRunnerChange={setFrontRunner}
+            subAgents={subAgents}
+            onToggleSubAgent={toggleSubAgent}
+          />
+        )}
       </div>
     </Modal>
   )
