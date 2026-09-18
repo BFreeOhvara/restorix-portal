@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useContext, createContext } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, UserPlus, GitBranch, Bug, Smartphone, CalendarDays, PieChart } from 'lucide-react'
+import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, UserPlus, GitBranch, Bug, Smartphone, CalendarDays, PieChart, CreditCard } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useBrand } from '../hooks/useBrand'
 import { supabase, SUPABASE_URL } from '../lib/supabase'
@@ -76,6 +76,8 @@ const NAV_GROUPS = [
       // Prompt 528 — the real destination the sidebar's Report a Bug
       // button submits to.
       { to: '/bug-reports', label: 'Bug Reports', icon: Bug, roles: ['admin'] },
+      // Prompt 611 — client portal's "Request payment method change" review queue.
+      { to: '/billing-requests', label: 'Billing Requests', icon: CreditCard, roles: ['admin'] },
     ],
   },
   // Prompt 456: reverses Prompt 454's headerless standalone block —

@@ -25,6 +25,7 @@ import Prospects from './pages/Prospects'
 import Appointments from './pages/Appointments'
 import Reports from './pages/Reports'
 import BugReports from './pages/BugReports'
+import BillingRequests from './pages/BillingRequests'
 
 const queryClient = new QueryClient()
 
@@ -244,6 +245,14 @@ export default function App() {
                         element={
                           <RoleRoute roles={['admin']}>
                             <BugReports />
+                          </RoleRoute>
+                        }
+                      />
+                      <Route
+                        path="/billing-requests"
+                        element={
+                          <RoleRoute roles={['admin']}>
+                            <BillingRequests />
                           </RoleRoute>
                         }
                       />

@@ -26,6 +26,7 @@ import { formatPhone } from '../lib/phone'
 import { displayOutcome } from '../lib/closerOutcome'
 import LogCallModal from '../components/LogCallModal'
 import CloserLeadModal from '../components/CloserLeadModal'
+import BillingRequestModal from '../components/BillingRequestModal'
 import { zonedDateStr, zonedDayRange, mondayOf, shiftDay } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 import { SearchBar, filterLeads } from './Pipeline'
@@ -1060,6 +1061,7 @@ function AttentionDot({ kind }) {
 function ClientOverview({ profile }) {
   const { session } = useAuth()
   const { data: deal, isLoading, isError } = useMyDeal()
+  const [showBillingRequest, setShowBillingRequest] = useState(false)
 
   // Prompt 590 — two mutually-exclusive header states (was two separately-
   // rendered h1/p blocks, one per early-return branch): the loading/no-deal
@@ -1100,6 +1102,8 @@ function ClientOverview({ profile }) {
             Bounded to today by design — always short, never a scroll-forever log.
           </p>
         </div>
+        <BillingSection onRequestClick={() => setShowBillingRequest(true)} />
+        {showBillingRequest && <BillingRequestModal onClose={() => setShowBillingRequest(false)} />}
       </div>
     )
   }
@@ -1160,6 +1164,24 @@ function ClientOverview({ profile }) {
           </p>
         </div>
       </div>
+
+      <BillingSection onRequestClick={() => setShowBillingRequest(true)} />
+      {showBillingRequest && <BillingRequestModal onClose={() => setShowBillingRequest(false)} />}
+    </div>
+  )
+}
+
+// Prompt 611 — client-facing entry point for a lightweight "notify the
+// team" billing request. Same visual weight as the Tiles/attention cards
+// around it; the actual form lives in BillingRequestModal.
+function BillingSection({ onRequestClick }) {
+  return (
+    <div className="flex items-center justify-between rounded-card border border-line bg-elevated px-5 py-[18px]">
+      <div>
+        <p className="eyebrow !text-fg-faint">Billing</p>
+        <p className="mt-1 font-sans text-sm text-fg-secondary">Need to update your payment method on file?</p>
+      </div>
+      <Button variant="secondary" onClick={onRequestClick}>Request payment method change</Button>
     </div>
   )
 }
