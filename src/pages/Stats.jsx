@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { X } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useAllLeadsForStats, useReps, statsForUser, statsForCloser, closerCloseRateByWeek } from '../hooks/useStats'
@@ -7,7 +6,7 @@ import { useMyAllCalls, groupCallsByDay, isPerfectDay } from '../hooks/useBadges
 import { WeekPaginator } from '../components/ui/WeekPaginator'
 import { DayPaginator } from '../components/ui/DayPaginator'
 import { MonthPaginator } from '../components/ui/MonthPaginator'
-import { DateRangeCalendar } from '../components/ui/DateRangeCalendar'
+import { CustomDatePicker, formatRangeLabel } from '../components/ui/CustomDatePicker'
 import { PillToggle } from '../components/ui/PillToggle'
 import {
   zonedDateStr, zonedDayRange, mondayOf, shiftDay, lastNBusinessDays,
@@ -37,13 +36,6 @@ const PERIOD_TABS = [
   { key: 'monthly', label: 'Monthly' },
   { key: 'allTime', label: 'All Time' },
 ]
-
-function formatRangeLabel(range) {
-  const short = (d) => new Date(`${d}T00:00:00.000Z`).toLocaleDateString(undefined, {
-    month: 'short', day: 'numeric', timeZone: 'UTC',
-  })
-  return range.start === range.end ? short(range.start) : `${short(range.start)} – ${short(range.end)}`
-}
 
 function weekdayLabel(dateStr) {
   return new Date(`${dateStr}T00:00:00.000Z`).toLocaleDateString(undefined, { weekday: 'short', timeZone: 'UTC' })
@@ -395,89 +387,10 @@ function mockCloseWeeks(currentMonday) {
   return weeks
 }
 
-// Prompt 536 reopen round 2 — All Time no longer shows the calendar
-// inline the moment the tab is picked (that pushed every card/section
-// below it down the page). Now a "Custom Date" pill trigger sits in the
-// same navigator slot Daily/Monthly's paginators use; clicking it opens
-// the real DateRangeCalendar as a floating popover (same
-// relative-wrapper + absolute-panel + click-outside-to-close pattern
-// Layout.jsx's own NotificationBell already established — reused
-// verbatim, not reinvented) so it floats over whatever's beneath it
-// instead of shifting layout. Completing a real selection (a full
-// start/end pair from the calendar, not just the first pending click)
-// closes the popover automatically; Clear inside it also closes it.
-//
-// Prompt 536 reopen round 3 — default label reads "All Time" and an "X"
-// button resets back to it — with no range picked this now genuinely
-// shows the true all-time totals rather than an empty prompt state, see
-// Stats() below.
-//
-// Prompt 536 reopen round 4 — two fixes: (1) default label reverted to
-// "Custom Date" per Brayden's clarification — "All Time" duplicated the
-// tab label it sits next to, and the true-all-time-by-default *behavior*
-// from round 3 is unchanged, only this pill's idle text changes. (2)
-// dropped round 3's measure-and-animate width entirely in favor of this
-// app's own established pattern for a steady-width nav control —
-// DayPaginator/MonthPaginator both just reserve a fixed `min-w-[Npx]` on
-// their label span sized for their longest realistic text, so the pill
-// never visibly resizes at all rather than resizing smoothly. Brayden's
-// own ask ("hold that same steady width... rather than shrinking/growing
-// noticeably") is a stricter bar than round 3's animation cleared —
-// matching the existing paginators' own technique is both simpler and
-// exactly what he pointed at as the reference.
-function CustomDatePicker({ range, onChange, initialMonth, today }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-  const label = range ? formatRangeLabel(range) : 'Custom Date'
-
-  useEffect(() => {
-    function handleClick(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
-
-  return (
-    <div ref={ref} className="relative">
-      {/* Prompt 538 — height locked to DayPaginator/MonthPaginator's own
-          real measured height (38px: their `p-1` wrapper + `h-7` buttons +
-          border, not the 36px the padding arithmetic alone suggests)
-          instead of the shorter `py-1.5` this pill previously used, which
-          rendered visibly shorter with the label off-center vertically. */}
-      <div className="flex h-[38px] items-center rounded-full border border-line bg-elevated pl-4 pr-1.5 transition-colors hover:bg-surface">
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="min-w-[120px] text-center font-sans text-xs font-medium text-fg-primary"
-        >
-          {label}
-        </button>
-        {range && (
-          <button
-            onClick={() => onChange(null)}
-            aria-label="Clear custom date range"
-            className="ml-1 shrink-0 rounded-full p-1 text-fg-faint transition-colors hover:bg-elevated hover:text-fg-primary"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        )}
-      </div>
-      {open && (
-        <div className="absolute right-0 top-full z-20 mt-2 w-72 shadow-lg">
-          <p className="mb-2 rounded-card border border-line bg-elevated px-3 py-2 font-sans text-[11px] text-fg-secondary">
-            Select a start or end date, or double-click a date for a single day.
-          </p>
-          <DateRangeCalendar
-            range={range}
-            onChange={(r) => { onChange(r); setOpen(false) }}
-            initialMonth={initialMonth}
-            today={today}
-          />
-        </div>
-      )}
-    </div>
-  )
-}
+// Prompt 606 — CustomDatePicker (and formatRangeLabel) moved to
+// src/components/ui/CustomDatePicker.jsx so SetterActivity's own All Time
+// tab can share it instead of duplicating it. See that file for the full
+// Prompt 536 reopen-round history that shaped this control.
 
 export default function Stats() {
   const { profile } = useAuth()
