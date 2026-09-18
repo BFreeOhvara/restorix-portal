@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { Play } from 'lucide-react'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 import { PillToggle } from '../components/ui/PillToggle'
 import { usePageHeader } from '../components/Layout'
 import { SurveyBody } from './Survey'
 import { useBrand } from '../hooks/useBrand'
+import Modal from '../components/ui/Modal'
 
 // Plain-text content area — Brayden edits SCRIPT_SECTIONS directly to update
 // call scripts. No generation or CMS, per spec (Prompt 433, relocated here
@@ -95,6 +97,50 @@ Good question — honestly it depends on your call volume, which is exactly why 
   },
 ]
 
+// Prompt 607 — real content for the Videos tab, hardcoded same as
+// SCRIPT_SECTIONS above (no CMS/generation system). No role split: same
+// videos for every role that can see this tab, unlike the Script tab.
+const VIDEO_SECTIONS = [
+  {
+    title: 'Cold Calling Mindset & Fundamentals',
+    videos: [
+      { title: "The ONLY Cold Call Mindset Video You'll Ever Need", youtubeId: 'jc0WyiPuXLU' },
+      { title: '10 Cold Calling Tips: Go From Beginner to Master', youtubeId: 'kc6tv4GKspA' },
+      { title: '2026 Cold Calling Techniques (He Trained 1 Million Sales Reps)', youtubeId: 'il2p-OD4Res' },
+    ],
+  },
+  {
+    title: 'The Opener',
+    videos: [
+      { title: 'The ONLY Cold Call Opener You Need (+ a few other tips)', youtubeId: 'f7ys83DQXGg' },
+      { title: 'BEST Appointment Setting Script | Setter Training', youtubeId: 'HDA9jURJlBc' },
+    ],
+  },
+  {
+    title: 'Discovery & Qualifying Questions',
+    videos: [
+      { title: 'How To Ask Discovery Questions To Uncover Business Problems', youtubeId: 'SThDd_7Y5Fw' },
+      { title: 'Use These Discovery Questions to Quantify Pain', youtubeId: 'UCrAj5tlcd8' },
+    ],
+  },
+  {
+    title: 'Objection Handling',
+    videos: [
+      { title: 'Learn The 3-Step Framework to Handle Any Cold Call Objection', youtubeId: 'NtrC9DK_qE8' },
+      { title: "How I Handle 'Not Interested' (Cold Call Script)", youtubeId: 'z_JohGi_i7k' },
+      { title: "3 Simple Tricks to Overcome 'I'm Not Interested' on Cold Calls", youtubeId: 'kHhemhC1OsA' },
+    ],
+  },
+  {
+    title: 'Booking the Appointment',
+    videos: [
+      { title: 'How I Book 3-5 Appointments Per Day (B2B Cold Calling)', youtubeId: 'dnOu6ysy7NU' },
+      { title: 'How to Book the Meeting on the 2nd Ask', youtubeId: 'mQ68FJYL8Lg' },
+      { title: '5 Easy Steps to Set More Appointments', youtubeId: 'bycAeHjGUcU' },
+    ],
+  },
+]
+
 const TABS = [
   { key: 'script', label: 'Script' },
   { key: 'videos', label: 'Videos' },
@@ -135,6 +181,70 @@ function ComingSoonTab({ message }) {
   )
 }
 
+// Prompt 607 — modal unmounts the iframe on close (same cleanup-on-close
+// discipline as MyCalls.jsx's RecordingModal) so playback actually stops
+// instead of continuing hidden behind the closed modal.
+function VideoModal({ title, youtubeId, onClose }) {
+  return (
+    <Modal title={title} onClose={onClose} width="max-w-2xl">
+      <div className="aspect-video w-full overflow-hidden rounded-card">
+        <iframe
+          className="h-full w-full"
+          src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1`}
+          title={title}
+          allow="autoplay; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    </Modal>
+  )
+}
+
+function VideoCard({ title, youtubeId }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="group text-left"
+      >
+        <div className="relative aspect-video w-full overflow-hidden rounded-card border border-line bg-elevated">
+          <img
+            src={`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`}
+            alt={title}
+            className="h-full w-full object-cover"
+          />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/25 transition-colors group-hover:bg-black/40">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white">
+              <Play size={20} fill="currentColor" />
+            </div>
+          </div>
+        </div>
+        <p className="mt-2 font-sans text-sm text-fg-primary">{title}</p>
+      </button>
+      {open && <VideoModal title={title} youtubeId={youtubeId} onClose={() => setOpen(false)} />}
+    </>
+  )
+}
+
+function VideosTab() {
+  return (
+    <div className="space-y-8">
+      {VIDEO_SECTIONS.map((section) => (
+        <div key={section.title}>
+          <h3 className="font-display text-lg font-medium text-fg-primary">{section.title}</h3>
+          <div className="mt-3 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {section.videos.map((video) => (
+              <VideoCard key={video.youtubeId} title={video.title} youtubeId={video.youtubeId} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function Training() {
   const [tab, setTab] = useState('script')
   const [scriptRole, setScriptRole] = useState('closer')
@@ -159,7 +269,7 @@ export default function Training() {
             </div>
           </div>
         )}
-        {tab === 'videos' && <ComingSoonTab message="Training videos are coming soon." />}
+        {tab === 'videos' && <VideosTab />}
       </div>
     </div>
   )
