@@ -206,7 +206,7 @@ export function useCommissionLeads() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('leads')
-        .select('id, facility_name, last_action_by, deal_setup_fee, deal_first_month_fee, updated_at')
+        .select('id, facility_name, last_action_by, assigned_closer, deal_setup_fee, deal_first_month_fee, closer_outcome_at, updated_at')
         .eq('closer_outcome', 'closed')
         .order('updated_at', { ascending: false })
       if (error) throw error
