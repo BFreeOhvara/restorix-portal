@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Phone, Search, ClipboardEdit, CheckCircle2, Video, AlertTriangle, ArrowRight } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
@@ -629,7 +629,15 @@ function CloserBookedPipeline({ profile }) {
   const { data: allLeads, isLoading } = useMyBooked(profile.id)
   const [activeLead, setActiveLead] = useState(null)
   const [search, setSearch] = useState('')
-  const [outcomeFilter, setOutcomeFilter] = useState('pending')
+  // Prompt 608 — Overview's Pipeline Snapshot (and the No Show banner)
+  // deep-link here with ?outcome=<key> so landing on My Pipeline shows the
+  // outcome the closer actually clicked instead of always defaulting to
+  // Pending. Read once at mount, same as any other initial-state default.
+  const [searchParams] = useSearchParams()
+  const initialOutcome = searchParams.get('outcome')
+  const [outcomeFilter, setOutcomeFilter] = useState(
+    CLOSER_OUTCOME_TILES.includes(initialOutcome) ? initialOutcome : 'pending'
+  )
 
   // Prompt 549 — My Pipeline scopes to the current portal's niche (settled
   // 2026-08-29, overriding Prompt 547's "one combined list"): a closer on
@@ -771,18 +779,26 @@ function CloserBookedPipeline({ profile }) {
   )
 }
 
-// Prompt 548 — one row of the closer Overview's "Today's Strategy Calls"
-// list. Local time · facility · contact, then a real Zoom join link when
+// Prompt 548 — one row of the closer Overview's strategy-calls list. Local
+// time · facility · contact, then a real Zoom join link when
 // `zoom_join_url` is set (opens in a new tab, doesn't bubble to the row's
 // own click) or muted "Zoom pending" text when it isn't. The row itself
 // opens the same CloserLeadModal My Pipeline uses.
-function StrategyCallRow({ lead, tz, onOpen }) {
-  const time = new Date(lead.strategy_call_at).toLocaleTimeString('en-US', {
-    timeZone: tz, hour: 'numeric', minute: '2-digit',
-  })
+// Prompt 608 — `showDate` renders weekday+date ahead of the time for the
+// Upcoming group, so a row further out than today doesn't read as if it
+// were happening right now; Today's own rows keep the original time-only
+// format unchanged.
+function StrategyCallRow({ lead, tz, onOpen, showDate }) {
+  const when = showDate
+    ? new Date(lead.strategy_call_at).toLocaleString('en-US', {
+        timeZone: tz, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+      })
+    : new Date(lead.strategy_call_at).toLocaleTimeString('en-US', {
+        timeZone: tz, hour: 'numeric', minute: '2-digit',
+      })
   return (
     <tr onClick={onOpen} className="cursor-pointer border-t border-line font-sans text-sm hover:bg-surface">
-      <td className="px-5 py-4 font-mono text-fg-primary [font-variant-numeric:tabular-nums]">{time}</td>
+      <td className="px-5 py-4 font-mono text-fg-primary [font-variant-numeric:tabular-nums]">{when}</td>
       <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
       <td className="px-5 py-4 text-fg-secondary">
         {lead.contact_name || 'No contact name'} · {formatPhone(lead.phone) || 'No phone'}
@@ -846,6 +862,38 @@ export function CloserOverview({ profile, title = 'Overview' }) {
     [leads, todayRange]
   )
 
+  // Prompt 608 — the same rule as todaysCalls (unresolved, real
+  // strategy_call_at) just shifted to any day after today, so the section
+  // below always has something to show as long as *any* future call is
+  // booked, not only on days with something today. Capped at 5 — this is
+  // a glance list, not a paginated table (that's My Pipeline's job).
+  const UPCOMING_CALLS_LIMIT = 5
+  const upcomingCalls = useMemo(
+    () =>
+      (leads || [])
+        .filter(
+          (l) =>
+            l.strategy_call_at &&
+            new Date(l.strategy_call_at) >= new Date(todayRange.end) &&
+            (!l.closer_outcome || l.closer_outcome === 'pending')
+        )
+        .sort((a, b) => new Date(a.strategy_call_at) - new Date(b.strategy_call_at))
+        .slice(0, UPCOMING_CALLS_LIMIT),
+    [leads, todayRange]
+  )
+
+  // Prompt 608 — Pipeline Snapshot's counts, same 4 keys/order as
+  // CLOSER_OUTCOME_TILES and My Pipeline's own Closer-tab chips, over the
+  // same all-time `leads` array already in memory (no new query).
+  const outcomeCounts = useMemo(() => {
+    const counts = { pending: 0, no_show: 0, lost: 0, closed: 0 }
+    for (const l of leads || []) {
+      const o = displayOutcome(l)
+      if (o in counts) counts[o] += 1
+    }
+    return counts
+  }, [leads])
+
   const tiles = useMemo(() => {
     const all = leads || []
     // Booked This Week — mirrors statsForCloser's `assigned` rule
@@ -892,7 +940,7 @@ export function CloserOverview({ profile, title = 'Overview' }) {
           whose No Show filter chip already exists (CLOSER_OUTCOME_TILES). */}
       {!isLoading && noShowCount > 0 && (
         <Link
-          to="/my-pipeline"
+          to="/my-pipeline?outcome=no_show"
           className={clsx(
             'mt-4 flex flex-wrap items-center gap-3 rounded-card border border-line px-4 py-3 transition-opacity hover:opacity-90',
             OUTCOME_TINT.no_show
@@ -908,13 +956,45 @@ export function CloserOverview({ profile, title = 'Overview' }) {
         </Link>
       )}
 
-      <h2 className="mt-8 font-display text-lg font-medium text-fg-primary">Today's Strategy Calls</h2>
+      {/* Prompt 608 — Pipeline Snapshot: this closer's whole booked-lead
+          pipeline, all-time, broken down the same 4 keys/order as My
+          Pipeline's own Closer-tab chips (CLOSER_OUTCOME_TILES), styled
+          with the exact same OUTCOME_TINT/OUTCOME_LABELS so it reads as
+          the same visual language rather than a new color system. Each
+          card deep-links straight into that outcome's filter on My
+          Pipeline. Placed above the calls list so the page has an
+          at-a-glance whole-book view before the time-sensitive detail. */}
+      <h2 className="mt-8 font-display text-lg font-medium text-fg-primary">Pipeline Snapshot</h2>
+      <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {CLOSER_OUTCOME_TILES.map((key) => (
+          <Link
+            key={key}
+            to={`/my-pipeline?outcome=${key}`}
+            className={clsx('rounded-card border border-line p-5 transition-opacity hover:opacity-90', OUTCOME_TINT[key])}
+          >
+            <p className={clsx('eyebrow', OUTCOME_TINT[key])}>{OUTCOME_LABELS[key]}</p>
+            <p className={clsx('mt-2 font-display text-3xl font-medium', OUTCOME_TINT[key])}>
+              {isLoading ? '—' : outcomeCounts[key]}
+            </p>
+          </Link>
+        ))}
+      </div>
+
+      {/* Prompt 608 — "Today's Strategy Calls" widened to "Strategy Calls":
+          today's rows first, then the next few upcoming ones beyond today
+          (upcomingCalls, already sorted/capped above), so the section has
+          something to show as long as *any* future call is booked, not
+          only on days with something today. Group labels only render when
+          both groups are actually present — a day that's only "today" or
+          only "upcoming" doesn't need a label disambiguating it from an
+          empty group. */}
+      <h2 className="mt-8 font-display text-lg font-medium text-fg-primary">Strategy Calls</h2>
       <div className="mt-3 overflow-hidden rounded-card border border-line bg-elevated">
         {isLoading ? (
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
-        ) : !todaysCalls.length ? (
+        ) : !todaysCalls.length && !upcomingCalls.length ? (
           <p className="p-8 text-center font-sans text-sm text-fg-secondary">
-            No strategy calls scheduled for today.
+            No strategy calls booked today or upcoming.
           </p>
         ) : (
           <table className="w-full text-left">
@@ -927,8 +1007,25 @@ export function CloserOverview({ profile, title = 'Overview' }) {
               </tr>
             </thead>
             <tbody>
+              {todaysCalls.length > 0 && upcomingCalls.length > 0 && (
+                <tr>
+                  <td colSpan={4} className="eyebrow border-t border-line bg-surface px-5 py-2 !text-fg-faint">
+                    Today
+                  </td>
+                </tr>
+              )}
               {todaysCalls.map((lead) => (
                 <StrategyCallRow key={lead.id} lead={lead} tz={tz} onOpen={() => setActiveLead(lead)} />
+              ))}
+              {todaysCalls.length > 0 && upcomingCalls.length > 0 && (
+                <tr>
+                  <td colSpan={4} className="eyebrow border-t border-line bg-surface px-5 py-2 !text-fg-faint">
+                    Upcoming
+                  </td>
+                </tr>
+              )}
+              {upcomingCalls.map((lead) => (
+                <StrategyCallRow key={lead.id} lead={lead} tz={tz} onOpen={() => setActiveLead(lead)} showDate />
               ))}
             </tbody>
           </table>
