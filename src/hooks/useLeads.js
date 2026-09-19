@@ -306,6 +306,30 @@ export function useLogCall() {
   })
 }
 
+// Prompt 612 — persists the Closer Survey's most recently completed result
+// onto the lead itself (survey_front_runner/survey_sub_agents), so a deal's
+// Stack survives closing and reopening CloserLeadModal (or a different day
+// entirely) instead of living only in that modal's local React state.
+// Reaching the survey's summary step again overwrites this with the latest
+// run — the most recent completed run always wins, by design.
+export function useSaveSurveyStack() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, frontRunner, subAgents }) => {
+      const { error } = await supabase
+        .from('leads')
+        .update({ survey_front_runner: frontRunner, survey_sub_agents: subAgents })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['leads'] })
+      queryClient.invalidateQueries({ queryKey: ['my-booked'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-closer-leads'] })
+    },
+  })
+}
+
 // Prompt 515 Part 3 — a setter's own Follow-up leads, split into `due`
 // (today or overdue) vs `future` (not yet due). Deliberately reads from
 // `leads`, NOT `follow_up_queue` — `follow_up_queue`'s only SELECT policy

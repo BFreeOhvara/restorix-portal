@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import clsx from 'clsx'
-import Modal from './ui/Modal'
 import { Field, inputClass } from './ui/Field'
 import { Button } from './ui/Button'
-import { AgentPicker } from './AgentPicker'
+import { ConfirmedStackSummary } from './ConfirmedStackSummary'
 import { OUTCOME_LABELS, OUTCOME_SOLID, OUTCOME_TINT } from './ui/OutcomeBadge'
 import { useLogCloserOutcome } from '../hooks/useLeads'
 import { priceForSelection } from '../lib/agentCatalog'
@@ -30,53 +29,21 @@ const OUTCOMES = ['pending', 'lost', 'closed']
 // wrapper of its own) plus this thin wrapper, so the new combined
 // Closer Overview lead modal can embed the exact same form logic
 // alongside the Closer Survey inside one shared `<Modal>` instead of
-// duplicating the outcome-picker/deal-value logic. `LogOutcomeModal`
-// itself is unchanged for its existing standalone callers (Pipeline.jsx,
-// the admin Closer tab) — same props, same behavior.
+// duplicating the outcome-picker/deal-value logic.
 //
-// Prompt 610 — `frontRunner`/`subAgents`/`onFrontRunnerChange`/
-// `onToggleSubAgent` are optional and only ever passed by CloserLeadModal
-// (the shared agent-selection state lives there, same precedent as
-// `surveyResults`). When they're present and the outcome is Closed, the
-// same AgentPicker used by the Client Portal tab renders here too, and
-// its selection computes a suggested setup/first-month fee. Standalone
-// `LogOutcomeModal` callers pass none of this, so `hasPicker` is false
-// and behavior is unchanged for them.
-export function LogOutcomeForm({ lead, onClose, frontRunner, subAgents, onFrontRunnerChange, onToggleSubAgent }) {
+// Prompt 612 — the deal-value inputs are gone. A deal's Stack (and
+// therefore its price) comes only from the Closer Survey's most recently
+// completed run for this lead — CloserLeadModal always passes
+// `frontRunner`/`subAgents` (read-only; there's no picker to edit them
+// with anymore). Closed is blocked entirely until a Stack exists.
+export function LogOutcomeForm({ lead, onClose, frontRunner, subAgents = new Set() }) {
   const [outcome, setOutcome] = useState(lead.closer_outcome || 'pending')
   const [notes, setNotes] = useState(lead.closer_notes || '')
-  const [setupFee, setSetupFee] = useState(lead.deal_setup_fee ?? '')
-  const [firstMonthFee, setFirstMonthFee] = useState(lead.deal_first_month_fee ?? '')
-  // Already has a value (re-opening a logged deal) counts as "adjusted" —
-  // don't let a later agent pick silently overwrite it.
-  const [feesTouched, setFeesTouched] = useState(
-    () => lead.deal_setup_fee != null || lead.deal_first_month_fee != null
-  )
   const logOutcome = useLogCloserOutcome()
 
   const isClosed = outcome === 'closed'
-  const hasPicker = typeof onFrontRunnerChange === 'function'
-  const setupFeeValid = setupFee !== '' && Number(setupFee) >= 0
-  const firstMonthFeeValid = firstMonthFee !== '' && Number(firstMonthFee) >= 0
-  const canSubmit = !isClosed || (setupFeeValid && firstMonthFeeValid)
-
-  useEffect(() => {
-    if (!isClosed || !hasPicker || feesTouched || !frontRunner) return
-    const price = priceForSelection(frontRunner, [...subAgents])
-    setSetupFee(String(price.setupFee))
-    setFirstMonthFee(String(price.monthlyFee))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isClosed, hasPicker, feesTouched, frontRunner, subAgents])
-
-  function handleSetupFeeChange(e) {
-    setFeesTouched(true)
-    setSetupFee(e.target.value)
-  }
-
-  function handleFirstMonthFeeChange(e) {
-    setFeesTouched(true)
-    setFirstMonthFee(e.target.value)
-  }
+  const price = frontRunner ? priceForSelection(frontRunner, [...subAgents]) : null
+  const canSubmit = !isClosed || !!frontRunner
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -85,8 +52,8 @@ export function LogOutcomeForm({ lead, onClose, frontRunner, subAgents, onFrontR
       id: lead.id,
       closer_outcome: outcome,
       closer_notes: notes,
-      deal_setup_fee: isClosed ? Number(setupFee) : undefined,
-      deal_first_month_fee: isClosed ? Number(firstMonthFee) : undefined,
+      deal_setup_fee: isClosed ? price.setupFee : undefined,
+      deal_first_month_fee: isClosed ? price.monthlyFee : undefined,
     })
     onClose()
   }
@@ -111,40 +78,21 @@ export function LogOutcomeForm({ lead, onClose, frontRunner, subAgents, onFrontR
         </div>
       </Field>
 
-      {isClosed && hasPicker && (
-        <AgentPicker
-          frontRunner={frontRunner}
-          onFrontRunnerChange={onFrontRunnerChange}
-          subAgents={subAgents}
-          onToggleSubAgent={onToggleSubAgent}
-        />
-      )}
-
       {isClosed && (
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Setup fee ($)">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              className={inputClass()}
-              value={setupFee}
-              onChange={handleSetupFeeChange}
-              required
-            />
-          </Field>
-          <Field label="First month fee ($)">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              className={inputClass()}
-              value={firstMonthFee}
-              onChange={handleFirstMonthFeeChange}
-              required
-            />
-          </Field>
-        </div>
+        <>
+          <ConfirmedStackSummary frontRunner={frontRunner} subAgents={subAgents} />
+          {price ? (
+            <p className="rounded-lg border border-line bg-surface px-4 py-3 font-sans text-sm text-fg-primary">
+              Setup fee: <span className="font-medium">${price.setupFee.toLocaleString()}</span> · First month
+              total: <span className="font-medium">${price.firstMonthTotal.toLocaleString()}</span> · Then{' '}
+              <span className="font-medium">${price.monthlyFee.toLocaleString()}/mo</span>
+            </p>
+          ) : (
+            <p className="rounded-lg border border-line bg-surface px-4 py-3 font-sans text-sm text-fg-secondary">
+              Run the Closer Survey with this client first — Closed needs a Stack and price from it.
+            </p>
+          )}
+        </>
       )}
 
       <Field label="Notes">
@@ -166,13 +114,5 @@ export function LogOutcomeForm({ lead, onClose, frontRunner, subAgents, onFrontR
         </Button>
       </div>
     </form>
-  )
-}
-
-export default function LogOutcomeModal({ lead, onClose }) {
-  return (
-    <Modal title={`Log outcome — ${lead.facility_name}`} onClose={onClose} width="max-w-xl">
-      <LogOutcomeForm lead={lead} onClose={onClose} />
-    </Modal>
   )
 }

@@ -19,17 +19,26 @@
 // RESULTS_CONTENT in survey.js, keyed identically to these keys, so the
 // Closer Survey and the client dashboard can never drift.
 //
-// Prompt 610 — every entry also carries `price: { setupFee, monthlyFee }`
-// so a closer's agent picks can compute a suggested deal price instead of
-// being typed in from nothing. THESE ARE PLACEHOLDER NUMBERS, not
-// Brayden's real pricing — front-runners priced higher than sub-agents
-// since they're the core product, but flag clearly for Brayden to tune
-// once he sees them live against real deals.
+// Prompt 612 — deal pricing is fully computed and locked: a deal's price is
+// derived entirely from the Closer Survey's Stack (front-runner + sub-agents),
+// never typed in. `price.setupFee` is no longer stored per entry — only
+// `price.monthlyFee` is real per-agent data; the setup fee is always
+// SETUP_FEE_PERCENT of the computed monthly total, then both figures are
+// charm-rounded to a $X99 price via charm99(). Both front-runners share the
+// same $999/mo base per Brayden's own worked example.
 
 import { RESULTS_CONTENT } from './survey'
 
 export const FRONT_RUNNER_KEYS = ['intake_triage', 'missed_call_recovery']
 export const SUB_AGENT_KEYS = ['insurance', 'follow_up', 'bed_sync', 'reminders', 'referral_reporting']
+
+export const SETUP_FEE_PERCENT = 0.75
+
+// Rounds up to the nearest hundred, then drops a dollar — the "charm $X99
+// price" every client-facing figure gets rounded to (e.g. 1128 -> 1199).
+export function charm99(x) {
+  return Math.ceil(x / 100) * 100 - 1
+}
 
 export const AGENT_CATALOG = {
   intake_triage: {
@@ -37,65 +46,73 @@ export const AGENT_CATALOG = {
     label: 'Inbound Intake & Triage',
     status: 'placeholder', // 'placeholder' | 'live'
     needsConnect: ['phone_number'],
-    price: { setupFee: 297, monthlyFee: 599 },
+    price: { monthlyFee: 999 },
   },
   missed_call_recovery: {
     kind: 'front_runner',
     label: 'Missed-Call Recovery',
     status: 'placeholder',
     needsConnect: ['phone_number'],
-    price: { setupFee: 297, monthlyFee: 549 },
+    price: { monthlyFee: 999 },
   },
   insurance: {
     kind: 'sub_agent',
     label: 'Insurance / payer verification',
     status: 'placeholder',
     needsConnect: [],
-    price: { setupFee: 0, monthlyFee: 199 },
+    price: { monthlyFee: 199 },
   },
   follow_up: {
     kind: 'sub_agent',
     label: 'Follow-up & nurture',
     status: 'placeholder',
     needsConnect: [],
-    price: { setupFee: 0, monthlyFee: 149 },
+    price: { monthlyFee: 149 },
   },
   bed_sync: {
     kind: 'sub_agent',
     label: 'Bed/program availability sync',
     status: 'placeholder',
     needsConnect: [],
-    price: { setupFee: 0, monthlyFee: 179 },
+    price: { monthlyFee: 179 },
   },
   reminders: {
     kind: 'sub_agent',
     label: 'Appointment Reminder & No-Show Prevention',
     status: 'placeholder',
     needsConnect: [],
-    price: { setupFee: 0, monthlyFee: 129 },
+    price: { monthlyFee: 129 },
   },
   referral_reporting: {
     kind: 'sub_agent',
     label: 'Referral-source reporting',
     status: 'placeholder',
     needsConnect: [],
-    price: { setupFee: 0, monthlyFee: 149 },
+    price: { monthlyFee: 149 },
   },
 }
 
-// Prompt 610 — sums a front-runner + its selected sub-agents into one
-// suggested price. Safe to call with an empty/unknown front-runner key
-// (returns zeros) so callers can compute this before a pick is made.
+// Prompt 612 — sums a front-runner + its selected sub-agents' monthlyFee,
+// charm-rounds it, derives the setup fee as SETUP_FEE_PERCENT of that
+// monthly total, then charm-rounds the combined first-month total and backs
+// the setup fee out of it — so every dollar figure a client sees ends in 99.
+// `firstMonthTotal` (setup + monthly) is for display only; callers persist
+// `setupFee`/`monthlyFee` (matches deal_setup_fee/deal_first_month_fee).
+// Safe to call with no front-runner picked yet — returns all zeros rather
+// than charm-rounding a $0 selection into -$1.
 export function priceForSelection(frontRunnerKey, subAgentKeys = []) {
   const front = AGENT_CATALOG[frontRunnerKey]?.price
-  const total = { setupFee: front?.setupFee ?? 0, monthlyFee: front?.monthlyFee ?? 0 }
+  let rawMonthly = front?.monthlyFee ?? 0
   for (const key of subAgentKeys) {
-    const price = AGENT_CATALOG[key]?.price
-    if (!price) continue
-    total.setupFee += price.setupFee
-    total.monthlyFee += price.monthlyFee
+    rawMonthly += AGENT_CATALOG[key]?.price?.monthlyFee ?? 0
   }
-  return total
+  if (rawMonthly <= 0) return { setupFee: 0, monthlyFee: 0, firstMonthTotal: 0 }
+
+  const monthlyFee = charm99(rawMonthly)
+  const rawSetup = monthlyFee * SETUP_FEE_PERCENT
+  const firstMonthTotal = charm99(monthlyFee + rawSetup)
+  const setupFee = firstMonthTotal - monthlyFee
+  return { setupFee, monthlyFee, firstMonthTotal }
 }
 
 export const CONNECT_LABELS = {
