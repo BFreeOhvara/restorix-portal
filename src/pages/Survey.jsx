@@ -3,6 +3,7 @@ import clsx from 'clsx'
 import { RotateCcw, ChevronDown } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Field, inputClass } from '../components/ui/Field'
+import { priceForSurveyValue } from '../lib/agentCatalog'
 import * as surveyBH from '../lib/survey'
 import * as surveySuretix from '../lib/surveySuretix'
 
@@ -248,6 +249,9 @@ export function SurveyBody({ onResults, niche = 'behavioral_health', hidePageHea
 
   const isSummary = step.key === 'summary'
   const results = isSummary ? M.computeSurveyResults(state) : null
+  // Prompt 616 — live, not stored: recomputed from `results` every render,
+  // same numbers `priceForSurveyValue` (Prompt 614) would produce.
+  const price = isSummary ? priceForSurveyValue(results.missedCallsPerWeek, results.admissionValue) : null
   const advanceOk = M.canAdvance(step.key, state)
 
   useEffect(() => {
@@ -567,9 +571,27 @@ export function SurveyBody({ onResults, niche = 'behavioral_health', hidePageHea
               )}
             </div>
 
+            <div>
+              <p className="eyebrow">Estimated price</p>
+              <dl className="mt-2 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-line bg-surface px-4 py-3">
+                  <dt className="eyebrow !text-fg-faint">First month</dt>
+                  <dd className="mt-1 font-sans text-sm font-medium text-fg-primary">
+                    ${price.firstMonthTotal.toLocaleString()}
+                  </dd>
+                </div>
+                <div className="rounded-lg border border-line bg-surface px-4 py-3">
+                  <dt className="eyebrow !text-fg-faint">Then monthly</dt>
+                  <dd className="mt-1 font-sans text-sm font-medium text-fg-primary">
+                    ${price.monthlyFee.toLocaleString()}/mo
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
             <p className="font-sans text-xs text-fg-faint">
-              Talk track and qualification only — the actual setup fee and first month get entered when you
-              log this deal as Closed.
+              Estimated first month and monthly price, based on what's captured above. This becomes the
+              deal's actual locked price the moment you log it as Closed.
             </p>
           </div>
         )}
