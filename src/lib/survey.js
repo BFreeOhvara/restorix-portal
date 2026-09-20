@@ -335,5 +335,9 @@ export function computeSurveyResults(state) {
     missedCallStrongSignal,
     subAgents,
     pricingInputs,
+    // Prompt 614 — raw values the pricing formula needs, so callers don't
+    // have to re-parse pricingInputs' formatted display strings.
+    missedCallsPerWeek: state.missedCallsPerWeek,
+    admissionValue: state.admissionValue,
   }
 }

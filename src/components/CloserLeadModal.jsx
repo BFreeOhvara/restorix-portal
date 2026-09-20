@@ -178,14 +178,30 @@ export default function CloserLeadModal({ lead, onClose }) {
   )
   const [frontRunner, setFrontRunner] = useState(lead.survey_front_runner || '')
   const [subAgents, setSubAgents] = useState(() => new Set(lead.survey_sub_agents || []))
+  // Prompt 614 — same "lift to local state" precedent as frontRunner/
+  // subAgents above: `lead` is a snapshot captured when its row was clicked
+  // and doesn't refresh mid-session, so the two pricing-input survey answers
+  // live here too rather than being read from `lead.survey_*` directly —
+  // otherwise completing the survey wouldn't update the price shown on the
+  // Log Outcome tab until the modal was closed and reopened.
+  const [missedCallsPerWeek, setMissedCallsPerWeek] = useState(lead.survey_missed_calls_per_week || '')
+  const [admissionValue, setAdmissionValue] = useState(lead.survey_admission_value || '')
 
   const handleSurveyResults = useCallback(
     (results) => {
       const subKeys = results.subAgents?.map((a) => a.key) || []
       setFrontRunner(results.frontRunnerKey || '')
       setSubAgents(new Set(subKeys))
+      setMissedCallsPerWeek(results.missedCallsPerWeek || '')
+      setAdmissionValue(results.admissionValue || '')
       if (results.frontRunnerKey) {
-        saveSurveyStack.mutate({ id: lead.id, frontRunner: results.frontRunnerKey, subAgents: subKeys })
+        saveSurveyStack.mutate({
+          id: lead.id,
+          frontRunner: results.frontRunnerKey,
+          subAgents: subKeys,
+          missedCallsPerWeek: results.missedCallsPerWeek || '',
+          admissionValue: results.admissionValue || '',
+        })
       }
     },
     [lead.id, saveSurveyStack]
@@ -219,7 +235,14 @@ export default function CloserLeadModal({ lead, onClose }) {
 
       <div className="mt-5 max-h-[70vh] overflow-y-auto pr-1">
         {tab === 'outcome' && (
-          <LogOutcomeForm lead={lead} onClose={onClose} frontRunner={frontRunner} subAgents={subAgents} />
+          <LogOutcomeForm
+            lead={lead}
+            onClose={onClose}
+            frontRunner={frontRunner}
+            subAgents={subAgents}
+            missedCallsPerWeek={missedCallsPerWeek}
+            admissionValue={admissionValue}
+          />
         )}
         {tab === 'survey' && <SurveyBody onResults={handleSurveyResults} />}
         {tab === 'reschedule' && <RescheduleForm lead={lead} onClose={onClose} />}

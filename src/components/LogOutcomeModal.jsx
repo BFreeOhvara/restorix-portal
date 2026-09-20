@@ -5,7 +5,7 @@ import { Button } from './ui/Button'
 import { ConfirmedStackSummary } from './ConfirmedStackSummary'
 import { OUTCOME_LABELS, OUTCOME_SOLID, OUTCOME_TINT } from './ui/OutcomeBadge'
 import { useLogCloserOutcome } from '../hooks/useLeads'
-import { priceForSelection } from '../lib/agentCatalog'
+import { priceForSurveyValue } from '../lib/agentCatalog'
 
 // Prompt 540 — 'needs_reschedule' retired as a manual pick: No Show is now
 // a derived display state (lib/closerOutcome.js) and a real Reschedule
@@ -36,13 +36,18 @@ const OUTCOMES = ['pending', 'lost', 'closed']
 // completed run for this lead — CloserLeadModal always passes
 // `frontRunner`/`subAgents` (read-only; there's no picker to edit them
 // with anymore). Closed is blocked entirely until a Stack exists.
-export function LogOutcomeForm({ lead, onClose, frontRunner, subAgents = new Set() }) {
+// Prompt 614 — the price itself no longer sums catalog fees for the Stack;
+// it scales with the survey's value-pricing answers (`missedCallsPerWeek`/
+// `admissionValue`, also passed down from CloserLeadModal). Closed is still
+// gated on a Stack (frontRunner) existing, not on value data existing —
+// missing value data just floors the price at the FLOOR baseline.
+export function LogOutcomeForm({ lead, onClose, frontRunner, subAgents = new Set(), missedCallsPerWeek, admissionValue }) {
   const [outcome, setOutcome] = useState(lead.closer_outcome || 'pending')
   const [notes, setNotes] = useState(lead.closer_notes || '')
   const logOutcome = useLogCloserOutcome()
 
   const isClosed = outcome === 'closed'
-  const price = frontRunner ? priceForSelection(frontRunner, [...subAgents]) : null
+  const price = priceForSurveyValue(missedCallsPerWeek, admissionValue)
   const canSubmit = !isClosed || !!frontRunner
 
   async function handleSubmit(e) {
@@ -81,7 +86,7 @@ export function LogOutcomeForm({ lead, onClose, frontRunner, subAgents = new Set
       {isClosed && (
         <>
           <ConfirmedStackSummary frontRunner={frontRunner} subAgents={subAgents} />
-          {price ? (
+          {frontRunner ? (
             <p className="rounded-lg border border-line bg-surface px-4 py-3 font-sans text-sm text-fg-primary">
               Setup fee: <span className="font-medium">${price.setupFee.toLocaleString()}</span> · First month
               total: <span className="font-medium">${price.firstMonthTotal.toLocaleString()}</span> · Then{' '}

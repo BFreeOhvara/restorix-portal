@@ -312,13 +312,21 @@ export function useLogCall() {
 // entirely) instead of living only in that modal's local React state.
 // Reaching the survey's summary step again overwrites this with the latest
 // run — the most recent completed run always wins, by design.
+// Prompt 614 — also persists the two raw survey answers the value-based
+// pricing formula needs (survey_missed_calls_per_week/survey_admission_value),
+// same "most recent completed run wins" behavior, no separate save path.
 export function useSaveSurveyStack() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, frontRunner, subAgents }) => {
+    mutationFn: async ({ id, frontRunner, subAgents, missedCallsPerWeek, admissionValue }) => {
       const { error } = await supabase
         .from('leads')
-        .update({ survey_front_runner: frontRunner, survey_sub_agents: subAgents })
+        .update({
+          survey_front_runner: frontRunner,
+          survey_sub_agents: subAgents,
+          survey_missed_calls_per_week: missedCallsPerWeek,
+          survey_admission_value: admissionValue,
+        })
         .eq('id', id)
       if (error) throw error
     },

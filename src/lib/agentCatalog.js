@@ -19,13 +19,13 @@
 // RESULTS_CONTENT in survey.js, keyed identically to these keys, so the
 // Closer Survey and the client dashboard can never drift.
 //
-// Prompt 612 — deal pricing is fully computed and locked: a deal's price is
-// derived entirely from the Closer Survey's Stack (front-runner + sub-agents),
-// never typed in. `price.setupFee` is no longer stored per entry — only
-// `price.monthlyFee` is real per-agent data; the setup fee is always
-// SETUP_FEE_PERCENT of the computed monthly total, then both figures are
-// charm-rounded to a $X99 price via charm99(). Both front-runners share the
-// same $999/mo base per Brayden's own worked example.
+// Prompt 614 — deal pricing no longer sums per-agent catalog fees at all.
+// The Stack (front-runner + sub-agents) now only decides what's included;
+// the monthly price scales with a rough estimate of what the facility is
+// losing to missed calls, from the Closer Survey's own value-pricing
+// answers (`survey_missed_calls_per_week`/`survey_admission_value`) — see
+// `priceForSurveyValue` below. `AGENT_CATALOG` entries keep no `price`
+// field anymore; there is exactly one pricing path.
 
 import { RESULTS_CONTENT } from './survey'
 
@@ -46,73 +46,119 @@ export const AGENT_CATALOG = {
     label: 'Inbound Intake & Triage',
     status: 'placeholder', // 'placeholder' | 'live'
     needsConnect: ['phone_number'],
-    price: { monthlyFee: 999 },
   },
   missed_call_recovery: {
     kind: 'front_runner',
     label: 'Missed-Call Recovery',
     status: 'placeholder',
     needsConnect: ['phone_number'],
-    price: { monthlyFee: 999 },
   },
   insurance: {
     kind: 'sub_agent',
     label: 'Insurance / payer verification',
     status: 'placeholder',
     needsConnect: [],
-    price: { monthlyFee: 199 },
   },
   follow_up: {
     kind: 'sub_agent',
     label: 'Follow-up & nurture',
     status: 'placeholder',
     needsConnect: [],
-    price: { monthlyFee: 149 },
   },
   bed_sync: {
     kind: 'sub_agent',
     label: 'Bed/program availability sync',
     status: 'placeholder',
     needsConnect: [],
-    price: { monthlyFee: 179 },
   },
   reminders: {
     kind: 'sub_agent',
     label: 'Appointment Reminder & No-Show Prevention',
     status: 'placeholder',
     needsConnect: [],
-    price: { monthlyFee: 129 },
   },
   referral_reporting: {
     kind: 'sub_agent',
     label: 'Referral-source reporting',
     status: 'placeholder',
     needsConnect: [],
-    price: { monthlyFee: 149 },
   },
 }
 
-// Prompt 612 — sums a front-runner + its selected sub-agents' monthlyFee,
-// charm-rounds it, derives the setup fee as SETUP_FEE_PERCENT of that
-// monthly total, then charm-rounds the combined first-month total and backs
-// the setup fee out of it — so every dollar figure a client sees ends in 99.
-// `firstMonthTotal` (setup + monthly) is for display only; callers persist
-// `setupFee`/`monthlyFee` (matches deal_setup_fee/deal_first_month_fee).
-// Safe to call with no front-runner picked yet — returns all zeros rather
-// than charm-rounding a $0 selection into -$1.
-export function priceForSelection(frontRunnerKey, subAgentKeys = []) {
-  const front = AGENT_CATALOG[frontRunnerKey]?.price
-  let rawMonthly = front?.monthlyFee ?? 0
-  for (const key of subAgentKeys) {
-    rawMonthly += AGENT_CATALOG[key]?.price?.monthlyFee ?? 0
-  }
-  if (rawMonthly <= 0) return { setupFee: 0, monthlyFee: 0, firstMonthTotal: 0 }
+// Prompt 614 — turns a pricing-input value into a representative number:
+// a plain number string parses as itself; one of Survey.jsx's BracketField
+// bracket strings ("Below $X" / "$X–$Y" / "Above $X") resolves to 75%/the
+// midpoint/125% of its anchor(s); empty/missing resolves to 0 (never NaN).
+function resolveEstimate(value) {
+  if (value === '' || value == null) return 0
+  const str = String(value).trim()
+  if (str === '') return 0
 
-  const monthlyFee = charm99(rawMonthly)
+  const num = (s) => Number(s.replace(/[$,%]/g, '').trim())
+
+  const below = str.match(/^below\s+(.+)$/i)
+  if (below) return num(below[1]) * 0.75
+
+  const above = str.match(/^above\s+(.+)$/i)
+  if (above) return num(above[1]) * 1.25
+
+  if (str.includes('–')) {
+    const [low, high] = str.split('–')
+    return (num(low) + num(high)) / 2
+  }
+
+  return num(str)
+}
+
+function clamp(x, lo, hi) {
+  return Math.min(Math.max(x, lo), hi)
+}
+
+// Prompt 614 — placeholder judgment call: the fraction of monthly missed
+// calls Restorix actually helps convert into a paying admission. Flag for
+// Brayden to tune once real survey-to-quote data exists.
+export const CAPTURE_RATE = 0.05
+
+// Prompt 614 — placeholder judgment call: our cut of the monthly value
+// estimated recovered for the facility. Flag for Brayden to tune once real
+// survey-to-quote data exists.
+export const VALUE_PERCENT = 0.02
+
+// Prompt 614 — monthlyFee floor/ceiling, deliberately already charm-99
+// numbers so the clamp itself never produces a non-99 monthly fee.
+export const FLOOR = 999
+export const CEILING = 2499
+
+// Prompt 614 — extracted from the old priceForSelection: charm-rounds a
+// monthly fee, derives the setup fee as SETUP_FEE_PERCENT of it, then
+// charm-rounds the combined first-month total and backs the setup fee out
+// of it — so every dollar figure a client sees ends in 99. Safe to call
+// with monthlyFee <= 0 — returns all zeros rather than charm-rounding $0
+// into -$1.
+export function priceFromMonthlyFee(rawMonthlyFee) {
+  if (rawMonthlyFee <= 0) return { setupFee: 0, monthlyFee: 0, firstMonthTotal: 0 }
+
+  const monthlyFee = charm99(rawMonthlyFee)
   const rawSetup = monthlyFee * SETUP_FEE_PERCENT
   const firstMonthTotal = charm99(monthlyFee + rawSetup)
   const setupFee = firstMonthTotal - monthlyFee
   return { setupFee, monthlyFee, firstMonthTotal }
+}
+
+// Prompt 614 — a deal's monthly price scales with a rough estimate of what
+// the facility is losing to missed calls: weekly missed calls -> monthly,
+// times the fraction of those calls we actually help convert (CAPTURE_RATE),
+// times what an admission is worth, times our cut of that (VALUE_PERCENT) —
+// clamped into Brayden's $1,500-$4,500 first-month target range via
+// FLOOR/CEILING, then run through the same charm-99 pipeline Prompt 612
+// locked. Missing/blank survey answers resolve to 0 and floor at FLOOR
+// (today's baseline, unchanged from before survey-value pricing existed).
+export function priceForSurveyValue(missedCallsPerWeek, admissionValue) {
+  const recoveredValue =
+    resolveEstimate(missedCallsPerWeek) * 4.33 * CAPTURE_RATE * resolveEstimate(admissionValue)
+  const rawMonthlyFee = recoveredValue * VALUE_PERCENT
+  const monthlyFee = clamp(rawMonthlyFee, FLOOR, CEILING)
+  return priceFromMonthlyFee(monthlyFee)
 }
 
 export const CONNECT_LABELS = {
