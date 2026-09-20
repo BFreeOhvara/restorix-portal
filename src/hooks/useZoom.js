@@ -22,15 +22,30 @@ export function useZoomConnection(closerId) {
   })
 }
 
-// Redirects the browser to Zoom's OAuth page — fetch/invoke can't follow
-// a redirect into a real navigation, so the caller does
-// `window.location.href = url` with the returned value.
+// Returns Zoom's OAuth authorize URL — fetch/invoke can't follow a
+// redirect into a real navigation, so the caller opens it itself (a
+// popup as of Prompt 617, falling back to `window.location.href = url`
+// if the popup is blocked).
 export function useConnectZoom() {
   return useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('zoom-oauth-start', { body: {} })
       if (error) throw error
       return data.url
+    },
+  })
+}
+
+// Prompt 617 — lets a closer remove their own Zoom connection so they can
+// reconnect a different account or recover from a bad token state. The
+// closer_zoom_tokens_delete RLS policy (closer_id = auth.uid()) is enough
+// on its own; no service-role edge function needed for a plain
+// delete-your-own-row operation.
+export function useDisconnectZoom() {
+  return useMutation({
+    mutationFn: async (closerId) => {
+      const { error } = await supabase.from('closer_zoom_tokens').delete().eq('closer_id', closerId)
+      if (error) throw error
     },
   })
 }

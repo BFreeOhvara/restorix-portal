@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Moon, Sun, SunMoon, Video, CheckCircle2 } from 'lucide-react'
 import clsx from 'clsx'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
-import { useZoomConnection, useConnectZoom } from '../hooks/useZoom'
+import { useZoomConnection, useConnectZoom, useDisconnectZoom } from '../hooks/useZoom'
 import { Field, inputClass } from '../components/ui/Field'
 import { Button } from '../components/ui/Button'
 import { SELECTABLE_TIMEZONES, DEFAULT_TIMEZONE } from '../lib/timezones'
@@ -51,15 +51,29 @@ const ZOOM_STATUS_COPY = {
   error: { tone: 'danger', text: "Couldn't connect Zoom — try again, or ask an admin to check the setup." },
 }
 
+// Prompt 617 — the popup navigates through Zoom itself, then lands on
+// zoom-oauth-callback (this function's own origin) which posts the result
+// back before closing. Hardcoded the same way that function's own
+// ZOOM_REDIRECT_URI/APP_SETTINGS_URL are.
+const ZOOM_CALLBACK_ORIGIN = 'https://avgvmzshujwphneykuvu.supabase.co'
+
 function ZoomForm({ profile }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const { data: connection, isLoading, refetch } = useZoomConnection(profile.id)
   const connectZoom = useConnectZoom()
+  const disconnectZoom = useDisconnectZoom()
   const [error, setError] = useState('')
+  const [waitingForPopup, setWaitingForPopup] = useState(false)
+  const [popupBlockedNotice, setPopupBlockedNotice] = useState(false)
+  const popupRef = useRef(null)
+  const popupPollRef = useRef(null)
 
-  // The zoom-oauth-callback edge function redirects back here with
-  // ?zoom=connected/denied/expired/error — surface it once, then clear
-  // it from the URL so a refresh doesn't re-show a stale result.
+  // The zoom-oauth-callback edge function falls back to a plain redirect
+  // back here (with ?zoom=connected/denied/expired/error) when there's no
+  // window.opener to postMessage — e.g. the popup was blocked and this
+  // component fell back to a full-page redirect itself, or a browser tore
+  // down the opener relationship. Surface it once, then clear it from the
+  // URL so a refresh doesn't re-show a stale result.
   const zoomStatus = searchParams.get('zoom')
   useEffect(() => {
     if (!zoomStatus) return
@@ -70,13 +84,76 @@ function ZoomForm({ profile }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoomStatus])
 
+  function stopWatchingPopup() {
+    setWaitingForPopup(false)
+    if (popupPollRef.current) {
+      clearInterval(popupPollRef.current)
+      popupPollRef.current = null
+    }
+    popupRef.current = null
+  }
+
+  // Prompt 617 — the popup's result arrives via postMessage instead of
+  // (only) a full-page redirect back to this URL. Checked against the
+  // callback function's own origin, not window.location.origin — the
+  // message is sent FROM that origin, so event.origin reflects the
+  // sender, not this page.
+  useEffect(() => {
+    function onMessage(event) {
+      if (event.origin !== ZOOM_CALLBACK_ORIGIN) return
+      const data = event.data
+      if (!data || data.type !== 'zoom-oauth-result') return
+      try { popupRef.current?.close() } catch { /* already closed */ }
+      stopWatchingPopup()
+      if (data.ok) {
+        setError('')
+        refetch()
+      } else {
+        setError(ZOOM_STATUS_COPY[data.status]?.text || "Couldn't connect Zoom — try again.")
+      }
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => stopWatchingPopup, [])
+
   async function connect() {
     setError('')
+    setPopupBlockedNotice(false)
     try {
       const url = await connectZoom.mutateAsync()
-      window.location.href = url
+      const popup = window.open(url, 'zoom-connect', 'width=520,height=720')
+      if (!popup) {
+        // Blocked — fall back to the pre-617 full-page redirect rather
+        // than leaving the click as a silent no-op. Delayed a beat so the
+        // notice actually paints before the tab navigates away.
+        setPopupBlockedNotice(true)
+        setTimeout(() => { window.location.href = url }, 300)
+        return
+      }
+      popupRef.current = popup
+      setWaitingForPopup(true)
+      popupPollRef.current = setInterval(() => {
+        if (popup.closed) {
+          // Closed manually without finishing — quietly reset, no error
+          // toast for a plain cancel.
+          stopWatchingPopup()
+        }
+      }, 500)
     } catch (e) {
       setError(e.message || 'Could not start the Zoom connection')
+    }
+  }
+
+  async function disconnect() {
+    setError('')
+    try {
+      await disconnectZoom.mutateAsync(profile.id)
+      refetch()
+    } catch (e) {
+      setError(e.message || 'Could not disconnect Zoom')
     }
   }
 
@@ -94,18 +171,26 @@ function ZoomForm({ profile }) {
           {ZOOM_STATUS_COPY[zoomStatus].text}
         </p>
       )}
+      {popupBlockedNotice && (
+        <p className="font-sans text-sm text-fg-secondary">Your browser blocked the popup — continuing without it…</p>
+      )}
 
       {isLoading ? (
         <p className="font-sans text-sm text-fg-secondary">Checking…</p>
       ) : connection ? (
-        <div className="flex items-center gap-2 font-sans text-sm text-success">
-          <CheckCircle2 size={16} />
-          Connected{connection.zoom_email ? ` as ${connection.zoom_email}` : ''}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 font-sans text-sm text-success">
+            <CheckCircle2 size={16} />
+            Connected{connection.zoom_email ? ` as ${connection.zoom_email}` : ''}
+          </div>
+          <Button type="button" variant="secondary" onClick={disconnect} disabled={disconnectZoom.isPending}>
+            {disconnectZoom.isPending ? 'Disconnecting…' : 'Disconnect'}
+          </Button>
         </div>
       ) : (
-        <Button type="button" onClick={connect} disabled={connectZoom.isPending}>
+        <Button type="button" onClick={connect} disabled={connectZoom.isPending || waitingForPopup}>
           <Video size={15} />
-          {connectZoom.isPending ? 'Redirecting…' : 'Connect Zoom'}
+          {waitingForPopup ? 'Waiting for Zoom…' : connectZoom.isPending ? 'Connecting…' : 'Connect Zoom'}
         </Button>
       )}
       {error && <p className="font-sans text-sm text-danger">{error}</p>}

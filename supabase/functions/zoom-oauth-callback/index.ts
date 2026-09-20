@@ -24,8 +24,13 @@ import { createClient } from 'npm:@supabase/supabase-js'
 
 const ZOOM_REDIRECT_URI = 'https://avgvmzshujwphneykuvu.supabase.co/functions/v1/zoom-oauth-callback'
 // Where the closer lands after connecting — Settings is where the
-// "Connect Zoom" card lives.
+// "Connect Zoom" card lives. Also doubles as the postMessage target
+// origin for the Prompt 617 popup flow — same single hardcoded portal
+// origin this function already assumed pre-617 (the app's custom domains,
+// portal.restorix.co / portal.suretix.co, aren't accounted for here; that
+// was already true of the plain redirect this replaces, not a new gap).
 const APP_SETTINGS_URL = 'https://restorix-portal-ohvara.vercel.app/settings'
+const APP_ORIGIN = new URL(APP_SETTINGS_URL).origin
 
 function b64url(bytes: Uint8Array): string {
   let bin = ''
@@ -48,11 +53,40 @@ async function verifyState(state: string, secret: string): Promise<string | null
   return b64url(new Uint8Array(expectedSig)) === sig ? closerId : null
 }
 
-function redirectTo(status: string): Response {
-  return new Response(null, {
-    status: 302,
-    headers: { Location: `${APP_SETTINGS_URL}?zoom=${status}` },
+// Prompt 617 — Settings now opens this in a popup instead of navigating
+// the whole tab away, so this function can no longer just redirect: it
+// needs to tell the opener the result and close itself. `status` is
+// always one of our own literal strings (never the raw Zoom `error`
+// param), so it's safe to inline into the script directly. Falls back to
+// a plain redirect when there's no `window.opener` — a direct visit to
+// this URL, or a browser that already tore down the opener relationship
+// (e.g. a strict Cross-Origin-Opener-Policy) — so the flow still resolves
+// even outside the popup.
+function resultResponse(status: string, ok: boolean): Response {
+  const fallbackUrl = `${APP_SETTINGS_URL}?zoom=${status}`
+  const html = `<!doctype html>
+<html><head><meta charset="utf-8"><title>Zoom</title></head>
+<body>
+<script>
+(function () {
+  var result = { type: 'zoom-oauth-result', ok: ${JSON.stringify(ok)}, status: ${JSON.stringify(status)} };
+  if (window.opener) {
+    try { window.opener.postMessage(result, ${JSON.stringify(APP_ORIGIN)}); } catch (e) {}
+    window.close();
+  } else {
+    window.location.href = ${JSON.stringify(fallbackUrl)};
+  }
+})();
+</script>
+</body></html>`
+  return new Response(html, {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
   })
+}
+
+function redirectTo(status: string): Response {
+  return resultResponse(status, status === 'connected')
 }
 
 Deno.serve(async (req) => {
