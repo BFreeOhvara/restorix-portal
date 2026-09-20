@@ -34,3 +34,22 @@ export function useConnectZoom() {
     },
   })
 }
+
+// Prompt 615 — the Meeting Room tab's "Start Your Meeting Room" button
+// needs the closer's real Zoom Personal Meeting Room join URL, not a
+// guessed URL format. Only enabled once useZoomConnection confirms a
+// connection exists, same gating precedent as every other Zoom-dependent
+// query in this app.
+export function useZoomPersonalRoom(closerId, enabled) {
+  return useQuery({
+    queryKey: ['zoom-personal-room', closerId],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('get-zoom-personal-room', { body: {} })
+      if (error) throw error
+      return data.join_url
+    },
+    enabled: !!closerId && enabled,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  })
+}

@@ -5,6 +5,7 @@ import clsx from 'clsx'
 import { useAuth } from '../hooks/useAuth'
 import { useBrand } from '../hooks/useBrand'
 import { useMyPool, useMyBooked, useMyFollowUps, useMyNotInterested, useMyLoggedBookings, useFinishDay, usePipelineHealth } from '../hooks/useLeads'
+import { useStrategyCalls } from '../hooks/useStrategyCalls'
 import { useMyDeal } from '../hooks/useDeals'
 import { AGENT_CATALOG } from '../lib/agentCatalog'
 import {
@@ -789,7 +790,7 @@ function CloserBookedPipeline({ profile }) {
 // Upcoming group, so a row further out than today doesn't read as if it
 // were happening right now; Today's own rows keep the original time-only
 // format unchanged.
-function StrategyCallRow({ lead, tz, onOpen, showDate }) {
+export function StrategyCallRow({ lead, tz, onOpen, showDate }) {
   const when = showDate
     ? new Date(lead.strategy_call_at).toLocaleString('en-US', {
         timeZone: tz, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -834,11 +835,15 @@ function StrategyCallRow({ lead, tz, onOpen, showDate }) {
 // scoped to `assigned_closer = me` + `status = 'appointment_booked'` —
 // the same single source CloserPipeline reads.
 export function CloserOverview({ profile, title = 'Overview' }) {
-  const { data: leads, isLoading } = useMyBooked(profile.id)
+  // Prompt 615 — todaysCalls/upcomingCalls extracted into a shared hook
+  // (useStrategyCalls) so the new Meeting Room tab can reuse the exact same
+  // data shape instead of re-deriving it. Behavior unchanged from Prompt
+  // 608: raw closer_outcome, NOT displayOutcome — a No Show that happened
+  // today still belongs on today's list so the closer can log the real
+  // outcome, rather than silently dropping off once its time passes.
+  const { leads, isLoading, tz, todaysCalls, upcomingCalls } = useStrategyCalls(profile)
   const [activeLead, setActiveLead] = useState(null)
-  const tz = profile.timezone || DEFAULT_TIMEZONE
 
-  const todayRange = useMemo(() => zonedDayRange(zonedDateStr(Date.now(), tz), tz), [tz])
   const weekRange = useMemo(() => {
     const monday = mondayOf(zonedDateStr(Date.now(), tz))
     return {
@@ -846,42 +851,6 @@ export function CloserOverview({ profile, title = 'Overview' }) {
       end: zonedDayRange(shiftDay(monday, 6), tz).end,
     }
   }, [tz])
-
-  // Raw closer_outcome here, NOT displayOutcome — a No Show that happened
-  // today still belongs on today's list so the closer can log the real
-  // outcome, rather than silently dropping off once its time passes.
-  const todaysCalls = useMemo(
-    () =>
-      (leads || [])
-        .filter(
-          (l) =>
-            l.strategy_call_at &&
-            inRange(l.strategy_call_at, todayRange.start, todayRange.end) &&
-            (!l.closer_outcome || l.closer_outcome === 'pending')
-        )
-        .sort((a, b) => new Date(a.strategy_call_at) - new Date(b.strategy_call_at)),
-    [leads, todayRange]
-  )
-
-  // Prompt 608 — the same rule as todaysCalls (unresolved, real
-  // strategy_call_at) just shifted to any day after today, so the section
-  // below always has something to show as long as *any* future call is
-  // booked, not only on days with something today. Capped at 5 — this is
-  // a glance list, not a paginated table (that's My Pipeline's job).
-  const UPCOMING_CALLS_LIMIT = 5
-  const upcomingCalls = useMemo(
-    () =>
-      (leads || [])
-        .filter(
-          (l) =>
-            l.strategy_call_at &&
-            new Date(l.strategy_call_at) >= new Date(todayRange.end) &&
-            (!l.closer_outcome || l.closer_outcome === 'pending')
-        )
-        .sort((a, b) => new Date(a.strategy_call_at) - new Date(b.strategy_call_at))
-        .slice(0, UPCOMING_CALLS_LIMIT),
-    [leads, todayRange]
-  )
 
   // Prompt 608 — Pipeline Snapshot's counts, same 4 keys/order as
   // CLOSER_OUTCOME_TILES and My Pipeline's own Closer-tab chips, over the

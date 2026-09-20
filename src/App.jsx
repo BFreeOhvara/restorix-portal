@@ -21,6 +21,7 @@ import Profile from './pages/Profile'
 import Settings from './pages/Settings'
 import MyLeads from './pages/MyLeads'
 import MyPipeline from './pages/MyPipeline'
+import MeetingRoom from './pages/MeetingRoom'
 import Prospects from './pages/Prospects'
 import Appointments from './pages/Appointments'
 import Reports from './pages/Reports'
@@ -237,6 +238,14 @@ export default function App() {
                         element={
                           <RoleRoute roles={['closer']}>
                             <MyPipeline />
+                          </RoleRoute>
+                        }
+                      />
+                      <Route
+                        path="/meeting-room"
+                        element={
+                          <RoleRoute roles={['closer']}>
+                            <MeetingRoom />
                           </RoleRoute>
                         }
                       />

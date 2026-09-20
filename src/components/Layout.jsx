@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useContext, createContext } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, UserPlus, GitBranch, Bug, Smartphone, CalendarDays, PieChart, CreditCard } from 'lucide-react'
+import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, UserPlus, GitBranch, Bug, Smartphone, CalendarDays, PieChart, CreditCard, Video } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useBrand } from '../hooks/useBrand'
 import { supabase, SUPABASE_URL } from '../lib/supabase'
@@ -66,6 +66,11 @@ const NAV_GROUPS = [
       // replacement). Closer-only.
       { to: '/my-leads', label: 'My Leads', icon: UserPlus, roles: ['closer'] },
       { to: '/my-pipeline', label: 'My Pipeline', icon: GitBranch, roles: ['closer'] },
+      // Prompt 615 — first piece of Phase 2 ("bring the call into the
+      // portal"): one destination for a closer's Personal Meeting Room +
+      // quick-join links for booked Strategy Calls. Closer-only, same as
+      // My Leads/My Pipeline above.
+      { to: '/meeting-room', label: 'Meeting Room', icon: Video, roles: ['closer'] },
     ],
   },
   {
