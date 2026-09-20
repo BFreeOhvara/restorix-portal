@@ -172,6 +172,13 @@ export const COPY = {
     priorityLabel: 'Is that something ownership/BD cares about, or is intake speed the bigger priority right now?',
     priorityPlaceholder: 'Gauges whether this is worth including',
   },
+  // Prompt 613 — always-asked, always-optional. The one number that turns
+  // call volume into dollars; still just data capture, no pricing math here.
+  admissionValue: {
+    question:
+      "Roughly, what does a new client end up being worth to you — the full treatment episode, not just the intake?",
+    placeholder: 'e.g. 15000',
+  },
   summary: {
     frontRunnerIncludedNote: 'After-hours crisis-language routing included automatically — not a separate line item.',
     missedCallStrongSignalNote:
@@ -207,6 +214,9 @@ export function initialSurveyState() {
     // Section 7 — referral-source reporting
     referralTracking: null, // 'yes_track' | 'no_guess'
     referralPriority: '',
+    // Prompt 613 — what a new client is worth (dollars or a narrowed bracket
+    // string, e.g. "$10,000–$30,000" — see BracketField in Survey.jsx)
+    admissionValue: '',
   }
 }
 
@@ -222,6 +232,10 @@ export const STEPS = [
   { key: 'section5', title: 'Bed/program availability' },
   { key: 'section6', title: 'Appointment follow-through' },
   { key: 'section7', title: 'Referral-source reporting' },
+  // Prompt 613 — last real question, after the client has already talked
+  // through their pain points. canAdvance has no case for this key, so it
+  // falls to the default `true` — never blocks the wizard, same as summary.
+  { key: 'admissionValue', title: 'Client value' },
   { key: 'summary', title: 'Summary' },
 ]
 
@@ -305,6 +319,7 @@ export function computeSurveyResults(state) {
   ].filter((a) => a.fit)
 
   const pricingInputs = [
+    { label: "What a new client is worth", value: state.admissionValue },
     { label: 'Weekly inquiry call volume', value: state.weeklyCallVolume },
     { label: 'Missed calls per week', value: state.missedCallsPerWeek },
     { label: 'Response-time gap on missed calls', value: state.responseTimeGap },

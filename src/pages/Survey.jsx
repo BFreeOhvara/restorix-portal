@@ -110,6 +110,76 @@ function TextField({ label, value, onChange, placeholder, type = 'text' }) {
   )
 }
 
+// Prompt 613 — reusable fallback for any numeric pricing input: a normal
+// number field plus a "Not sure — narrow it down instead" link that swaps it
+// for a 2-round higher/lower comparison against fixed LOW/MID/HIGH reference
+// points (props). Resolves to one of four brackets (below LOW / LOW–MID /
+// MID–HIGH / above HIGH), stored as that bracket's own label string directly
+// in `value` — same field the raw number would otherwise occupy, so
+// computeSurveyResults's pricingInputs list needs no changes at all.
+function BracketField({ label, value, onChange, placeholder, low, mid, high, formatValue = (n) => `$${Number(n).toLocaleString()}` }) {
+  const [round, setRound] = useState(null) // null | 1 | 2
+  const [round1Answer, setRound1Answer] = useState(null) // 'lower' | 'higher'
+
+  const isBracket = value !== '' && value != null && Number.isNaN(Number(value))
+
+  const HIGHER_LOWER_OPTIONS = [
+    { value: 'lower', label: 'Lower' },
+    { value: 'higher', label: 'Higher' },
+  ]
+
+  function pickRound1(answer) {
+    setRound1Answer(answer)
+    setRound(2)
+  }
+
+  function pickRound2(answer) {
+    const bracket =
+      round1Answer === 'higher'
+        ? answer === 'higher'
+          ? `Above ${formatValue(high)}`
+          : `${formatValue(mid)}–${formatValue(high)}`
+        : answer === 'higher'
+          ? `${formatValue(low)}–${formatValue(mid)}`
+          : `Below ${formatValue(low)}`
+    onChange(bracket)
+    setRound(null)
+    setRound1Answer(null)
+  }
+
+  if (round === 1 || round === 2) {
+    const compareTo = round === 1 ? mid : round1Answer === 'higher' ? high : low
+    return (
+      <Field label={label}>
+        <p className="mb-2 font-sans text-sm text-fg-secondary">Higher or lower than {formatValue(compareTo)}?</p>
+        <ChoiceButtons value={null} onChange={round === 1 ? pickRound1 : pickRound2} options={HIGHER_LOWER_OPTIONS} />
+      </Field>
+    )
+  }
+
+  if (isBracket) {
+    return (
+      <Field label={label}>
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3">
+          <span className="font-sans text-sm font-medium text-fg-primary">{value}</span>
+          <button type="button" onClick={() => onChange('')} className="font-sans text-sm text-accent underline">
+            Clear
+          </button>
+        </div>
+      </Field>
+    )
+  }
+
+  return (
+    <div>
+      <TextField label={label} type="number" value={value} onChange={onChange} placeholder={placeholder} />
+      <button type="button" onClick={() => setRound(1)} className="mt-2 font-sans text-sm text-accent underline">
+        Not sure — narrow it down instead
+      </button>
+    </div>
+  )
+}
+
 // Prompt 469 — content sourced from the "Restorix Closer Survey" vault
 // note. Stateless per Brayden's own call — no save, no lead association,
 // opens fresh every time. The tool's job is qualification/talk-track
@@ -213,12 +283,17 @@ export function SurveyBody({ onResults, niche = 'behavioral_health', hidePageHea
 
         {step.key === 'section1' && (
           <div className="space-y-8">
-            <TextField
+            {/* Prompt 613 — LOW/MID/HIGH anchors below are placeholder judgment
+                calls (not researched like admissionValue's), flagged here for
+                Brayden to tune once he's seen a few real surveys run. */}
+            <BracketField
               label={COPY.section1.weeklyCallVolumeLabel}
-              type="number"
               value={state.weeklyCallVolume}
               onChange={set('weeklyCallVolume')}
               placeholder={COPY.section1.weeklyCallVolumePlaceholder}
+              low={20}
+              mid={50}
+              high={100}
             />
             <Question label={COPY.section1.missedVolumeQuestion}>
               <ChoiceButtons
@@ -238,12 +313,14 @@ export function SurveyBody({ onResults, niche = 'behavioral_health', hidePageHea
                 </Question>
                 {state.missedCallbackSpeed === 'sometimes_not_at_all' && (
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <TextField
+                    <BracketField
                       label={COPY.section1.missedCallsPerWeekLabel}
-                      type="number"
                       value={state.missedCallsPerWeek}
                       onChange={set('missedCallsPerWeek')}
                       placeholder={COPY.section1.missedCallsPerWeekPlaceholder}
+                      low={5}
+                      mid={15}
+                      high={30}
                     />
                     <TextField
                       label={COPY.section1.responseTimeGapLabel}
@@ -323,12 +400,15 @@ export function SurveyBody({ onResults, niche = 'behavioral_health', hidePageHea
               />
             </Question>
             {state.followUp === 'falls_through' && (
-              <TextField
+              // Prompt 613 — placeholder anchors, see section1's note above.
+              <BracketField
                 label={COPY.section4.coldInquiriesLabel}
-                type="number"
                 value={state.monthlyColdInquiries}
                 onChange={set('monthlyColdInquiries')}
                 placeholder={COPY.section4.coldInquiriesPlaceholder}
+                low={10}
+                mid={30}
+                high={75}
               />
             )}
           </div>
@@ -364,11 +444,16 @@ export function SurveyBody({ onResults, niche = 'behavioral_health', hidePageHea
               />
             </Question>
             {state.reminders === 'hope_they_show' && (
-              <TextField
+              // Prompt 613 — placeholder anchors, see section1's note above.
+              <BracketField
                 label={COPY.section6.rateLabel}
                 value={state.noShowRate}
                 onChange={set('noShowRate')}
                 placeholder={COPY.section6.ratePlaceholder}
+                low={10}
+                mid={20}
+                high={35}
+                formatValue={(n) => `${n}%`}
               />
             )}
           </div>
@@ -391,6 +476,24 @@ export function SurveyBody({ onResults, niche = 'behavioral_health', hidePageHea
                 placeholder={COPY.section7.priorityPlaceholder}
               />
             )}
+          </div>
+        )}
+
+        {step.key === 'admissionValue' && (
+          <div className="space-y-8">
+            {/* Prompt 613 — anchors from this session's own market research,
+                not invented: detox alone runs $8,000–$15,000 per stay,
+                insurance-funded residential $8,400–$22,400, private-pay
+                residential $45,000–$180,000. */}
+            <BracketField
+              label={COPY.admissionValue.question}
+              value={state.admissionValue}
+              onChange={set('admissionValue')}
+              placeholder={COPY.admissionValue.placeholder}
+              low={10000}
+              mid={30000}
+              high={75000}
+            />
           </div>
         )}
 
