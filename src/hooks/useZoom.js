@@ -55,16 +55,37 @@ export function useDisconnectZoom() {
 // guessed URL format. Only enabled once useZoomConnection confirms a
 // connection exists, same gating precedent as every other Zoom-dependent
 // query in this app.
+// Prompt 618 — widened from returning just the join URL string to the
+// full {join_url, meeting_number, password} object the SDK embed needs;
+// PersonalRoomCard reads `.join_url` where it used to read the query
+// result directly.
 export function useZoomPersonalRoom(closerId, enabled) {
   return useQuery({
     queryKey: ['zoom-personal-room', closerId],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke('get-zoom-personal-room', { body: {} })
       if (error) throw error
-      return data.join_url
+      return data
     },
     enabled: !!closerId && enabled,
     staleTime: 5 * 60 * 1000,
     retry: false,
+  })
+}
+
+// Prompt 618 — fetches a fresh signed JWT for the Meeting SDK's
+// client.join() right before a closer opens the embed. A mutation, not a
+// query: each join attempt needs its own signature call, not a cached one
+// (the meeting number changes per booked call, and there's no value in
+// caching a token meant to be used once).
+export function useZoomSdkSignature() {
+  return useMutation({
+    mutationFn: async ({ meetingNumber, role }) => {
+      const { data, error } = await supabase.functions.invoke('zoom-sdk-signature', {
+        body: { meetingNumber, role },
+      })
+      if (error) throw error
+      return data.signature
+    },
   })
 }

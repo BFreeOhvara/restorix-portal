@@ -147,7 +147,26 @@ Deno.serve(async (req) => {
     })
   }
 
-  return new Response(JSON.stringify({ join_url: joinUrl }), {
+  // Prompt 618: the Meeting SDK embed needs a bare meeting number +
+  // password, not a join URL. `me.pmi` is already the bare number; Zoom's
+  // GET /users/{userId} response has no separate PMI-passcode field, but
+  // personal_meeting_url embeds it as a `pwd` query param when the account
+  // requires one — parse it out of the real URL rather than guessing at a
+  // second endpoint. Falls back to no password if the account doesn't
+  // require one (or the URL came from the pmi-only fallback above).
+  let password: string | null = null
+  try {
+    password = new URL(joinUrl).searchParams.get('pwd')
+  } catch {
+    // joinUrl was already validated as truthy above; a parse failure here
+    // just means no password could be extracted, not a request error.
+  }
+
+  return new Response(JSON.stringify({
+    join_url: joinUrl,
+    meeting_number: me.pmi ? String(me.pmi) : null,
+    password,
+  }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 })

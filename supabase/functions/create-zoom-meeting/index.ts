@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
 
   const { data: lead, error: leadError } = await adminClient
     .from('leads')
-    .select('id, facility_name, assigned_closer, strategy_call_at, zoom_join_url')
+    .select('id, facility_name, assigned_closer, strategy_call_at, zoom_join_url, zoom_meeting_id, zoom_meeting_password')
     .eq('id', leadId)
     .single()
   if (leadError || !lead) {
@@ -97,7 +97,15 @@ Deno.serve(async (req) => {
   // Idempotent — a retry (or the retroactive-create path double-firing)
   // should never create a second meeting for the same lead.
   if (lead.zoom_join_url) {
-    return new Response(JSON.stringify({ join_url: lead.zoom_join_url, pending: false }), {
+    return new Response(JSON.stringify({
+      join_url: lead.zoom_join_url,
+      pending: false,
+      // Prompt 618: widened for the Meeting SDK embed, which needs a bare
+      // meeting number + password rather than a join URL. Leads created
+      // before this prompt shipped won't have a stored password yet.
+      meeting_number: lead.zoom_meeting_id || null,
+      password: lead.zoom_meeting_password || null,
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
@@ -168,13 +176,22 @@ Deno.serve(async (req) => {
 
   const { error: updateError } = await adminClient
     .from('leads')
-    .update({ zoom_join_url: meeting.join_url, zoom_meeting_id: String(meeting.id) })
+    .update({
+      zoom_join_url: meeting.join_url,
+      zoom_meeting_id: String(meeting.id),
+      zoom_meeting_password: meeting.password || null,
+    })
     .eq('id', leadId)
   if (updateError) {
     console.error('[create-zoom-meeting] failed to save join_url:', updateError.message)
   }
 
-  return new Response(JSON.stringify({ join_url: meeting.join_url, pending: false }), {
+  return new Response(JSON.stringify({
+    join_url: meeting.join_url,
+    pending: false,
+    meeting_number: String(meeting.id),
+    password: meeting.password || null,
+  }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 })

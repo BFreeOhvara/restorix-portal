@@ -790,7 +790,12 @@ function CloserBookedPipeline({ profile }) {
 // Upcoming group, so a row further out than today doesn't read as if it
 // were happening right now; Today's own rows keep the original time-only
 // format unchanged.
-export function StrategyCallRow({ lead, tz, onOpen, showDate }) {
+// Prompt 618 — opt-in `onEmbedJoin`: when passed, the Join control becomes
+// a button that opens the call in-page (Meeting Room's own use) instead of
+// the plain external link every other caller here still gets. Omitted by
+// both of this file's own call sites, so Overview's own Strategy Calls
+// section is unchanged.
+export function StrategyCallRow({ lead, tz, onOpen, showDate, onEmbedJoin }) {
   const when = showDate
     ? new Date(lead.strategy_call_at).toLocaleString('en-US', {
         timeZone: tz, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -807,15 +812,25 @@ export function StrategyCallRow({ lead, tz, onOpen, showDate }) {
       </td>
       <td className="px-5 py-4">
         {lead.zoom_join_url ? (
-          <a
-            href={lead.zoom_join_url}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 font-sans text-sm font-semibold text-white transition-opacity hover:opacity-90"
-          >
-            <Video size={15} /> Join
-          </a>
+          onEmbedJoin ? (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onEmbedJoin(lead) }}
+              className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 font-sans text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            >
+              <Video size={15} /> Join
+            </button>
+          ) : (
+            <a
+              href={lead.zoom_join_url}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 font-sans text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            >
+              <Video size={15} /> Join
+            </a>
+          )
         ) : (
           <span className="font-sans text-sm text-fg-faint">Zoom pending</span>
         )}
