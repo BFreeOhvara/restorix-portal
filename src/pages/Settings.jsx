@@ -8,6 +8,7 @@ import { useTheme } from '../hooks/useTheme'
 import { useZoomConnection, useConnectZoom, useDisconnectZoom } from '../hooks/useZoom'
 import { Field, inputClass } from '../components/ui/Field'
 import { Button } from '../components/ui/Button'
+import { Switch } from '../components/ui/Switch'
 import { SELECTABLE_TIMEZONES, DEFAULT_TIMEZONE } from '../lib/timezones'
 import { usePageHeader } from '../components/Layout'
 
@@ -17,6 +18,12 @@ import { usePageHeader } from '../components/Layout'
 // single UTC/server boundary. Prompt 502 gives it its second: theme,
 // replacing the placeholder card that used to say Restorix doesn't have
 // one yet.
+// Prompt 619 — Brayden: the page "feels lackluster" with just three
+// cards. This is a closer-only pass (Profile/Notifications/Call &
+// Booking) — other roles come later once the closer dashboard is done.
+// Timezone/Theme stay exactly as-is and ungated. Auth/login/password/
+// email/2FA deliberately out of scope — that's a separate, larger prompt
+// Brayden is sequencing after this one.
 export default function Settings() {
   const { profile } = useAuth()
   usePageHeader({ title: 'Settings', subtitle: 'Account settings — password, name, and role live on Profile.' })
@@ -24,7 +31,8 @@ export default function Settings() {
 
   return (
     <div className="max-w-lg">
-      <div className="mt-6 rounded-card border border-line bg-elevated p-6">
+      <p className="eyebrow">General</p>
+      <div className="mt-3 rounded-card border border-line bg-elevated p-6">
         <TimezoneForm profile={profile} />
       </div>
 
@@ -33,10 +41,217 @@ export default function Settings() {
       </div>
 
       {profile.role === 'closer' && (
-        <div className="mt-6 rounded-card border border-line bg-elevated p-6">
-          <ZoomForm profile={profile} />
-        </div>
+        <>
+          <p className="eyebrow mt-8">Closer</p>
+          <div className="mt-3 rounded-card border border-line bg-elevated p-6">
+            <ZoomForm profile={profile} />
+          </div>
+
+          <div className="mt-6 rounded-card border border-line bg-elevated p-6">
+            <ProfileForm profile={profile} />
+          </div>
+
+          <div className="mt-6 rounded-card border border-line bg-elevated p-6">
+            <NotificationsForm profile={profile} />
+          </div>
+
+          <div className="mt-6 rounded-card border border-line bg-elevated p-6">
+            <CallBookingForm profile={profile} />
+          </div>
+        </>
       )}
+    </div>
+  )
+}
+
+// Prompt 619 — display name + phone, shown on booking confirmations and
+// inside the Meeting Room; not a login credential (that's out of scope
+// here, see the file-level note above). Same explicit-Save pattern as
+// TimezoneForm since these are free-text fields, not one-click choices.
+function ProfileForm({ profile }) {
+  const { refreshProfile } = useAuth()
+  const [fullName, setFullName] = useState(profile.full_name || '')
+  const [phone, setPhone] = useState(profile.phone || '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [saved, setSaved] = useState(false)
+
+  const dirty = fullName !== (profile.full_name || '') || phone !== (profile.phone || '')
+
+  async function save(e) {
+    e.preventDefault()
+    setError('')
+    if (!fullName.trim()) { setError('Name cannot be empty'); return }
+    setSaving(true)
+    const { error: nameError } = await supabase.rpc('update_own_full_name', { p_full_name: fullName })
+    if (nameError) {
+      setSaving(false)
+      setError(nameError.message || 'Could not save your profile')
+      return
+    }
+    const { error: phoneError } = await supabase.rpc('update_own_phone', { p_phone: phone })
+    setSaving(false)
+    if (phoneError) { setError(phoneError.message || 'Could not save your profile'); return }
+    await refreshProfile()
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  return (
+    <form onSubmit={save} className="space-y-4">
+      <div>
+        <p className="font-sans text-sm font-semibold text-fg-primary">Profile & Display</p>
+        <p className="mt-1 font-sans text-xs text-fg-secondary">
+          Shown on booking confirmations and inside the Meeting Room.
+        </p>
+      </div>
+      <Field label="Display name">
+        <input className={inputClass()} value={fullName} onChange={(e) => setFullName(e.target.value)} />
+      </Field>
+      <Field label="Phone number">
+        <input
+          className={inputClass()}
+          type="tel"
+          placeholder="(555) 555-5555"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+        />
+      </Field>
+      {error && <p className="font-sans text-sm text-danger">{error}</p>}
+      <div className="flex items-center gap-3">
+        <Button type="submit" disabled={!dirty || saving}>
+          {saving ? 'Saving…' : 'Save changes'}
+        </Button>
+        {saved && <span className="font-sans text-sm text-success">Saved</span>}
+      </div>
+    </form>
+  )
+}
+
+// Prompt 619 — toggle preferences only. No closer-facing notification
+// channel (email/push/SMS-to-closer) exists anywhere in this codebase
+// yet — the only reminder-sending edge function that exists today
+// (send-appointment-reminders) texts the LEAD, not the closer, so there's
+// nothing to wire these into. Storing the toggle now, flagged as a
+// follow-up: once a real closer-notification sender exists, it should
+// check notification_preferences before sending.
+const NOTIFICATION_TOGGLES = [
+  { key: 'new_lead_assigned', label: 'New lead assigned', hint: 'When a lead is added to your pool.' },
+  { key: 'call_booked', label: 'Call booked', hint: 'When a strategy call is booked onto your calendar.' },
+  { key: 'call_rescheduled_canceled', label: 'Call rescheduled or canceled', hint: 'When a booked call changes time or is canceled.' },
+  { key: 'call_starting_soon', label: 'Call starting soon', hint: 'A heads-up shortly before a booked call starts.' },
+]
+
+function NotificationsForm({ profile }) {
+  const { refreshProfile } = useAuth()
+  const [prefs, setPrefs] = useState(profile.notification_preferences || {})
+  const [savingKey, setSavingKey] = useState(null)
+
+  async function toggle(key, value) {
+    const next = { ...prefs, [key]: value }
+    setPrefs(next)
+    setSavingKey(key)
+    const { error } = await supabase.rpc('update_own_notification_preferences', { p_notification_preferences: next })
+    setSavingKey(null)
+    if (error) { setPrefs(prefs); return }
+    await refreshProfile()
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="font-sans text-sm font-semibold text-fg-primary">Notifications</p>
+        <p className="mt-1 font-sans text-xs text-fg-secondary">
+          Choose what you want to be notified about. Sending isn't wired up for every one of these yet — this saves
+          your preference either way.
+        </p>
+      </div>
+      <div className="space-y-3">
+        {NOTIFICATION_TOGGLES.map(({ key, label, hint }) => (
+          <div key={key} className="flex items-center justify-between gap-4">
+            <div>
+              <p className="font-sans text-sm text-fg-primary">{label}</p>
+              <p className="font-sans text-xs text-fg-secondary">{hint}</p>
+            </div>
+            <Switch
+              checked={prefs[key] !== false}
+              onChange={(value) => toggle(key, value)}
+              disabled={savingKey === key}
+              label={label}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const REMINDER_LEAD_TIMES = [
+  { value: '15m', label: '15 minutes before' },
+  { value: '30m', label: '30 minutes before' },
+  { value: '1h', label: '1 hour before' },
+]
+
+// Prompt 619 — stored preferences only, flagged per the prompt's own
+// scope: default reminder lead time doesn't map onto the existing
+// send-appointment-reminders function (that fires fixed 24h/1h/15m
+// thresholds to the LEAD's phone, unrelated to a closer preference), and
+// wiring a real "auto-open Meeting Room shortly before a call starts"
+// would need a global watcher (running outside the Meeting Room page,
+// deduping so it doesn't re-open a call already dismissed) — a real
+// feature addition, not a toggle-sized change. Shipping the toggle +
+// storage now rather than guessing at that design.
+function CallBookingForm({ profile }) {
+  const { refreshProfile } = useAuth()
+  const [leadTime, setLeadTime] = useState(profile.call_reminder_lead_time || '15m')
+  const [autoOpen, setAutoOpen] = useState(!!profile.auto_open_meeting_room)
+  const [saving, setSaving] = useState(false)
+
+  async function persist(nextLeadTime, nextAutoOpen) {
+    setSaving(true)
+    const { error } = await supabase.rpc('update_own_call_preferences', {
+      p_call_reminder_lead_time: nextLeadTime,
+      p_auto_open_meeting_room: nextAutoOpen,
+    })
+    setSaving(false)
+    if (!error) await refreshProfile()
+  }
+
+  function onLeadTimeChange(value) {
+    setLeadTime(value)
+    persist(value, autoOpen)
+  }
+
+  function onAutoOpenChange(value) {
+    setAutoOpen(value)
+    persist(leadTime, value)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="font-sans text-sm font-semibold text-fg-primary">Call & Booking</p>
+        <p className="mt-1 font-sans text-xs text-fg-secondary">Preferences only for now — not yet wired into automatic behavior.</p>
+      </div>
+      <Field label="Default reminder lead time">
+        <select
+          className={inputClass()}
+          value={leadTime}
+          onChange={(e) => onLeadTimeChange(e.target.value)}
+          disabled={saving}
+        >
+          {REMINDER_LEAD_TIMES.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </Field>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="font-sans text-sm text-fg-primary">Auto-open Meeting Room</p>
+          <p className="font-sans text-xs text-fg-secondary">Open the Meeting Room shortly before a call starts.</p>
+        </div>
+        <Switch checked={autoOpen} onChange={onAutoOpenChange} disabled={saving} label="Auto-open Meeting Room" />
+      </div>
     </div>
   )
 }
