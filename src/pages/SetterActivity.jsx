@@ -11,6 +11,7 @@ import { DayPaginator } from '../components/ui/DayPaginator'
 import { MonthPaginator } from '../components/ui/MonthPaginator'
 import { CustomDatePicker, formatRangeLabel } from '../components/ui/CustomDatePicker'
 import { PillToggle } from '../components/ui/PillToggle'
+import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 import { zonedDateStr, zonedDayRange, monthOf, firstOfMonth, lastOfMonth } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 import { usePageHeader } from '../components/Layout'
@@ -151,7 +152,13 @@ function InviteRepBubble() {
           aria-label="Invite a rep"
           className="flex h-14 w-14 items-center justify-center rounded-full bg-accent text-white shadow-lg transition-transform hover:scale-105 hover:bg-accent-deep dark:hover:bg-accent-bright"
         >
-          <Send size={24} />
+          {/* Prompt 629 — the button is already a centering flexbox; the
+              Send glyph's own visible mass sits up-and-right of its square
+              viewBox center (the paper-plane's tip reaches 22,2 while its
+              tail stops at 2,9), so it reads off-center in a circle. Nudge
+              the glyph back down-left by the ~2px that offset works out to
+              at size 24. */}
+          <Send size={24} className="-translate-x-[2px] translate-y-[2px]" />
         </button>
       </div>
       {open && <InviteRepModal onClose={() => setOpen(false)} />}
@@ -221,14 +228,18 @@ export default function SetterActivity() {
 
   return (
     <div>
-      {/* Prompt 628 — two toolbar rows: the new Setter/Closer leaderboard
-          toggle takes the top-left slot the period toggle used to hold,
-          with the date navigator opposite it on the right (where the
-          "Invite Setter" button used to sit — that trigger is now the
-          floating bubble below). The period toggle drops to its own row
-          underneath, same left alignment. */}
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <PillToggle options={ROLE_TABS} active={roleTab} onChange={setRoleTab} />
+      {/* Prompt 629 — two toolbar rows, re-split from what 628 shipped:
+          row 1 is the Setter/Closer leaderboard toggle alone, now the same
+          boxed SegmentedTabs variant="grouped" Training.jsx uses for its own
+          Script/Videos row (not a rounded-full PillToggle); row 2 pairs the
+          period toggle on the left with the date navigator on the right. The
+          invite trigger is the floating bubble below, unchanged from 628. */}
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <SegmentedTabs tabs={ROLE_TABS} active={roleTab} onChange={setRoleTab} variant="grouped" />
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <PillToggle options={periodTabs} active={periodTab} onChange={setPeriodTab} />
         {periodTab === 'daily' && <DayPaginator date={dayDate} onChange={setDayDate} timezone={tz} />}
         {periodTab === 'monthly' && <MonthPaginator month={monthStr} onChange={setMonthStr} timezone={tz} />}
         {periodTab === 'allTime' && (
@@ -239,10 +250,6 @@ export default function SetterActivity() {
             today={today}
           />
         )}
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <PillToggle options={periodTabs} active={periodTab} onChange={setPeriodTab} />
       </div>
 
       {/* Prompt 606 — box quantized to the app's established header (43px)
