@@ -233,8 +233,11 @@ export default function SetterActivity() {
           boxed SegmentedTabs variant="grouped" Training.jsx uses for its own
           Script/Videos row (not a rounded-full PillToggle); row 2 pairs the
           period toggle on the left with the date navigator on the right. The
-          invite trigger is the floating bubble below, unchanged from 628. */}
-      <div className="mt-6 flex flex-wrap items-center gap-3">
+          invite trigger is the floating bubble below, unchanged from 628.
+          Prompt 630 — row 1's own mt-6 dropped (24px) so the page clears
+          a ~930px viewport without a scrollbar (941px -> 917px measured);
+          every gap below is untouched. */}
+      <div className="flex flex-wrap items-center gap-3">
         <SegmentedTabs tabs={ROLE_TABS} active={roleTab} onChange={setRoleTab} variant="grouped" />
       </div>
 
