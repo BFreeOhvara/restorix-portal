@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useContext, createContext } from 'react'
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, User, Settings as SettingsIcon, UserPlus, GitBranch, Bug, Smartphone, CalendarDays, PieChart, CreditCard, Video } from 'lucide-react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Bell, LogOut, Workflow, Users as UsersIcon, GraduationCap, BarChart2, TrendingUp, Activity as ActivityIcon, Users2, DollarSign, Target, MessageSquare, PhoneCall, Settings as SettingsIcon, UserPlus, GitBranch, Bug, Smartphone, CalendarDays, PieChart, CreditCard, Video } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useBrand } from '../hooks/useBrand'
 import { supabase, SUPABASE_URL } from '../lib/supabase'
@@ -290,10 +290,18 @@ function SwapButton() {
 // `grid-rows-[1fr]` on a `grid` wrapper, animating to real auto-height
 // instead of a hardcoded max-height. Because the panel now lives in
 // normal flow, growing it pushes the icon-button row and account button
-// above it upward as the sidebar's flex-1 nav yields space, rather than
+// above it upward as the sidebar's nav content sits above it, rather than
 // laying a shadowed card over those buttons — same handlers and markup
 // inside, only the container/positioning/animation changed.
-function AccountPopover({ profile, onSignOut, onNavigate }) {
+// Prompt 623 — Profile item dropped (Settings' own Account card already
+// surfaces Role/Username; login/password fields move to Settings once
+// Security ships). Account row + Sign-out row now live inside one shared
+// `rounded-lg border` card instead of two separately-boxed elements — the
+// account row lost its own `rounded-lg` fill, the reveal lost its own
+// nested border/background, and a `border-t` on Sign-out is what now
+// separates the two rows within the single card. Sign-out centered
+// instead of left-aligned; the account row above it is untouched.
+function AccountPopover({ profile, onSignOut }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -307,37 +315,31 @@ function AccountPopover({ profile, onSignOut, onNavigate }) {
 
   return (
     <div ref={ref} className="p-3">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 rounded-lg bg-surface px-2 py-2 text-left transition-colors hover:bg-muted"
-      >
-        {/* Prompt 505: avatar added matching ohvara-dashboard's own
-            AccountMenu row (Sidebar.jsx) — Avatar left of the stacked
-            name/role text, same `gap` proportions. Reuses the existing
-            Avatar component verbatim (Prompt 491, already handles the
-            real-photo vs. pastel-initials fallback) rather than building
-            a second one. */}
-        <Avatar profile={profile} size={28} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-sans text-sm font-medium text-fg-primary">{profile?.full_name}</p>
-          <p className="eyebrow !text-fg-faint">{profile?.role}</p>
-        </div>
-      </button>
+      <div className="overflow-hidden rounded-lg border border-line bg-surface">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="flex w-full items-center gap-2 px-2 py-2 text-left transition-colors hover:bg-muted"
+        >
+          {/* Prompt 505: avatar added matching ohvara-dashboard's own
+              AccountMenu row (Sidebar.jsx) — Avatar left of the stacked
+              name/role text, same `gap` proportions. Reuses the existing
+              Avatar component verbatim (Prompt 491, already handles the
+              real-photo vs. pastel-initials fallback) rather than building
+              a second one. */}
+          <Avatar profile={profile} size={28} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-sans text-sm font-medium text-fg-primary">{profile?.full_name}</p>
+            <p className="eyebrow !text-fg-faint">{profile?.role}</p>
+          </div>
+        </button>
 
-      <div
-        className={`grid transition-[grid-template-rows] duration-200 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
-      >
-        <div className="overflow-hidden">
-          <div className="mt-1 overflow-hidden rounded-lg border border-line bg-elevated py-1">
-            <button
-              onClick={() => { setOpen(false); onNavigate('/profile') }}
-              className="flex w-full items-center gap-2.5 px-3 py-2 text-left font-sans text-sm text-fg-primary hover:bg-surface"
-            >
-              <User size={15} className="text-fg-faint" /> Profile
-            </button>
+        <div
+          className={`grid transition-[grid-template-rows] duration-200 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
+        >
+          <div className="overflow-hidden">
             <button
               onClick={() => { setOpen(false); onSignOut() }}
-              className="flex w-full items-center gap-2.5 px-3 py-2 text-left font-sans text-sm text-danger hover:bg-surface"
+              className="flex w-full items-center justify-center gap-2.5 border-t border-line px-3 py-2 font-sans text-sm text-danger hover:bg-muted"
             >
               <LogOut size={15} /> Sign out
             </button>
@@ -393,7 +395,6 @@ export function usePageHeader({ title, subtitle }) {
 export default function Layout() {
   const { profile, signOut } = useAuth()
   const brand = useBrand()
-  const navigate = useNavigate()
   const location = useLocation()
   // Prompt 528
   const [showBugReport, setShowBugReport] = useState(false)
@@ -447,8 +448,14 @@ export default function Layout() {
         </div>
 
         {/* Prompt 622 — pt-2 added so the TODAY label isn't flush against
-            the new divider line above. */}
-        <nav className="flex-1 space-y-4 px-3 pt-2">
+            the new divider line above.
+            Prompt 623 — dropped `flex-1`: this nav no longer needs to yield
+            space to the footer below it. It now sizes to its own content
+            and the footer wrapper (`mt-auto` below) pins itself to the
+            bottom of the `<aside>` independently, so the account card
+            expanding/collapsing no longer shifts the nav links, group
+            labels, or the divider under the logo at all. */}
+        <nav className="space-y-4 px-3 pt-2">
           {navGroups.map(({ label: groupLabel, items }) => {
             const visible = items.filter((l) => l.roles.includes(profile?.role))
             if (visible.length === 0) return null
@@ -465,29 +472,38 @@ export default function Layout() {
           })}
         </nav>
 
-        {/* Prompt 531 — moved from stacked (Prompt 528) to opposite ends of
-            this same row, per Brayden's revised spec ("move one to one
-            corner, the other to the other corner"). `px-5` matches the
-            logo block's own edge padding above so both buttons align to
-            the sidebar's real left/right edges. Sits directly above the
-            existing divider line (drawn by AccountPopover's own border-t). */}
-        {/* Prompt 549 — closer-only Swap button sat between Report a Bug
-            and Add to Home Screen (the nav landmark Brayden named as "the
-            phone button"). Non-closers keep the original two-corner row. */}
-        {/* Prompt 622 — SwapButton rotated out of use for now ("we're gonna
-            kind of rotate out of use like the sure text thing for now" —
-            Brayden). Not a removal: SwapButton is still defined below,
-            fully working, just unrendered — currently unused, re-enable by
-            rendering <SwapButton /> between the two buttons below. Added
-            pt-1 since the row now sits further from the buttons above with
-            the divider gone and no longer needs to visually anchor a third,
-            wider item in the middle. */}
-        <div className="flex items-center justify-between px-5 pb-3 pt-1">
-          <SidebarIconButton icon={Bug} label="Report a Bug" onClick={() => setShowBugReport(true)} />
-          <SidebarIconButton icon={Smartphone} label="Add to Home Screen" onClick={() => setShowAddToHome(true)} />
-        </div>
+        {/* Prompt 623 — icon-button row + AccountPopover wrapped together
+            and pinned to the bottom of the `<aside>` via `mt-auto` on this
+            wrapper, independent of `<nav>` above (see its own comment).
+            Growing/shrinking the account card only moves this wrapper's
+            own contents (the icon row shifts up a little), never anything
+            above it. */}
+        <div className="mt-auto">
+          {/* Prompt 531 — moved from stacked (Prompt 528) to opposite ends of
+              this same row, per Brayden's revised spec ("move one to one
+              corner, the other to the other corner"). `px-5` matches the
+              logo block's own edge padding above so both buttons align to
+              the sidebar's real left/right edges. Sits directly above the
+              existing divider line (drawn by AccountPopover's own border-t). */}
+          {/* Prompt 549 — closer-only Swap button sat between Report a Bug
+              and Add to Home Screen (the nav landmark Brayden named as "the
+              phone button"). Non-closers keep the original two-corner row. */}
+          {/* Prompt 622 — SwapButton rotated out of use for now ("we're gonna
+              kind of rotate out of use like the sure text thing for now" —
+              Brayden). Not a removal: SwapButton is still defined below,
+              fully working, just unrendered — currently unused, re-enable by
+              rendering <SwapButton /> between the two buttons below.
+              Prompt 623 — `pb-3 pt-1` tightened to `pb-1` (bottom padding
+              only) to close the gap to the account card directly below;
+              the card's own `p-3` wrapper padding already supplies the top
+              spacing this row needs. */}
+          <div className="flex items-center justify-between px-5 pb-1">
+            <SidebarIconButton icon={Bug} label="Report a Bug" onClick={() => setShowBugReport(true)} />
+            <SidebarIconButton icon={Smartphone} label="Add to Home Screen" onClick={() => setShowAddToHome(true)} />
+          </div>
 
-        <AccountPopover profile={profile} onSignOut={signOut} onNavigate={navigate} />
+          <AccountPopover profile={profile} onSignOut={signOut} />
+        </div>
       </aside>
 
       {showBugReport && <BugReportModal onClose={() => setShowBugReport(false)} />}
