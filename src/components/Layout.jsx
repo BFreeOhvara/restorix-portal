@@ -339,7 +339,7 @@ function AccountPopover({ profile, onSignOut }) {
           <div className="overflow-hidden">
             <button
               onClick={() => { setOpen(false); onSignOut() }}
-              className="flex w-full items-center justify-center gap-2.5 border-t border-line px-3 py-2 font-sans text-sm text-danger hover:bg-muted"
+              className="flex w-full items-center gap-2.5 border-t border-line px-3 py-2 font-sans text-sm text-danger hover:bg-muted"
             >
               <LogOut size={15} /> Sign out
             </button>
