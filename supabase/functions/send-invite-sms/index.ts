@@ -1,17 +1,21 @@
 // ============================================================
-// send-invite-sms — sends a closer-created setter invite link via SMS
+// send-invite-sms — sends a closer-created rep/client invite link via SMS
 //
 // Prompt 533: closers get their own invite-send flow (SMS only, email
 // deferred to a future prompt). The invite ROW is created client-side —
 // same generateToken()+insert pattern useInvites.js's useCreateInvite
 // already uses for admin's InviteModal — now allowed for closers too via
-// the invites_insert_closer RLS policy (role = 'setter' only). This
+// the invites_insert_closer RLS policy (role = 'setter' | 'closer'). This
 // function's only job is delivering that token by text, not creating it.
 //
 // Re-verifies the token actually belongs to the caller (created_by
-// match, unused, unexpired, role = 'setter') before sending — closes off
+// match, unused, unexpired, role in ALLOWED_INVITE_ROLES) before sending — closes off
 // the SMS API as a spam vector even though RLS already restricts who can
 // create invite rows and what role they can carry.
+//
+// Prompt 628: the allowed role set is setter | closer | client (see
+// ALLOWED_INVITE_ROLES). Closers may now invite closers, matching the
+// widened invites_insert_closer RLS policy.
 //
 // Deploy WITH jwt verification (called by an authed closer):
 //   supabase functions deploy send-invite-sms --project-ref avgvmzshujwphneykuvu
@@ -27,6 +31,10 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+// Prompt 628 — the full set of roles this flow may deliver. Deliberately
+// excludes 'admin': widening this array is the only way to change that.
+const ALLOWED_INVITE_ROLES = ['setter', 'closer', 'client']
 
 function jsonError(message: string, status: number) {
   return new Response(JSON.stringify({ error: message }), {
@@ -107,8 +115,13 @@ Deno.serve(async (req) => {
   // Prompt 546 — closers also send `client` invites through this flow
   // (client-portal provisioning on a Closed deal). Still closer-only,
   // still created_by-scoped; only the allowed role set widened.
-  if (invite.role !== 'setter' && invite.role !== 'client') {
-    return jsonError('This invite flow can only send setter or client invites', 403)
+  // Prompt 628 — 'closer' joins that set (closers can now invite closers).
+  // The role checked here is the one STORED on the invite row, never a
+  // role passed in by the client — the caller only sends `token`, so
+  // there is nothing for a client to lie about, and 'admin' invites still
+  // cannot be sent through this flow at all.
+  if (!ALLOWED_INVITE_ROLES.includes(invite.role)) {
+    return jsonError('This invite flow can only send setter, closer or client invites', 403)
   }
   if (invite.used_at) {
     return jsonError('This invite has already been used', 400)
@@ -126,7 +139,7 @@ Deno.serve(async (req) => {
   }
 
   const link = `https://portal.restorix.co/join/${token}`
-  const roleWord = invite.role === 'client' ? 'client' : 'setter'
+  const roleWord = invite.role
   const messageBody = `You've been invited to join Restorix Portal as a ${roleWord}. Set up your account: ${link}`
 
   try {

@@ -64,9 +64,20 @@ export function normalizePhoneE164(raw) {
   return null
 }
 
-export function useSendSetterInviteSms() {
+// Prompt 628 — renamed from useSendSetterInviteSms and made role-agnostic:
+// closers can now invite closers as well as setters, so the invite row's
+// `role` comes from the caller instead of being hardcoded. Only 'setter'
+// and 'closer' are accepted here; the real enforcement is the
+// invites_insert_closer RLS policy (widened to the same two roles) and
+// send-invite-sms's own re-verification of the stored row, not this
+// client-side guard.
+const REP_INVITE_ROLES = ['setter', 'closer']
+
+export function useSendRepInviteSms() {
   return useMutation({
-    mutationFn: async ({ phone }) => {
+    mutationFn: async ({ phone, role }) => {
+      if (!REP_INVITE_ROLES.includes(role)) throw new Error('Invalid invite role')
+
       const normalized = normalizePhoneE164(phone)
       if (!normalized) throw new Error('Enter a valid 10-digit US phone number')
 
@@ -74,7 +85,7 @@ export function useSendSetterInviteSms() {
       const token = generateToken()
       const { error: insertError } = await supabase
         .from('invites')
-        .insert({ token, role: 'setter', created_by: userData.user.id })
+        .insert({ token, role, created_by: userData.user.id })
       if (insertError) throw insertError
 
       const { data, error } = await supabase.functions.invoke('send-invite-sms', {
