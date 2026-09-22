@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Moon, Sun, SunMoon, Video, CheckCircle2, User, Bell, CalendarClock, ShieldCheck } from 'lucide-react'
+import { Moon, Sun, SunMoon, Video, CheckCircle2, ShieldCheck } from 'lucide-react'
 import clsx from 'clsx'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
@@ -31,6 +31,12 @@ import { AvatarUpload, ROLE_LABEL } from './Profile'
 // built from the app's own tokens: https://claude.ai/artifact/RoyToc72PPoHTaMTQnth2m
 // Non-closer roles (setter/admin/client) are untouched — they only ever
 // saw Timezone+Theme here and still do, same layout as before.
+// Prompt 624 — 621's floating sub-nav + two-boxed-card panels replaced
+// with a horizontal underline tab bar and single-column flowing sections
+// (SettingsSection), per a second signed-off mockup with more density:
+// https://claude.ai/artifact/DHyjHonUXeQbyQpw4Uws1n. Same fields/toggles/
+// RPCs throughout — layout only, plus three honestly-locked "Soon"
+// preview sections (no persistence, no schema, disabled controls).
 export default function Settings() {
   const { profile } = useAuth()
   usePageHeader({ title: 'Settings', subtitle: 'Account settings — password, name, and role live on Profile.' })
@@ -55,75 +61,78 @@ export default function Settings() {
 }
 
 const CLOSER_TABS = [
-  { key: 'profile', label: 'Profile', icon: User },
-  { key: 'appearance', label: 'Appearance', icon: SunMoon },
-  { key: 'notifications', label: 'Notifications', icon: Bell },
-  { key: 'booking', label: 'Call & Booking', icon: CalendarClock },
-  { key: 'integrations', label: 'Integrations', icon: Video },
+  { key: 'profile', label: 'Profile' },
+  { key: 'appearance', label: 'Appearance' },
+  { key: 'notifications', label: 'Notifications' },
+  { key: 'booking', label: 'Call & Booking' },
+  { key: 'integrations', label: 'Integrations' },
 ]
 
 function CloserSettingsHub({ profile }) {
   const [tab, setTab] = useState('profile')
 
   return (
-    <div className="flex items-start gap-6">
-      <nav className="sticky top-24 w-[212px] shrink-0 rounded-card border border-line bg-elevated p-2.5 shadow-lg">
-        {CLOSER_TABS.map(({ key, label, icon: Icon }) => (
+    <div className="max-w-3xl">
+      <div className="mb-8 flex items-center gap-1 overflow-x-auto border-b border-line">
+        {CLOSER_TABS.map(({ key, label }) => (
           <button
             key={key}
             type="button"
             onClick={() => setTab(key)}
             className={clsx(
-              'mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left font-sans text-sm transition-colors last:mb-0',
+              '-mb-px whitespace-nowrap border-b-2 px-4 py-2.5 font-sans text-sm transition-colors',
               tab === key
-                ? 'bg-surface font-semibold text-accent'
-                : 'text-fg-secondary hover:bg-surface hover:text-fg-primary'
+                ? 'border-accent font-semibold text-accent'
+                : 'border-transparent text-fg-secondary hover:text-fg-primary'
             )}
           >
-            <Icon size={16} />
             {label}
           </button>
         ))}
         {/* Security stays disabled/unclickable until Prompt 620 has a real
             panel to show here — honestly locked, not faked. */}
-        <div className="mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left font-sans text-sm text-fg-faint">
-          <ShieldCheck size={16} />
+        <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-4 py-2.5 font-sans text-sm text-fg-faint">
+          <ShieldCheck size={15} />
           Security
-          <span className="ml-auto rounded-full border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-fg-faint">
+          <span className="rounded-full border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-fg-faint">
             620
           </span>
-        </div>
-      </nav>
-
-      <div className="min-w-0 flex-1">
-        {tab === 'profile' && <ProfilePanel profile={profile} />}
-        {tab === 'appearance' && <AppearancePanel profile={profile} />}
-        {tab === 'notifications' && <NotificationsPanel profile={profile} />}
-        {tab === 'booking' && <BookingPanel profile={profile} />}
-        {tab === 'integrations' && <IntegrationsPanel profile={profile} />}
+        </span>
       </div>
+
+      {tab === 'profile' && <ProfilePanel profile={profile} />}
+      {tab === 'appearance' && <AppearancePanel profile={profile} />}
+      {tab === 'notifications' && <NotificationsPanel profile={profile} />}
+      {tab === 'booking' && <BookingPanel profile={profile} />}
+      {tab === 'integrations' && <IntegrationsPanel profile={profile} />}
     </div>
   )
 }
 
-function PanelCard({ children }) {
-  return <div className="rounded-card border border-line bg-elevated p-6">{children}</div>
-}
-
-function CardHead({ title, description, action }) {
+function SettingsSection({ title, description, action, badge, last = false, children }) {
   return (
-    <div className={clsx('mb-5', action && 'flex items-start justify-between gap-4')}>
-      <div>
-        <p className="font-sans text-sm font-semibold text-fg-primary">{title}</p>
-        {description && <p className="mt-1 font-sans text-xs text-fg-secondary">{description}</p>}
+    <div className={clsx('py-6 first:pt-0', !last && 'border-b border-line')}>
+      <div className={clsx('mb-4', action ? 'flex items-start justify-between gap-4' : undefined)}>
+        <div>
+          <p className="flex items-center gap-2 font-sans text-sm font-semibold text-fg-primary">
+            {title}
+            {badge}
+          </p>
+          {description && <p className="mt-1 font-sans text-xs text-fg-secondary">{description}</p>}
+        </div>
+        {action}
       </div>
-      {action}
+      {children}
     </div>
   )
 }
 
-function PanelGrid({ children }) {
-  return <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">{children}</div>
+function SoonBadge() {
+  return (
+    <span className="rounded-full border border-line-strong px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-accent-deep">
+      Soon
+    </span>
+  )
 }
 
 // ---- Profile tab -----------------------------------------------------
@@ -131,11 +140,8 @@ function PanelGrid({ children }) {
 function ProfilePanel({ profile }) {
   return (
     <div>
-      <p className="eyebrow mb-4">Profile</p>
-      <PanelGrid>
-        <BasicInfoCard profile={profile} />
-        <AccountCard profile={profile} />
-      </PanelGrid>
+      <BasicInfoCard profile={profile} />
+      <AccountCard profile={profile} />
     </div>
   )
 }
@@ -175,17 +181,16 @@ function BasicInfoCard({ profile }) {
   }
 
   return (
-    <PanelCard>
-      <form onSubmit={save}>
-        <CardHead
-          title="Basic info"
-          description="Shown on booking confirmations and inside the Meeting Room."
-          action={
-            <Button type="submit" disabled={!dirty || saving}>
-              {saving ? 'Saving…' : 'Save changes'}
-            </Button>
-          }
-        />
+    <form onSubmit={save}>
+      <SettingsSection
+        title="Photo & name"
+        description="Shown on booking confirmations and inside the Meeting Room."
+        action={
+          <Button type="submit" disabled={!dirty || saving}>
+            {saving ? 'Saving…' : 'Save changes'}
+          </Button>
+        }
+      >
         <div className="mb-5 border-b border-line pb-5">
           <AvatarUpload
             profile={profile}
@@ -214,28 +219,45 @@ function BasicInfoCard({ profile }) {
         </div>
         {error && <p className="mt-3 font-sans text-sm text-danger">{error}</p>}
         {saved && <p className="mt-3 font-sans text-sm text-success">Saved</p>}
-      </form>
-    </PanelCard>
+      </SettingsSection>
+    </form>
   )
 }
 
 // Read-only for now — login/password/role move here once Security
-// (Prompt 620) ships. No new fields, no edit capability.
+// (Prompt 620) ships. No new fields, no edit capability. "Member since"
+// added in Prompt 624 — profile.created_at is already returned by
+// useAuth's `select('*')`, no new query needed.
 function AccountCard({ profile }) {
+  const memberSince = profile.created_at
+    ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '—'
+
   return (
-    <PanelCard>
-      <CardHead title="Account" description="Read-only for now — login and password move here once Security ships." />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <SettingsSection
+      title="Account"
+      description="Read-only for now — login and password move here once Security ships."
+      last
+    >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
           <span className="eyebrow">Role</span>
-          <p className="mt-1.5 font-sans text-sm text-fg-primary">{ROLE_LABEL[profile.role] || profile.role}</p>
+          <p className="mt-1.5">
+            <span className="inline-flex items-center rounded-full bg-accent/10 px-2.5 py-0.5 font-sans text-xs font-semibold text-accent-deep">
+              {ROLE_LABEL[profile.role] || profile.role}
+            </span>
+          </p>
         </div>
         <div>
           <span className="eyebrow">Username</span>
           <p className="mt-1.5 font-mono text-sm text-fg-secondary">{profile.username}</p>
         </div>
+        <div>
+          <span className="eyebrow">Member since</span>
+          <p className="mt-1.5 font-sans text-sm text-fg-primary">{memberSince}</p>
+        </div>
       </div>
-    </PanelCard>
+    </SettingsSection>
   )
 }
 
@@ -244,15 +266,8 @@ function AccountCard({ profile }) {
 function AppearancePanel({ profile }) {
   return (
     <div>
-      <p className="eyebrow mb-4">Appearance</p>
-      <PanelGrid>
-        <PanelCard>
-          <TimezoneForm profile={profile} headerAction />
-        </PanelCard>
-        <PanelCard>
-          <ThemeForm />
-        </PanelCard>
-      </PanelGrid>
+      <TimezoneForm profile={profile} headerAction />
+      <ThemeForm last />
     </div>
   )
 }
@@ -277,6 +292,15 @@ const CALL_NOTIFICATION_TOGGLES = [
   { key: 'call_starting_soon', label: 'Call starting soon', hint: 'A heads-up shortly before a booked call starts.' },
 ]
 
+// Prompt 624 — pure UI preview, no persistence/schema/wiring. Rendered
+// with ToggleList's `disabled` mode: permanently-off, non-interactive
+// switches, same honest-lock spirit as the Security tab.
+const DELIVERY_CHANNEL_TOGGLES = [
+  { key: 'email', label: 'Email', hint: 'Send alerts to your login email.' },
+  { key: 'sms', label: 'SMS', hint: 'Text alerts to the phone number on your profile.' },
+  { key: 'push', label: 'Push', hint: 'Browser/app push while the portal is open.' },
+]
+
 function NotificationsPanel({ profile }) {
   const { refreshProfile } = useAuth()
   const [prefs, setPrefs] = useState(profile.notification_preferences || {})
@@ -294,36 +318,43 @@ function NotificationsPanel({ profile }) {
 
   return (
     <div>
-      <p className="eyebrow mb-4">Notifications</p>
-      <PanelGrid>
-        <PanelCard>
-          <CardHead title="Leads" description="Sending isn't wired up yet — this saves your preference either way." />
-          <ToggleList toggles={LEAD_NOTIFICATION_TOGGLES} prefs={prefs} savingKey={savingKey} onToggle={toggle} />
-        </PanelCard>
-        <PanelCard>
-          <CardHead title="Calls" description="Sending isn't wired up yet — this saves your preference either way." />
-          <ToggleList toggles={CALL_NOTIFICATION_TOGGLES} prefs={prefs} savingKey={savingKey} onToggle={toggle} />
-        </PanelCard>
-      </PanelGrid>
+      <SettingsSection title="Leads" description="Sending isn't wired up yet — this saves your preference either way.">
+        <ToggleList toggles={LEAD_NOTIFICATION_TOGGLES} prefs={prefs} savingKey={savingKey} onToggle={toggle} />
+      </SettingsSection>
+      <SettingsSection title="Calls" description="Sending isn't wired up yet — this saves your preference either way.">
+        <ToggleList toggles={CALL_NOTIFICATION_TOGGLES} prefs={prefs} savingKey={savingKey} onToggle={toggle} />
+      </SettingsSection>
+      <SettingsSection
+        title="Delivery channels"
+        badge={<SoonBadge />}
+        description="Choose where these alerts get sent once notification delivery is built."
+        last
+      >
+        <ToggleList toggles={DELIVERY_CHANNEL_TOGGLES} disabled />
+      </SettingsSection>
     </div>
   )
 }
 
-function ToggleList({ toggles, prefs, savingKey, onToggle }) {
+function ToggleList({ toggles, prefs, savingKey, onToggle, disabled = false }) {
   return (
     <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
       {toggles.map(({ key, label, hint }) => (
         <div key={key} className="flex items-center justify-between gap-4 bg-surface px-4 py-3.5">
           <div>
-            <p className="font-sans text-sm font-medium text-fg-primary">{label}</p>
-            <p className="mt-0.5 font-sans text-xs text-fg-secondary">{hint}</p>
+            <p className={clsx('font-sans text-sm font-medium', disabled ? 'text-fg-faint' : 'text-fg-primary')}>{label}</p>
+            <p className={clsx('mt-0.5 font-sans text-xs', disabled ? 'text-fg-faint' : 'text-fg-secondary')}>{hint}</p>
           </div>
-          <Switch
-            checked={prefs[key] !== false}
-            onChange={(value) => onToggle(key, value)}
-            disabled={savingKey === key}
-            label={label}
-          />
+          {disabled ? (
+            <Switch checked={false} onChange={() => {}} disabled label={label} />
+          ) : (
+            <Switch
+              checked={prefs[key] !== false}
+              onChange={(value) => onToggle(key, value)}
+              disabled={savingKey === key}
+              label={label}
+            />
+          )}
         </div>
       ))}
     </div>
@@ -377,36 +408,46 @@ function BookingPanel({ profile }) {
 
   return (
     <div>
-      <p className="eyebrow mb-4">Call &amp; Booking</p>
-      <PanelGrid>
-        <PanelCard>
-          <CardHead title="Reminders" description="Not yet wired into automatic behavior." />
-          <Field label="Default reminder lead time">
-            <select
-              className={inputClass()}
-              value={leadTime}
-              onChange={(e) => onLeadTimeChange(e.target.value)}
-              disabled={saving}
-            >
-              {REMINDER_LEAD_TIMES.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </Field>
-        </PanelCard>
-        <PanelCard>
-          <CardHead title="Meeting Room" description="Not yet wired into automatic behavior." />
-          <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
-            <div className="flex items-center justify-between gap-4 bg-surface px-4 py-3.5">
-              <div>
-                <p className="font-sans text-sm font-medium text-fg-primary">Auto-open Meeting Room</p>
-                <p className="mt-0.5 font-sans text-xs text-fg-secondary">Open the Meeting Room shortly before a call starts.</p>
-              </div>
-              <Switch checked={autoOpen} onChange={onAutoOpenChange} disabled={saving} label="Auto-open Meeting Room" />
+      <SettingsSection title="Reminders" description="Not yet wired into automatic behavior.">
+        <Field label="Default reminder lead time">
+          <select
+            className={inputClass()}
+            value={leadTime}
+            onChange={(e) => onLeadTimeChange(e.target.value)}
+            disabled={saving}
+          >
+            {REMINDER_LEAD_TIMES.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </Field>
+      </SettingsSection>
+      <SettingsSection title="Meeting Room" description="Not yet wired into automatic behavior.">
+        <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
+          <div className="flex items-center justify-between gap-4 bg-surface px-4 py-3.5">
+            <div>
+              <p className="font-sans text-sm font-medium text-fg-primary">Auto-open Meeting Room</p>
+              <p className="mt-0.5 font-sans text-xs text-fg-secondary">Open the Meeting Room shortly before a call starts.</p>
             </div>
+            <Switch checked={autoOpen} onChange={onAutoOpenChange} disabled={saving} label="Auto-open Meeting Room" />
           </div>
-        </PanelCard>
-      </PanelGrid>
+        </div>
+      </SettingsSection>
+      <SettingsSection
+        title="Availability windows"
+        badge={<SoonBadge />}
+        description="Set the hours you're generally available for booked calls — not built yet."
+        last
+      >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Earliest booking time">
+            <input className={inputClass()} value="9:00 AM" disabled readOnly />
+          </Field>
+          <Field label="Latest booking time">
+            <input className={inputClass()} value="6:00 PM" disabled readOnly />
+          </Field>
+        </div>
+      </SettingsSection>
     </div>
   )
 }
@@ -422,13 +463,14 @@ function BookingPanel({ profile }) {
 function IntegrationsPanel({ profile }) {
   return (
     <div>
-      <p className="eyebrow mb-4">Integrations</p>
-      <PanelGrid>
-        <PanelCard>
-          <ZoomForm profile={profile} />
-        </PanelCard>
-        <InPortalCallingCard profile={profile} />
-      </PanelGrid>
+      <ZoomForm profile={profile} />
+      <InPortalCallingCard profile={profile} />
+      <SettingsSection
+        title="Calendar sync"
+        badge={<SoonBadge />}
+        description="Two-way sync with Google or Outlook calendar — not built yet."
+        last
+      />
     </div>
   )
 }
@@ -438,11 +480,10 @@ function InPortalCallingCard({ profile }) {
   const connected = !!connection
 
   return (
-    <PanelCard>
-      <CardHead
-        title="In-portal calling"
-        description="Booked calls open inside the Meeting Room using Zoom's Meeting SDK — no separate tab or app."
-      />
+    <SettingsSection
+      title="In-portal calling"
+      description="Booked calls open inside the Meeting Room using Zoom's Meeting SDK — no separate tab or app."
+    >
       {isLoading ? (
         <p className="font-sans text-sm text-fg-secondary">Checking…</p>
       ) : (
@@ -451,7 +492,7 @@ function InPortalCallingCard({ profile }) {
           {connected ? 'Active — uses the Zoom account connected above' : 'Connect Zoom above to enable'}
         </div>
       )}
-    </PanelCard>
+    </SettingsSection>
   )
 }
 
@@ -572,9 +613,7 @@ function ZoomForm({ profile }) {
   }
 
   return (
-    <div>
-      <CardHead title="Zoom account" description="Connect your own Zoom account so meetings for your booked appointments run under you as host." />
-
+    <SettingsSection title="Zoom account" description="Connect your own Zoom account so meetings for your booked appointments run under you as host.">
       {zoomStatus && ZOOM_STATUS_COPY[zoomStatus] && (
         <p className={clsx('mb-3 font-sans text-sm', ZOOM_STATUS_COPY[zoomStatus].tone === 'success' ? 'text-success' : 'text-danger')}>
           {ZOOM_STATUS_COPY[zoomStatus].text}
@@ -603,7 +642,7 @@ function ZoomForm({ profile }) {
         </Button>
       )}
       {error && <p className="mt-3 font-sans text-sm text-danger">{error}</p>}
-    </div>
+    </SettingsSection>
   )
 }
 
@@ -613,7 +652,17 @@ const THEME_OPTIONS = [
   { value: 'dark', label: 'Dark', icon: Moon },
 ]
 
-function ThemeForm() {
+// Prompt 624 — decorative two-tone swatch above each theme label, per the
+// signed-off mockup. Hardcoded to the real token hex values in
+// src/index.css (not read from CSS vars at runtime) — same "System"/
+// "Light" swatch on purpose, matching the mockup exactly.
+const THEME_SWATCH = {
+  system: ['#e5ecea', '#ffffff'],
+  light: ['#e5ecea', '#ffffff'],
+  dark: ['#0d1512', '#1a2420'],
+}
+
+function ThemeForm({ last = false }) {
   const { refreshProfile } = useAuth()
   const { themePreference, setThemePreference } = useTheme()
   const [saving, setSaving] = useState(null)
@@ -627,16 +676,15 @@ function ThemeForm() {
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="font-sans text-sm font-semibold text-fg-primary">Theme</p>
-        <p className="mt-1 font-sans text-xs text-fg-secondary">
-          System follows your device's light/dark setting automatically. Light and Dark override it.
-        </p>
-      </div>
-      <div className="grid grid-cols-3 gap-2">
+    <SettingsSection
+      title="Theme"
+      description="System follows your device's light/dark setting automatically. Light and Dark override it."
+      last={last}
+    >
+      <div className="grid max-w-sm grid-cols-3 gap-2">
         {THEME_OPTIONS.map(({ value, label, icon: Icon }) => {
           const active = themePreference === value
+          const [top, bottom] = THEME_SWATCH[value]
           return (
             <button
               key={value}
@@ -650,20 +698,24 @@ function ThemeForm() {
                   : 'border-line text-fg-secondary hover:border-fg-primary/40 hover:text-fg-primary'
               )}
             >
+              <span className="flex h-6 w-full overflow-hidden rounded-md border border-line">
+                <span className="flex-1" style={{ backgroundColor: top }} />
+                <span className="flex-1" style={{ backgroundColor: bottom }} />
+              </span>
               <Icon size={18} />
               {saving === value ? 'Saving…' : label}
             </button>
           )
         })}
       </div>
-    </div>
+    </SettingsSection>
   )
 }
 
 // `headerAction` — Prompt 621: same timezone RPC/state, rendered with the
 // Save button in the card header's top-right (closer Appearance tab)
 // instead of below the field (non-closer General section, unchanged).
-function TimezoneForm({ profile, headerAction = false }) {
+function TimezoneForm({ profile, headerAction = false, last = false }) {
   const { refreshProfile } = useAuth()
   const [timezone, setTimezone] = useState(profile.timezone || DEFAULT_TIMEZONE)
   const [saving, setSaving] = useState(false)
@@ -703,10 +755,11 @@ function TimezoneForm({ profile, headerAction = false }) {
   if (headerAction) {
     return (
       <form onSubmit={save}>
-        <CardHead title="Timezone" description={description} action={saveButton} />
-        {timezoneField}
-        {error && <p className="mt-3 font-sans text-sm text-danger">{error}</p>}
-        {saved && <p className="mt-3 font-sans text-sm text-success">Saved</p>}
+        <SettingsSection title="Timezone" description={description} action={saveButton} last={last}>
+          {timezoneField}
+          {error && <p className="mt-3 font-sans text-sm text-danger">{error}</p>}
+          {saved && <p className="mt-3 font-sans text-sm text-success">Saved</p>}
+        </SettingsSection>
       </form>
     )
   }
