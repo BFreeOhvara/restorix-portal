@@ -8,6 +8,7 @@ import { useTheme } from '../hooks/useTheme'
 import { useZoomConnection, useConnectZoom, useDisconnectZoom } from '../hooks/useZoom'
 import { Field, inputClass } from '../components/ui/Field'
 import { Button } from '../components/ui/Button'
+import { PillToggle } from '../components/ui/PillToggle'
 import { Switch } from '../components/ui/Switch'
 import { SELECTABLE_TIMEZONES, DEFAULT_TIMEZONE } from '../lib/timezones'
 import { usePageHeader } from '../components/Layout'
@@ -37,6 +38,12 @@ import { AvatarUpload, ROLE_LABEL } from './Profile'
 // https://claude.ai/artifact/DHyjHonUXeQbyQpw4Uws1n. Same fields/toggles/
 // RPCs throughout — layout only, plus three honestly-locked "Soon"
 // preview sections (no persistence, no schema, disabled controls).
+// Prompt 625 — two corrections per Brayden's live review of 624: the tab
+// bar becomes a boxed pill row (Training's Script/Videos PillToggle, same
+// visual language, stretched full-width) instead of underlined text, and
+// every section gets its card back (rounded-card border bg-elevated,
+// matching Pipeline Snapshot/Overview/the rest of the portal) instead of
+// sitting flat with just a border-b divider.
 export default function Settings() {
   const { profile } = useAuth()
   usePageHeader({ title: 'Settings', subtitle: 'Account settings — password, name, and role live on Profile.' })
@@ -50,7 +57,7 @@ export default function Settings() {
           <TimezoneForm profile={profile} />
         </div>
 
-        <div className="mt-6 rounded-card border border-line bg-elevated p-6">
+        <div className="mt-6">
           <ThemeForm />
         </div>
       </div>
@@ -60,12 +67,27 @@ export default function Settings() {
   return <CloserSettingsHub profile={profile} />
 }
 
+// Security stays disabled/unclickable until Prompt 620 has a real panel to
+// show here — honestly locked, not faked, carried through PillToggle's own
+// `disabled` option flag (Prompt 625) instead of a separate non-interactive
+// element.
 const CLOSER_TABS = [
   { key: 'profile', label: 'Profile' },
   { key: 'appearance', label: 'Appearance' },
   { key: 'notifications', label: 'Notifications' },
   { key: 'booking', label: 'Call & Booking' },
   { key: 'integrations', label: 'Integrations' },
+  {
+    key: 'security',
+    label: 'Security',
+    icon: ShieldCheck,
+    disabled: true,
+    badge: (
+      <span className="rounded-full border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-fg-faint">
+        620
+      </span>
+    ),
+  },
 ]
 
 function CloserSettingsHub({ profile }) {
@@ -73,31 +95,8 @@ function CloserSettingsHub({ profile }) {
 
   return (
     <div className="max-w-3xl">
-      <div className="mb-8 flex items-center gap-1 overflow-x-auto border-b border-line">
-        {CLOSER_TABS.map(({ key, label }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={clsx(
-              '-mb-px whitespace-nowrap border-b-2 px-4 py-2.5 font-sans text-sm transition-colors',
-              tab === key
-                ? 'border-accent font-semibold text-accent'
-                : 'border-transparent text-fg-secondary hover:text-fg-primary'
-            )}
-          >
-            {label}
-          </button>
-        ))}
-        {/* Security stays disabled/unclickable until Prompt 620 has a real
-            panel to show here — honestly locked, not faked. */}
-        <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-4 py-2.5 font-sans text-sm text-fg-faint">
-          <ShieldCheck size={15} />
-          Security
-          <span className="rounded-full border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-fg-faint">
-            620
-          </span>
-        </span>
+      <div className="mb-8">
+        <PillToggle options={CLOSER_TABS} active={tab} onChange={setTab} stretch />
       </div>
 
       {tab === 'profile' && <ProfilePanel profile={profile} />}
@@ -109,9 +108,9 @@ function CloserSettingsHub({ profile }) {
   )
 }
 
-function SettingsSection({ title, description, action, badge, last = false, children }) {
+function SettingsSection({ title, description, action, badge, children }) {
   return (
-    <div className={clsx('py-6 first:pt-0', !last && 'border-b border-line')}>
+    <div className="rounded-card border border-line bg-elevated p-6">
       <div className={clsx('mb-4', action ? 'flex items-start justify-between gap-4' : undefined)}>
         <div>
           <p className="flex items-center gap-2 font-sans text-sm font-semibold text-fg-primary">
@@ -139,7 +138,7 @@ function SoonBadge() {
 
 function ProfilePanel({ profile }) {
   return (
-    <div>
+    <div className="space-y-5">
       <BasicInfoCard profile={profile} />
       <AccountCard profile={profile} />
     </div>
@@ -237,7 +236,6 @@ function AccountCard({ profile }) {
     <SettingsSection
       title="Account"
       description="Read-only for now — login and password move here once Security ships."
-      last
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
@@ -265,9 +263,9 @@ function AccountCard({ profile }) {
 
 function AppearancePanel({ profile }) {
   return (
-    <div>
+    <div className="space-y-5">
       <TimezoneForm profile={profile} headerAction />
-      <ThemeForm last />
+      <ThemeForm />
     </div>
   )
 }
@@ -317,7 +315,7 @@ function NotificationsPanel({ profile }) {
   }
 
   return (
-    <div>
+    <div className="space-y-5">
       <SettingsSection title="Leads" description="Sending isn't wired up yet — this saves your preference either way.">
         <ToggleList toggles={LEAD_NOTIFICATION_TOGGLES} prefs={prefs} savingKey={savingKey} onToggle={toggle} />
       </SettingsSection>
@@ -328,7 +326,6 @@ function NotificationsPanel({ profile }) {
         title="Delivery channels"
         badge={<SoonBadge />}
         description="Choose where these alerts get sent once notification delivery is built."
-        last
       >
         <ToggleList toggles={DELIVERY_CHANNEL_TOGGLES} disabled />
       </SettingsSection>
@@ -407,7 +404,7 @@ function BookingPanel({ profile }) {
   }
 
   return (
-    <div>
+    <div className="space-y-5">
       <SettingsSection title="Reminders" description="Not yet wired into automatic behavior.">
         <Field label="Default reminder lead time">
           <select
@@ -437,7 +434,6 @@ function BookingPanel({ profile }) {
         title="Availability windows"
         badge={<SoonBadge />}
         description="Set the hours you're generally available for booked calls — not built yet."
-        last
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Earliest booking time">
@@ -462,14 +458,13 @@ function BookingPanel({ profile }) {
 // ZoomForm's own call, so this isn't a second network request).
 function IntegrationsPanel({ profile }) {
   return (
-    <div>
+    <div className="space-y-5">
       <ZoomForm profile={profile} />
       <InPortalCallingCard profile={profile} />
       <SettingsSection
         title="Calendar sync"
         badge={<SoonBadge />}
         description="Two-way sync with Google or Outlook calendar — not built yet."
-        last
       />
     </div>
   )
@@ -662,7 +657,7 @@ const THEME_SWATCH = {
   dark: ['#0d1512', '#1a2420'],
 }
 
-function ThemeForm({ last = false }) {
+function ThemeForm() {
   const { refreshProfile } = useAuth()
   const { themePreference, setThemePreference } = useTheme()
   const [saving, setSaving] = useState(null)
@@ -679,7 +674,6 @@ function ThemeForm({ last = false }) {
     <SettingsSection
       title="Theme"
       description="System follows your device's light/dark setting automatically. Light and Dark override it."
-      last={last}
     >
       <div className="grid max-w-sm grid-cols-3 gap-2">
         {THEME_OPTIONS.map(({ value, label, icon: Icon }) => {
@@ -715,7 +709,7 @@ function ThemeForm({ last = false }) {
 // `headerAction` — Prompt 621: same timezone RPC/state, rendered with the
 // Save button in the card header's top-right (closer Appearance tab)
 // instead of below the field (non-closer General section, unchanged).
-function TimezoneForm({ profile, headerAction = false, last = false }) {
+function TimezoneForm({ profile, headerAction = false }) {
   const { refreshProfile } = useAuth()
   const [timezone, setTimezone] = useState(profile.timezone || DEFAULT_TIMEZONE)
   const [saving, setSaving] = useState(false)
@@ -755,7 +749,7 @@ function TimezoneForm({ profile, headerAction = false, last = false }) {
   if (headerAction) {
     return (
       <form onSubmit={save}>
-        <SettingsSection title="Timezone" description={description} action={saveButton} last={last}>
+        <SettingsSection title="Timezone" description={description} action={saveButton}>
           {timezoneField}
           {error && <p className="mt-3 font-sans text-sm text-danger">{error}</p>}
           {saved && <p className="mt-3 font-sans text-sm text-success">Saved</p>}
