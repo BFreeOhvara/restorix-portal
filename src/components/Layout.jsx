@@ -235,6 +235,9 @@ function SidebarIconButton({ icon: Icon, iconSrc, label, onClick, disabled }) {
 // session exchange server-side and redirects to that domain's
 // /auth/callback with the new session, so the closer lands logged in on
 // the other branded portal without re-entering a password.
+// Prompt 622 — currently unused — re-enable by rendering <SwapButton />
+// in the icon row below (see the sidebar footer JSX further down). Left
+// intact rather than deleted per Brayden's "rotate out of use for now."
 function SwapButton() {
   const brand = useBrand()
   const [busy, setBusy] = useState(false)
@@ -279,6 +282,17 @@ function SwapButton() {
   )
 }
 
+// Prompt 622 — the divider that used to sit on this component's own
+// wrapper (border-t) now lives on the logo block up top instead, so this
+// wrapper only keeps its padding. The Profile/Sign out reveal switched
+// from an absolutely-positioned floating card (bottom-full, shadow-lg)
+// to an inline grid-rows expand: `open` toggles `grid-rows-[0fr]` <->
+// `grid-rows-[1fr]` on a `grid` wrapper, animating to real auto-height
+// instead of a hardcoded max-height. Because the panel now lives in
+// normal flow, growing it pushes the icon-button row and account button
+// above it upward as the sidebar's flex-1 nav yields space, rather than
+// laying a shadowed card over those buttons — same handlers and markup
+// inside, only the container/positioning/animation changed.
 function AccountPopover({ profile, onSignOut, onNavigate }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -292,7 +306,7 @@ function AccountPopover({ profile, onSignOut, onNavigate }) {
   }, [])
 
   return (
-    <div ref={ref} className="relative border-t border-line p-3">
+    <div ref={ref} className="p-3">
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-2 rounded-lg bg-surface px-2 py-2 text-left transition-colors hover:bg-muted"
@@ -310,22 +324,26 @@ function AccountPopover({ profile, onSignOut, onNavigate }) {
         </div>
       </button>
 
-      {open && (
-        <div className="absolute inset-x-3 bottom-full z-50 mb-2 overflow-hidden rounded-lg border border-line bg-elevated py-1 shadow-lg">
-          <button
-            onClick={() => { setOpen(false); onNavigate('/profile') }}
-            className="flex w-full items-center gap-2.5 px-3 py-2 text-left font-sans text-sm text-fg-primary hover:bg-surface"
-          >
-            <User size={15} className="text-fg-faint" /> Profile
-          </button>
-          <button
-            onClick={() => { setOpen(false); onSignOut() }}
-            className="flex w-full items-center gap-2.5 px-3 py-2 text-left font-sans text-sm text-danger hover:bg-surface"
-          >
-            <LogOut size={15} /> Sign out
-          </button>
+      <div
+        className={`grid transition-[grid-template-rows] duration-200 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
+      >
+        <div className="overflow-hidden">
+          <div className="mt-1 overflow-hidden rounded-lg border border-line bg-elevated py-1">
+            <button
+              onClick={() => { setOpen(false); onNavigate('/profile') }}
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-left font-sans text-sm text-fg-primary hover:bg-surface"
+            >
+              <User size={15} className="text-fg-faint" /> Profile
+            </button>
+            <button
+              onClick={() => { setOpen(false); onSignOut() }}
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-left font-sans text-sm text-danger hover:bg-surface"
+            >
+              <LogOut size={15} /> Sign out
+            </button>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -420,12 +438,17 @@ export default function Layout() {
             resolved from the portal's hostname). Behavioral health keeps the
             exact same PNG + "Restorix Portal" text; Suretix has no logo
             asset yet so it renders the plain-text wordmark alone. */}
-        <div className="flex h-16 items-center gap-2.5 px-5">
+        {/* Prompt 622 — border-b added here (lining up with the header's own
+            h-16 border-b across the page) since AccountPopover's wrapper no
+            longer draws the divider at the bottom of the sidebar. */}
+        <div className="flex h-16 items-center gap-2.5 border-b border-line px-5">
           {brand.logo_url && <img src={brand.logo_url} alt="" className="h-8 w-auto" />}
           <span className="font-display text-lg font-semibold tracking-tight text-fg-primary">{brand.wordmark}</span>
         </div>
 
-        <nav className="flex-1 space-y-4 px-3">
+        {/* Prompt 622 — pt-2 added so the TODAY label isn't flush against
+            the new divider line above. */}
+        <nav className="flex-1 space-y-4 px-3 pt-2">
           {navGroups.map(({ label: groupLabel, items }) => {
             const visible = items.filter((l) => l.roles.includes(profile?.role))
             if (visible.length === 0) return null
@@ -448,12 +471,19 @@ export default function Layout() {
             logo block's own edge padding above so both buttons align to
             the sidebar's real left/right edges. Sits directly above the
             existing divider line (drawn by AccountPopover's own border-t). */}
-        {/* Prompt 549 — closer-only Swap button sits between Report a Bug
+        {/* Prompt 549 — closer-only Swap button sat between Report a Bug
             and Add to Home Screen (the nav landmark Brayden named as "the
             phone button"). Non-closers keep the original two-corner row. */}
-        <div className="flex items-center justify-between px-5 pb-3">
+        {/* Prompt 622 — SwapButton rotated out of use for now ("we're gonna
+            kind of rotate out of use like the sure text thing for now" —
+            Brayden). Not a removal: SwapButton is still defined below,
+            fully working, just unrendered — currently unused, re-enable by
+            rendering <SwapButton /> between the two buttons below. Added
+            pt-1 since the row now sits further from the buttons above with
+            the divider gone and no longer needs to visually anchor a third,
+            wider item in the middle. */}
+        <div className="flex items-center justify-between px-5 pb-3 pt-1">
           <SidebarIconButton icon={Bug} label="Report a Bug" onClick={() => setShowBugReport(true)} />
-          {profile?.role === 'closer' && <SwapButton />}
           <SidebarIconButton icon={Smartphone} label="Add to Home Screen" onClick={() => setShowAddToHome(true)} />
         </div>
 
