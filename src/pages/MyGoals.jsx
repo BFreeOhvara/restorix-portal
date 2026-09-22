@@ -10,6 +10,7 @@ import { totalCommission } from '../lib/commissions'
 import { zonedDateStr, zonedDayRange, mondayOf } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 import { usePageHeader } from '../components/Layout'
+import { PageLoading } from '../components/ui/PageLoading'
 
 // v1 daily target is hardcoded (150 dials / 2 booked = "perfect day"),
 // weekly/monthly are that same target scaled to a 5-day work week and a
@@ -356,7 +357,7 @@ export default function MyGoals() {
   return (
     <div>
       {isLoading ? (
-        <p className="mt-6 font-sans text-sm text-fg-secondary">Loading…</p>
+        <PageLoading />
       ) : (
         <>
           {isPerfectDay && (

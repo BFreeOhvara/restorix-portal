@@ -1,6 +1,7 @@
 import { useMyDeal } from '../hooks/useDeals'
 import { ownedAgents } from '../lib/clientPreview'
 import { usePageHeader } from '../components/Layout'
+import { PageLoading } from '../components/ui/PageLoading'
 
 // Prompt 578 — the client Reports page. Ties to `referral_reporting`
 // (still a bare placeholder in the catalog). There is no sample content
@@ -15,7 +16,7 @@ export default function Reports() {
   usePageHeader({ title: 'Reports', subtitle: 'Which channels and referral sources turn into real admissions.' })
 
   if (isLoading) {
-    return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
+    return <PageLoading />
   }
 
   const purchased = ownedAgents(deal).includes('referral_reporting')

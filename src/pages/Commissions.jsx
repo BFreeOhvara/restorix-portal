@@ -15,6 +15,7 @@ import {
   recurringMonthsElapsed,
 } from '../lib/commissions'
 import { usePageHeader } from '../components/Layout'
+import { PageLoading } from '../components/ui/PageLoading'
 
 function fmt(n) {
   return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -239,7 +240,7 @@ export default function Commissions() {
   })
 
   if (isLoading) {
-    return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
+    return <PageLoading />
   }
 
   if (isAdmin) {

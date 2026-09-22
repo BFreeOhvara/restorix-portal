@@ -14,6 +14,7 @@ import {
 } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 import { usePageHeader } from '../components/Layout'
+import { PageLoading } from '../components/ui/PageLoading'
 
 function Tile({ label, value, sub }) {
   return (
@@ -529,7 +530,7 @@ export default function Stats() {
   usePageHeader({ title: 'Stats', subtitle: isAdmin ? 'Team performance' : 'Your performance' })
 
   if (isLoading) {
-    return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
+    return <PageLoading />
   }
 
   return (

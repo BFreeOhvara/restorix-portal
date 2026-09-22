@@ -8,6 +8,7 @@ import { zonedDateStr, shiftDay } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 import { isTestClient, PREVIEW_APPOINTMENTS, initials } from '../lib/clientPreview'
 import { usePageHeader } from '../components/Layout'
+import { PageLoading } from '../components/ui/PageLoading'
 
 // Prompt 578 — the client Appointments page: the facility's own
 // patient/consult appointments (NOT the closer-side send-appointment-
@@ -50,7 +51,7 @@ export default function Appointments() {
   usePageHeader({ title: 'Appointments', subtitle: "Who's booked, and whether they've confirmed." })
 
   if (isLoading) {
-    return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
+    return <PageLoading />
   }
 
   return (

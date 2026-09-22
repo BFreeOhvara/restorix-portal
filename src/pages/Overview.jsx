@@ -32,6 +32,7 @@ import { zonedDateStr, zonedDayRange, mondayOf, shiftDay } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 import { SearchBar, filterLeads } from './Pipeline'
 import { usePageHeader } from '../components/Layout'
+import { PageLoading } from '../components/ui/PageLoading'
 
 // Prompt 590 — a hook can't be called conditionally inside a component's
 // own body (Rules of Hooks), but mounting/unmounting a child component
@@ -1059,7 +1060,7 @@ function ClientOverview({ profile }) {
   })
 
   if (isLoading) {
-    return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
+    return <PageLoading />
   }
   if (isError || !deal) {
     return null

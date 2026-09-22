@@ -13,6 +13,7 @@ import {
   initials,
 } from '../lib/clientPreview'
 import { usePageHeader } from '../components/Layout'
+import { PageLoading } from '../components/ui/PageLoading'
 
 // Prompt 578 — the client Pipeline (nav label "Pipeline", path /prospects
 // since /pipeline is admin-only and /my-pipeline is the closer's). A CRM
@@ -149,7 +150,7 @@ export default function Prospects() {
   usePageHeader({ title: 'Pipeline', subtitle: "Everyone who's reached out, and where they stand." })
 
   if (isLoading) {
-    return <p className="font-sans text-sm text-fg-secondary">Loading…</p>
+    return <PageLoading />
   }
 
   return (
