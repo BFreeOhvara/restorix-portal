@@ -223,11 +223,23 @@ function BasicInfoCard({ profile }) {
   )
 }
 
-// Read-only for now — login/password/role move here once Security
-// (Prompt 620) ships. No new fields, no edit capability. "Member since"
-// added in Prompt 624 — profile.created_at is already returned by
-// useAuth's `select('*')`, no new query needed.
+// Read-only for now except Email — login/password/role move here once
+// Security (Prompt 620) ships. "Member since" added in Prompt 624 —
+// profile.created_at is already returned by useAuth's `select('*')`, no
+// new query needed.
+// Prompt 626 — Username replaced with a self-service Email row. The
+// synthetic `<username>@restorix.internal` address every account still
+// has today is never shown; an account on one gets an inline add-email
+// form instead of a value. Wired straight to Supabase Auth's own
+// `updateUser({ email })` (see EmailForm below) — no custom RPC, since
+// this is exactly what that API is for. Username itself is untouched
+// and stays a valid login path (Login.jsx just relabels the field).
 function AccountCard({ profile }) {
+  const { session } = useAuth()
+  const email = session?.user?.email || ''
+  const hasRealEmail = !!email && !email.endsWith('@restorix.internal')
+  const [editingEmail, setEditingEmail] = useState(false)
+
   const memberSince = profile.created_at
     ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : '—'
@@ -235,7 +247,7 @@ function AccountCard({ profile }) {
   return (
     <SettingsSection
       title="Account"
-      description="Read-only for now — login and password move here once Security ships."
+      description="Login and password move here once Security ships."
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
@@ -246,9 +258,26 @@ function AccountCard({ profile }) {
             </span>
           </p>
         </div>
-        <div>
-          <span className="eyebrow">Username</span>
-          <p className="mt-1.5 font-mono text-sm text-fg-secondary">{profile.username}</p>
+        <div className="sm:col-span-2">
+          <span className="eyebrow">Email</span>
+          {hasRealEmail && !editingEmail ? (
+            <p className="mt-1.5 flex flex-wrap items-center gap-2">
+              <span className="font-mono text-sm text-fg-secondary">{email}</span>
+              <button
+                type="button"
+                onClick={() => setEditingEmail(true)}
+                className="font-sans text-xs font-medium text-accent hover:underline"
+              >
+                Edit
+              </button>
+            </p>
+          ) : (
+            <EmailForm
+              mode={hasRealEmail ? 'edit' : 'add'}
+              currentEmail={email}
+              onCancel={hasRealEmail ? () => setEditingEmail(false) : undefined}
+            />
+          )}
         </div>
         <div>
           <span className="eyebrow">Member since</span>
@@ -256,6 +285,76 @@ function AccountCard({ profile }) {
         </div>
       </div>
     </SettingsSection>
+  )
+}
+
+// Prompt 626 — `mode="add"` (no real email yet) renders the input/button
+// inline with no separate reveal click, since there's nothing to hide;
+// `mode="edit"` (AccountCard's Edit link) gets a Cancel button back to
+// the plain display. `supabase.auth.updateUser({ email })` succeeding
+// only means Supabase accepted and queued the change — the address isn't
+// live until the confirmation link is clicked, so success flips to a
+// pending message rather than closing the form or implying it's done.
+function EmailForm({ mode, currentEmail, onCancel }) {
+  const [value, setValue] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [pendingEmail, setPendingEmail] = useState('')
+
+  async function submit(e) {
+    e.preventDefault()
+    setError('')
+    const next = value.trim()
+    if (!next) return
+    setSaving(true)
+    const { error: updateError } = await supabase.auth.updateUser({ email: next })
+    setSaving(false)
+    if (updateError) { setError(updateError.message || 'Could not update your email'); return }
+    setPendingEmail(next)
+  }
+
+  if (pendingEmail) {
+    return (
+      <div className="mt-1.5">
+        <p className="font-sans text-sm text-fg-primary">
+          Check <span className="font-mono">{pendingEmail}</span> for a confirmation link — your email won't update until you click it.
+        </p>
+        <button
+          type="button"
+          onClick={() => { setPendingEmail(''); setValue('') }}
+          className="mt-1 font-sans text-xs font-medium text-accent hover:underline"
+        >
+          Use a different email
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="email"
+          className={clsx(inputClass(), 'max-w-[220px]')}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={mode === 'edit' ? currentEmail : 'you@example.com'}
+          required
+        />
+        <Button type="submit" disabled={saving}>
+          {saving ? 'Saving…' : mode === 'edit' ? 'Save' : 'Add email'}
+        </Button>
+        {onCancel && (
+          <Button type="button" variant="secondary" onClick={onCancel}>Cancel</Button>
+        )}
+      </div>
+      {mode === 'add' && (
+        <p className="mt-1.5 font-sans text-xs text-fg-faint">
+          You'll still sign in with your existing username until you confirm an email.
+        </p>
+      )}
+      {error && <p className="mt-1.5 font-sans text-sm text-danger">{error}</p>}
+    </form>
   )
 }
 

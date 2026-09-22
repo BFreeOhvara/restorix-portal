@@ -43,7 +43,7 @@ export default function Login() {
           <p className="mt-1 font-sans text-sm text-fg-secondary">Sign in to manage your leads, calls, and pipeline.</p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-            <Field label="Username">
+            <Field label="Email or username">
               <input
                 className={inputClass()}
                 value={username}
