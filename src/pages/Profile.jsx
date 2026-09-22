@@ -17,7 +17,7 @@ const AvatarCropModal = lazy(() =>
   import('../components/ui/AvatarCropModal').then((m) => ({ default: m.AvatarCropModal }))
 )
 
-const ROLE_LABEL = { setter: 'Setter', closer: 'Closer', admin: 'Admin' }
+export const ROLE_LABEL = { setter: 'Setter', closer: 'Closer', admin: 'Admin' }
 
 // Prompt 453 — profile edit + password change. Scope kept to what
 // `profiles` actually has a column for (full_name only — no email/phone/
@@ -47,6 +47,10 @@ const ROLE_LABEL = { setter: 'Setter', closer: 'Closer', admin: 'Admin' }
 // offsets were computed against that wrong box. Given the button an
 // explicit `width`/`height` matching `AVATAR_SIZE` instead of relying on
 // block-level shrink-to-fit sizing to happen to match.
+// Prompt 621 — AvatarUpload exported (with optional `size`/`meta` props,
+// both unused here so this page's own render is byte-for-byte unchanged)
+// so Settings' new Basic Info card can reuse the exact same upload/crop/
+// remove hooks and modal instead of forking a second copy.
 export default function Profile() {
   const { profile } = useAuth()
   usePageHeader({ title: 'Profile' })
@@ -85,7 +89,7 @@ export default function Profile() {
 // avatar_color_deterministic) — no user-facing picker as of Prompt 495.
 // Removing a photo only ever touches avatar_url, never avatar_color, so
 // the deterministic color is still there underneath afterward.
-function AvatarUpload({ profile }) {
+export function AvatarUpload({ profile, size = AVATAR_SIZE, meta }) {
   const upload = useUploadAvatar()
   const remove = useRemoveAvatar()
   const { refreshProfile } = useAuth()
@@ -132,17 +136,17 @@ function AvatarUpload({ profile }) {
   }
 
   return (
-    <div className="shrink-0">
-      <div className="relative" style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}>
+    <div className={meta ? 'flex items-center gap-3.5' : 'shrink-0'}>
+      <div className="relative shrink-0" style={{ width: size, height: size }}>
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={busy}
           title="Change profile photo"
           className="group relative rounded-full disabled:cursor-default"
-          style={{ width: AVATAR_SIZE, height: AVATAR_SIZE }}
+          style={{ width: size, height: size }}
         >
-          <Avatar profile={profile} size={AVATAR_SIZE} className="border border-line" />
+          <Avatar profile={profile} size={size} className="border border-line" />
           <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
             {busy ? <Loader2 size={16} className="animate-spin text-white" /> : <Camera size={16} className="text-white" />}
           </div>
@@ -165,7 +169,22 @@ function AvatarUpload({ profile }) {
         <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
       </div>
 
-      {error && <p className="mt-1 max-w-[8rem] font-sans text-[11px] text-danger">{error}</p>}
+      {meta ? (
+        <div className="min-w-0">
+          {meta}
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={busy}
+            className="mt-1 font-sans text-xs font-semibold text-accent disabled:cursor-default disabled:opacity-50"
+          >
+            Change photo
+          </button>
+          {error && <p className="mt-1 font-sans text-[11px] text-danger">{error}</p>}
+        </div>
+      ) : (
+        error && <p className="mt-1 max-w-[8rem] font-sans text-[11px] text-danger">{error}</p>
+      )}
 
       {pendingImage && (
         <Suspense fallback={null}>

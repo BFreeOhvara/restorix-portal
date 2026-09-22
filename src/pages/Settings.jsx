@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Moon, Sun, SunMoon, Video, CheckCircle2 } from 'lucide-react'
+import { Moon, Sun, SunMoon, Video, CheckCircle2, User, Bell, CalendarClock, ShieldCheck } from 'lucide-react'
 import clsx from 'clsx'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
@@ -11,6 +11,7 @@ import { Button } from '../components/ui/Button'
 import { Switch } from '../components/ui/Switch'
 import { SELECTABLE_TIMEZONES, DEFAULT_TIMEZONE } from '../lib/timezones'
 import { usePageHeader } from '../components/Layout'
+import { AvatarUpload, ROLE_LABEL } from './Profile'
 
 // Prompt 453 — Settings got a real nav destination but had nothing genuine
 // to put in it yet. Prompt 458 gives it its first real setting: timezone,
@@ -24,51 +25,127 @@ import { usePageHeader } from '../components/Layout'
 // Timezone/Theme stay exactly as-is and ungated. Auth/login/password/
 // email/2FA deliberately out of scope — that's a separate, larger prompt
 // Brayden is sequencing after this one.
+// Prompt 621 — the closer view (only) is rebuilt as a real tabbed hub
+// (floating sub-nav + per-topic cards), replacing the flat max-w-lg card
+// stack Brayden called "thrown together". Design signed off in a mockup
+// built from the app's own tokens: https://claude.ai/artifact/RoyToc72PPoHTaMTQnth2m
+// Non-closer roles (setter/admin/client) are untouched — they only ever
+// saw Timezone+Theme here and still do, same layout as before.
 export default function Settings() {
   const { profile } = useAuth()
   usePageHeader({ title: 'Settings', subtitle: 'Account settings — password, name, and role live on Profile.' })
   if (!profile) return null
 
+  if (profile.role !== 'closer') {
+    return (
+      <div className="max-w-lg">
+        <p className="eyebrow">General</p>
+        <div className="mt-3 rounded-card border border-line bg-elevated p-6">
+          <TimezoneForm profile={profile} />
+        </div>
+
+        <div className="mt-6 rounded-card border border-line bg-elevated p-6">
+          <ThemeForm />
+        </div>
+      </div>
+    )
+  }
+
+  return <CloserSettingsHub profile={profile} />
+}
+
+const CLOSER_TABS = [
+  { key: 'profile', label: 'Profile', icon: User },
+  { key: 'appearance', label: 'Appearance', icon: SunMoon },
+  { key: 'notifications', label: 'Notifications', icon: Bell },
+  { key: 'booking', label: 'Call & Booking', icon: CalendarClock },
+  { key: 'integrations', label: 'Integrations', icon: Video },
+]
+
+function CloserSettingsHub({ profile }) {
+  const [tab, setTab] = useState('profile')
+
   return (
-    <div className="max-w-lg">
-      <p className="eyebrow">General</p>
-      <div className="mt-3 rounded-card border border-line bg-elevated p-6">
-        <TimezoneForm profile={profile} />
+    <div className="flex items-start gap-6">
+      <nav className="sticky top-24 w-[212px] shrink-0 rounded-card border border-line bg-elevated p-2.5 shadow-lg">
+        {CLOSER_TABS.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            className={clsx(
+              'mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left font-sans text-sm transition-colors last:mb-0',
+              tab === key
+                ? 'bg-surface font-semibold text-accent'
+                : 'text-fg-secondary hover:bg-surface hover:text-fg-primary'
+            )}
+          >
+            <Icon size={16} />
+            {label}
+          </button>
+        ))}
+        {/* Security stays disabled/unclickable until Prompt 620 has a real
+            panel to show here — honestly locked, not faked. */}
+        <div className="mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left font-sans text-sm text-fg-faint">
+          <ShieldCheck size={16} />
+          Security
+          <span className="ml-auto rounded-full border border-line px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-fg-faint">
+            620
+          </span>
+        </div>
+      </nav>
+
+      <div className="min-w-0 flex-1">
+        {tab === 'profile' && <ProfilePanel profile={profile} />}
+        {tab === 'appearance' && <AppearancePanel profile={profile} />}
+        {tab === 'notifications' && <NotificationsPanel profile={profile} />}
+        {tab === 'booking' && <BookingPanel profile={profile} />}
+        {tab === 'integrations' && <IntegrationsPanel profile={profile} />}
       </div>
-
-      <div className="mt-6 rounded-card border border-line bg-elevated p-6">
-        <ThemeForm />
-      </div>
-
-      {profile.role === 'closer' && (
-        <>
-          <p className="eyebrow mt-8">Closer</p>
-          <div className="mt-3 rounded-card border border-line bg-elevated p-6">
-            <ZoomForm profile={profile} />
-          </div>
-
-          <div className="mt-6 rounded-card border border-line bg-elevated p-6">
-            <ProfileForm profile={profile} />
-          </div>
-
-          <div className="mt-6 rounded-card border border-line bg-elevated p-6">
-            <NotificationsForm profile={profile} />
-          </div>
-
-          <div className="mt-6 rounded-card border border-line bg-elevated p-6">
-            <CallBookingForm profile={profile} />
-          </div>
-        </>
-      )}
     </div>
   )
 }
 
-// Prompt 619 — display name + phone, shown on booking confirmations and
-// inside the Meeting Room; not a login credential (that's out of scope
-// here, see the file-level note above). Same explicit-Save pattern as
-// TimezoneForm since these are free-text fields, not one-click choices.
-function ProfileForm({ profile }) {
+function PanelCard({ children }) {
+  return <div className="rounded-card border border-line bg-elevated p-6">{children}</div>
+}
+
+function CardHead({ title, description, action }) {
+  return (
+    <div className={clsx('mb-5', action && 'flex items-start justify-between gap-4')}>
+      <div>
+        <p className="font-sans text-sm font-semibold text-fg-primary">{title}</p>
+        {description && <p className="mt-1 font-sans text-xs text-fg-secondary">{description}</p>}
+      </div>
+      {action}
+    </div>
+  )
+}
+
+function PanelGrid({ children }) {
+  return <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">{children}</div>
+}
+
+// ---- Profile tab -----------------------------------------------------
+
+function ProfilePanel({ profile }) {
+  return (
+    <div>
+      <p className="eyebrow mb-4">Profile</p>
+      <PanelGrid>
+        <BasicInfoCard profile={profile} />
+        <AccountCard profile={profile} />
+      </PanelGrid>
+    </div>
+  )
+}
+
+// Prompt 621 — same display-name/phone RPCs Prompt 619 shipped, moved
+// into a card with a real avatar/photo row above the fields (reusing
+// Profile.jsx's own AvatarUpload/useUploadAvatar/useRemoveAvatar/
+// AvatarCropModal exactly as-is) and its Save button relocated to the
+// card header's top-right.
+function BasicInfoCard({ profile }) {
   const { refreshProfile } = useAuth()
   const [fullName, setFullName] = useState(profile.full_name || '')
   const [phone, setPhone] = useState(profile.phone || '')
@@ -98,35 +175,89 @@ function ProfileForm({ profile }) {
   }
 
   return (
-    <form onSubmit={save} className="space-y-4">
-      <div>
-        <p className="font-sans text-sm font-semibold text-fg-primary">Profile & Display</p>
-        <p className="mt-1 font-sans text-xs text-fg-secondary">
-          Shown on booking confirmations and inside the Meeting Room.
-        </p>
-      </div>
-      <Field label="Display name">
-        <input className={inputClass()} value={fullName} onChange={(e) => setFullName(e.target.value)} />
-      </Field>
-      <Field label="Phone number">
-        <input
-          className={inputClass()}
-          type="tel"
-          placeholder="(555) 555-5555"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+    <PanelCard>
+      <form onSubmit={save}>
+        <CardHead
+          title="Basic info"
+          description="Shown on booking confirmations and inside the Meeting Room."
+          action={
+            <Button type="submit" disabled={!dirty || saving}>
+              {saving ? 'Saving…' : 'Save changes'}
+            </Button>
+          }
         />
-      </Field>
-      {error && <p className="font-sans text-sm text-danger">{error}</p>}
-      <div className="flex items-center gap-3">
-        <Button type="submit" disabled={!dirty || saving}>
-          {saving ? 'Saving…' : 'Save changes'}
-        </Button>
-        {saved && <span className="font-sans text-sm text-success">Saved</span>}
-      </div>
-    </form>
+        <div className="mb-5 border-b border-line pb-5">
+          <AvatarUpload
+            profile={profile}
+            size={52}
+            meta={
+              <>
+                <p className="font-sans text-sm font-semibold text-fg-primary">{profile.full_name}</p>
+                <p className="font-sans text-xs text-fg-secondary">{ROLE_LABEL[profile.role] || profile.role}</p>
+              </>
+            }
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Display name">
+            <input className={inputClass()} value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          </Field>
+          <Field label="Phone number">
+            <input
+              className={inputClass()}
+              type="tel"
+              placeholder="(555) 555-5555"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+          </Field>
+        </div>
+        {error && <p className="mt-3 font-sans text-sm text-danger">{error}</p>}
+        {saved && <p className="mt-3 font-sans text-sm text-success">Saved</p>}
+      </form>
+    </PanelCard>
   )
 }
+
+// Read-only for now — login/password/role move here once Security
+// (Prompt 620) ships. No new fields, no edit capability.
+function AccountCard({ profile }) {
+  return (
+    <PanelCard>
+      <CardHead title="Account" description="Read-only for now — login and password move here once Security ships." />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <span className="eyebrow">Role</span>
+          <p className="mt-1.5 font-sans text-sm text-fg-primary">{ROLE_LABEL[profile.role] || profile.role}</p>
+        </div>
+        <div>
+          <span className="eyebrow">Username</span>
+          <p className="mt-1.5 font-mono text-sm text-fg-secondary">{profile.username}</p>
+        </div>
+      </div>
+    </PanelCard>
+  )
+}
+
+// ---- Appearance tab ----------------------------------------------------
+
+function AppearancePanel({ profile }) {
+  return (
+    <div>
+      <p className="eyebrow mb-4">Appearance</p>
+      <PanelGrid>
+        <PanelCard>
+          <TimezoneForm profile={profile} headerAction />
+        </PanelCard>
+        <PanelCard>
+          <ThemeForm />
+        </PanelCard>
+      </PanelGrid>
+    </div>
+  )
+}
+
+// ---- Notifications tab --------------------------------------------------
 
 // Prompt 619 — toggle preferences only. No closer-facing notification
 // channel (email/push/SMS-to-closer) exists anywhere in this codebase
@@ -135,14 +266,18 @@ function ProfileForm({ profile }) {
 // nothing to wire these into. Storing the toggle now, flagged as a
 // follow-up: once a real closer-notification sender exists, it should
 // check notification_preferences before sending.
-const NOTIFICATION_TOGGLES = [
+// Prompt 621 — split into "Leads" and "Calls" cards by what the toggle is
+// actually about, same NotificationsForm logic/RPC, two render groups.
+const LEAD_NOTIFICATION_TOGGLES = [
   { key: 'new_lead_assigned', label: 'New lead assigned', hint: 'When a lead is added to your pool.' },
+]
+const CALL_NOTIFICATION_TOGGLES = [
   { key: 'call_booked', label: 'Call booked', hint: 'When a strategy call is booked onto your calendar.' },
   { key: 'call_rescheduled_canceled', label: 'Call rescheduled or canceled', hint: 'When a booked call changes time or is canceled.' },
   { key: 'call_starting_soon', label: 'Call starting soon', hint: 'A heads-up shortly before a booked call starts.' },
 ]
 
-function NotificationsForm({ profile }) {
+function NotificationsPanel({ profile }) {
   const { refreshProfile } = useAuth()
   const [prefs, setPrefs] = useState(profile.notification_preferences || {})
   const [savingKey, setSavingKey] = useState(null)
@@ -158,33 +293,44 @@ function NotificationsForm({ profile }) {
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="font-sans text-sm font-semibold text-fg-primary">Notifications</p>
-        <p className="mt-1 font-sans text-xs text-fg-secondary">
-          Choose what you want to be notified about. Sending isn't wired up for every one of these yet — this saves
-          your preference either way.
-        </p>
-      </div>
-      <div className="space-y-3">
-        {NOTIFICATION_TOGGLES.map(({ key, label, hint }) => (
-          <div key={key} className="flex items-center justify-between gap-4">
-            <div>
-              <p className="font-sans text-sm text-fg-primary">{label}</p>
-              <p className="font-sans text-xs text-fg-secondary">{hint}</p>
-            </div>
-            <Switch
-              checked={prefs[key] !== false}
-              onChange={(value) => toggle(key, value)}
-              disabled={savingKey === key}
-              label={label}
-            />
-          </div>
-        ))}
-      </div>
+    <div>
+      <p className="eyebrow mb-4">Notifications</p>
+      <PanelGrid>
+        <PanelCard>
+          <CardHead title="Leads" description="Sending isn't wired up yet — this saves your preference either way." />
+          <ToggleList toggles={LEAD_NOTIFICATION_TOGGLES} prefs={prefs} savingKey={savingKey} onToggle={toggle} />
+        </PanelCard>
+        <PanelCard>
+          <CardHead title="Calls" description="Sending isn't wired up yet — this saves your preference either way." />
+          <ToggleList toggles={CALL_NOTIFICATION_TOGGLES} prefs={prefs} savingKey={savingKey} onToggle={toggle} />
+        </PanelCard>
+      </PanelGrid>
     </div>
   )
 }
+
+function ToggleList({ toggles, prefs, savingKey, onToggle }) {
+  return (
+    <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
+      {toggles.map(({ key, label, hint }) => (
+        <div key={key} className="flex items-center justify-between gap-4 bg-surface px-4 py-3.5">
+          <div>
+            <p className="font-sans text-sm font-medium text-fg-primary">{label}</p>
+            <p className="mt-0.5 font-sans text-xs text-fg-secondary">{hint}</p>
+          </div>
+          <Switch
+            checked={prefs[key] !== false}
+            onChange={(value) => onToggle(key, value)}
+            disabled={savingKey === key}
+            label={label}
+          />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ---- Call & Booking tab -------------------------------------------------
 
 const REMINDER_LEAD_TIMES = [
   { value: '15m', label: '15 minutes before' },
@@ -201,7 +347,9 @@ const REMINDER_LEAD_TIMES = [
 // deduping so it doesn't re-open a call already dismissed) — a real
 // feature addition, not a toggle-sized change. Shipping the toggle +
 // storage now rather than guessing at that design.
-function CallBookingForm({ profile }) {
+// Prompt 621 — split into "Reminders" and "Meeting Room" cards, same
+// CallBookingForm logic/RPC, two render groups.
+function BookingPanel({ profile }) {
   const { refreshProfile } = useAuth()
   const [leadTime, setLeadTime] = useState(profile.call_reminder_lead_time || '15m')
   const [autoOpen, setAutoOpen] = useState(!!profile.auto_open_meeting_room)
@@ -228,31 +376,82 @@ function CallBookingForm({ profile }) {
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="font-sans text-sm font-semibold text-fg-primary">Call & Booking</p>
-        <p className="mt-1 font-sans text-xs text-fg-secondary">Preferences only for now — not yet wired into automatic behavior.</p>
-      </div>
-      <Field label="Default reminder lead time">
-        <select
-          className={inputClass()}
-          value={leadTime}
-          onChange={(e) => onLeadTimeChange(e.target.value)}
-          disabled={saving}
-        >
-          {REMINDER_LEAD_TIMES.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
-      </Field>
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="font-sans text-sm text-fg-primary">Auto-open Meeting Room</p>
-          <p className="font-sans text-xs text-fg-secondary">Open the Meeting Room shortly before a call starts.</p>
-        </div>
-        <Switch checked={autoOpen} onChange={onAutoOpenChange} disabled={saving} label="Auto-open Meeting Room" />
-      </div>
+    <div>
+      <p className="eyebrow mb-4">Call &amp; Booking</p>
+      <PanelGrid>
+        <PanelCard>
+          <CardHead title="Reminders" description="Not yet wired into automatic behavior." />
+          <Field label="Default reminder lead time">
+            <select
+              className={inputClass()}
+              value={leadTime}
+              onChange={(e) => onLeadTimeChange(e.target.value)}
+              disabled={saving}
+            >
+              {REMINDER_LEAD_TIMES.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </Field>
+        </PanelCard>
+        <PanelCard>
+          <CardHead title="Meeting Room" description="Not yet wired into automatic behavior." />
+          <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
+            <div className="flex items-center justify-between gap-4 bg-surface px-4 py-3.5">
+              <div>
+                <p className="font-sans text-sm font-medium text-fg-primary">Auto-open Meeting Room</p>
+                <p className="mt-0.5 font-sans text-xs text-fg-secondary">Open the Meeting Room shortly before a call starts.</p>
+              </div>
+              <Switch checked={autoOpen} onChange={onAutoOpenChange} disabled={saving} label="Auto-open Meeting Room" />
+            </div>
+          </div>
+        </PanelCard>
+      </PanelGrid>
     </div>
+  )
+}
+
+// ---- Integrations tab ---------------------------------------------------
+
+// Prompt 621 — Zoom's existing Connect/Disconnect card (Prompt 530/617)
+// unchanged, plus a new read-only "In-portal calling" card describing the
+// Meeting SDK embed (Prompt 618/620) whose status text genuinely reflects
+// the real connection state via the same useZoomConnection query (react-
+// query dedupes the identical ['zoom-connection', closerId] key against
+// ZoomForm's own call, so this isn't a second network request).
+function IntegrationsPanel({ profile }) {
+  return (
+    <div>
+      <p className="eyebrow mb-4">Integrations</p>
+      <PanelGrid>
+        <PanelCard>
+          <ZoomForm profile={profile} />
+        </PanelCard>
+        <InPortalCallingCard profile={profile} />
+      </PanelGrid>
+    </div>
+  )
+}
+
+function InPortalCallingCard({ profile }) {
+  const { data: connection, isLoading } = useZoomConnection(profile.id)
+  const connected = !!connection
+
+  return (
+    <PanelCard>
+      <CardHead
+        title="In-portal calling"
+        description="Booked calls open inside the Meeting Room using Zoom's Meeting SDK — no separate tab or app."
+      />
+      {isLoading ? (
+        <p className="font-sans text-sm text-fg-secondary">Checking…</p>
+      ) : (
+        <div className={clsx('flex items-center gap-2 font-sans text-sm', connected ? 'text-success' : 'text-fg-secondary')}>
+          {connected && <CheckCircle2 size={16} />}
+          {connected ? 'Active — uses the Zoom account connected above' : 'Connect Zoom above to enable'}
+        </div>
+      )}
+    </PanelCard>
   )
 }
 
@@ -262,7 +461,7 @@ function CallBookingForm({ profile }) {
 const ZOOM_STATUS_COPY = {
   connected: { tone: 'success', text: 'Zoom connected.' },
   denied: { tone: 'danger', text: 'Zoom connection was cancelled.' },
-  expired: { tone: 'danger', text: 'That connection link expired — try again.' },
+  expired: { tone: 'danger', text: "That connection link expired — try again." },
   error: { tone: 'danger', text: "Couldn't connect Zoom — try again, or ask an admin to check the setup." },
 }
 
@@ -373,21 +572,16 @@ function ZoomForm({ profile }) {
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="font-sans text-sm font-semibold text-fg-primary">Zoom</p>
-        <p className="mt-1 font-sans text-xs text-fg-secondary">
-          Connect your own Zoom account so meetings for your booked appointments run under you as host.
-        </p>
-      </div>
+    <div>
+      <CardHead title="Zoom account" description="Connect your own Zoom account so meetings for your booked appointments run under you as host." />
 
       {zoomStatus && ZOOM_STATUS_COPY[zoomStatus] && (
-        <p className={clsx('font-sans text-sm', ZOOM_STATUS_COPY[zoomStatus].tone === 'success' ? 'text-success' : 'text-danger')}>
+        <p className={clsx('mb-3 font-sans text-sm', ZOOM_STATUS_COPY[zoomStatus].tone === 'success' ? 'text-success' : 'text-danger')}>
           {ZOOM_STATUS_COPY[zoomStatus].text}
         </p>
       )}
       {popupBlockedNotice && (
-        <p className="font-sans text-sm text-fg-secondary">Your browser blocked the popup — continuing without it…</p>
+        <p className="mb-3 font-sans text-sm text-fg-secondary">Your browser blocked the popup — continuing without it…</p>
       )}
 
       {isLoading ? (
@@ -408,7 +602,7 @@ function ZoomForm({ profile }) {
           {waitingForPopup ? 'Waiting for Zoom…' : connectZoom.isPending ? 'Connecting…' : 'Connect Zoom'}
         </Button>
       )}
-      {error && <p className="font-sans text-sm text-danger">{error}</p>}
+      {error && <p className="mt-3 font-sans text-sm text-danger">{error}</p>}
     </div>
   )
 }
@@ -466,7 +660,10 @@ function ThemeForm() {
   )
 }
 
-function TimezoneForm({ profile }) {
+// `headerAction` — Prompt 621: same timezone RPC/state, rendered with the
+// Save button in the card header's top-right (closer Appearance tab)
+// instead of below the field (non-closer General section, unchanged).
+function TimezoneForm({ profile, headerAction = false }) {
   const { refreshProfile } = useAuth()
   const [timezone, setTimezone] = useState(profile.timezone || DEFAULT_TIMEZONE)
   const [saving, setSaving] = useState(false)
@@ -487,25 +684,41 @@ function TimezoneForm({ profile }) {
     setTimeout(() => setSaved(false), 2000)
   }
 
+  const description = 'Drives what "today" means everywhere in the app — Overview, My Goals, Stats, Activity, and My Calls all use this instead of server time.'
+  const timezoneField = (
+    <Field label="Timezone">
+      <select className={inputClass()} value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+        {SELECTABLE_TIMEZONES.map((tz) => (
+          <option key={tz.value} value={tz.value}>{tz.label}</option>
+        ))}
+      </select>
+    </Field>
+  )
+  const saveButton = (
+    <Button type="submit" disabled={!dirty || saving}>
+      {saving ? 'Saving…' : 'Save changes'}
+    </Button>
+  )
+
+  if (headerAction) {
+    return (
+      <form onSubmit={save}>
+        <CardHead title="Timezone" description={description} action={saveButton} />
+        {timezoneField}
+        {error && <p className="mt-3 font-sans text-sm text-danger">{error}</p>}
+        {saved && <p className="mt-3 font-sans text-sm text-success">Saved</p>}
+      </form>
+    )
+  }
+
   return (
     <form onSubmit={save} className="space-y-4">
       <p className="font-sans text-sm font-semibold text-fg-primary">Timezone</p>
-      <p className="font-sans text-xs text-fg-secondary">
-        Drives what "today" means everywhere in the app — Overview, My Goals, Stats, Activity, and My
-        Calls all use this instead of server time.
-      </p>
-      <Field label="Timezone">
-        <select className={inputClass()} value={timezone} onChange={(e) => setTimezone(e.target.value)}>
-          {SELECTABLE_TIMEZONES.map((tz) => (
-            <option key={tz.value} value={tz.value}>{tz.label}</option>
-          ))}
-        </select>
-      </Field>
+      <p className="font-sans text-xs text-fg-secondary">{description}</p>
+      {timezoneField}
       {error && <p className="font-sans text-sm text-danger">{error}</p>}
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={!dirty || saving}>
-          {saving ? 'Saving…' : 'Save changes'}
-        </Button>
+        {saveButton}
         {saved && <span className="font-sans text-sm text-success">Saved</span>}
       </div>
     </form>
