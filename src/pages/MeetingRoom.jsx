@@ -1,8 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Video } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { useZoomConnection, useZoomPersonalRoom } from '../hooks/useZoom'
 import { useStrategyCalls } from '../hooks/useStrategyCalls'
 import { Button } from '../components/ui/Button'
 import { usePageHeader } from '../components/Layout'
@@ -11,51 +9,81 @@ import CloserLeadModal from '../components/CloserLeadModal'
 import ZoomCallModal from '../components/ZoomCallModal'
 
 // Prompt 615 — first piece of Phase 2 ("bring the call into the portal"):
-// one destination for both a closer's standing Personal Meeting Room and
-// quick-join links for their booked Strategy Calls, instead of scattered
-// across Settings and Overview.
-// Prompt 618 — Phase 3: both join actions now open the call in an
-// embedded modal (ZoomCallModal, via the Meeting SDK) instead of a new
-// tab. `data` is the widened {join_url, meeting_number, password} shape
-// from get-zoom-personal-room.
-function PersonalRoomCard({ profile, onJoin }) {
-  const { data: connection, isLoading: connectionLoading } = useZoomConnection(profile.id)
-  const { data, isLoading: roomLoading, isError, error } = useZoomPersonalRoom(profile.id, !!connection)
+// one destination for quick-join links into a closer's booked Strategy
+// Calls, instead of scattered across Settings and Overview.
+// Prompt 618 — Phase 3: join actions open the call in an embedded modal
+// (ZoomCallModal, via the Meeting SDK) instead of a new tab. `data` is the
+// widened {join_url, meeting_number, password} shape from
+// get-zoom-personal-room.
+// Prompt 636 — the standing Personal Meeting Room (not tied to any booked
+// call) is gone per Brayden's own call: Meeting Room is now 100% about
+// booked Strategy Calls. Replaced by a live status card, below, that's
+// driven by whether there's a call to join right now.
+const JOIN_WINDOW_MS = 15 * 60 * 1000
+
+// Prompt 636 — the top-of-page status box: "is there something to join
+// right now." Considers todaysCalls + upcomingCalls together (both already
+// exclude anything the closer has logged an outcome for) — the soonest
+// call with a real zoom_join_url that has entered its 15-minute join
+// window wins, no upper bound (a call in progress stays joinable). When
+// nothing is in-window, names the next booked call (if any) so it's clear
+// why there's nothing to click yet, rather than leaving the state blank.
+function MeetingStatusCard({ tz, now, todaysCalls, upcomingCalls, onJoin }) {
+  const { joinable, next, isNextToday } = useMemo(() => {
+    const all = [...todaysCalls, ...upcomingCalls].sort(
+      (a, b) => new Date(a.strategy_call_at) - new Date(b.strategy_call_at)
+    )
+    const joinable = all.find(
+      (l) => l.zoom_join_url && now >= new Date(l.strategy_call_at).getTime() - JOIN_WINDOW_MS
+    )
+    const next = joinable ? null : all[0] || null
+    const isNextToday = next ? todaysCalls.some((l) => l.id === next.id) : false
+    return { joinable, next, isNextToday }
+  }, [todaysCalls, upcomingCalls, now])
+
+  if (joinable) {
+    const when = new Date(joinable.strategy_call_at).toLocaleString('en-US', {
+      timeZone: tz, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+    })
+    return (
+      <div className="rounded-card border border-line bg-elevated p-6">
+        <p className="font-sans text-sm font-semibold text-fg-primary">You have a meeting to join</p>
+        <p className="mt-1 font-sans text-xs text-fg-secondary">
+          {joinable.facility_name} · {when}
+        </p>
+        <div className="mt-4">
+          <Button
+            type="button"
+            onClick={() =>
+              onJoin({ meetingNumber: joinable.zoom_meeting_id, password: joinable.zoom_meeting_password })
+            }
+            className="!px-6 !py-3 !text-base"
+          >
+            <Video size={18} /> Join the Meeting Room
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const nextWhen = next
+    ? isNextToday
+      ? `Today at ${new Date(next.strategy_call_at).toLocaleTimeString('en-US', {
+          timeZone: tz, hour: 'numeric', minute: '2-digit',
+        })}`
+      : new Date(next.strategy_call_at).toLocaleString('en-US', {
+          timeZone: tz, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+        })
+    : null
 
   return (
     <div className="rounded-card border border-line bg-elevated p-6">
-      <p className="font-sans text-sm font-semibold text-fg-primary">Your Meeting Room</p>
-      <p className="mt-1 font-sans text-xs text-fg-secondary">
-        A standing Zoom room you can start any time — not tied to any one lead. Share it or start it whenever you
-        and a client are ready to meet.
-      </p>
-
-      <div className="mt-4">
-        {connectionLoading ? (
-          <p className="font-sans text-sm text-fg-secondary">Checking Zoom connection…</p>
-        ) : !connection ? (
-          <div className="space-y-2">
-            <p className="font-sans text-sm text-fg-secondary">Connect Zoom to get your own Meeting Room.</p>
-            <Link to="/settings">
-              <Button type="button" variant="secondary">Go to Settings</Button>
-            </Link>
-          </div>
-        ) : roomLoading ? (
-          <p className="font-sans text-sm text-fg-secondary">Loading your room…</p>
-        ) : isError || !data?.join_url ? (
-          <p className="font-sans text-sm text-danger">
-            {error?.message || "Couldn't load your Meeting Room — try again shortly."}
-          </p>
-        ) : (
-          <Button
-            type="button"
-            onClick={() => onJoin({ meetingNumber: data.meeting_number, password: data.password })}
-            className="!px-6 !py-3 !text-base"
-          >
-            <Video size={18} /> Start Your Meeting Room
-          </Button>
-        )}
-      </div>
+      <p className="font-sans text-sm font-semibold text-fg-primary">You have no meetings to join</p>
+      {next && (
+        <p className="mt-1 font-sans text-xs text-fg-secondary">
+          Next call: {nextWhen} with {next.facility_name}
+        </p>
+      )}
     </div>
   )
 }
@@ -64,9 +92,7 @@ function PersonalRoomCard({ profile, onJoin }) {
 // shape (useStrategyCalls) and StrategyCallRow so this list looks and
 // behaves identically to Overview's own Strategy Calls section, just in
 // its own dedicated destination.
-function CallsCard({ profile, onOpenLead, onJoin }) {
-  const { isLoading, tz, todaysCalls, upcomingCalls } = useStrategyCalls(profile)
-
+function CallsCard({ isLoading, tz, now, todaysCalls, upcomingCalls, onOpenLead, onJoin }) {
   return (
     <div className="mt-6">
       <h2 className="font-display text-lg font-medium text-fg-primary">Today's & Upcoming Calls</h2>
@@ -100,6 +126,7 @@ function CallsCard({ profile, onOpenLead, onJoin }) {
                   key={lead.id}
                   lead={lead}
                   tz={tz}
+                  now={now}
                   onOpen={() => onOpenLead(lead)}
                   onEmbedJoin={() => onJoin({ meetingNumber: lead.zoom_meeting_id, password: lead.zoom_meeting_password })}
                 />
@@ -116,6 +143,7 @@ function CallsCard({ profile, onOpenLead, onJoin }) {
                   key={lead.id}
                   lead={lead}
                   tz={tz}
+                  now={now}
                   onOpen={() => onOpenLead(lead)}
                   showDate
                   onEmbedJoin={() => onJoin({ meetingNumber: lead.zoom_meeting_id, password: lead.zoom_meeting_password })}
@@ -129,9 +157,31 @@ function CallsCard({ profile, onOpenLead, onJoin }) {
   )
 }
 
+// Prompt 636 — one shared useStrategyCalls call (leads/tz/now) feeding both
+// the status card and the table, only ever rendered once `profile` is
+// guaranteed non-null (MeetingRoom below guards this).
+function MeetingRoomBody({ profile, onOpenLead, onJoin }) {
+  const { isLoading, tz, todaysCalls, upcomingCalls, now } = useStrategyCalls(profile)
+
+  return (
+    <>
+      <MeetingStatusCard tz={tz} now={now} todaysCalls={todaysCalls} upcomingCalls={upcomingCalls} onJoin={onJoin} />
+      <CallsCard
+        isLoading={isLoading}
+        tz={tz}
+        now={now}
+        todaysCalls={todaysCalls}
+        upcomingCalls={upcomingCalls}
+        onOpenLead={onOpenLead}
+        onJoin={onJoin}
+      />
+    </>
+  )
+}
+
 export default function MeetingRoom() {
   const { profile } = useAuth()
-  usePageHeader({ title: 'Meeting Room', subtitle: 'Start or join a call without leaving the app.' })
+  usePageHeader({ title: 'Meeting Room', subtitle: 'Join a call without leaving the app.' })
   const [activeLead, setActiveLead] = useState(null)
   const [activeCall, setActiveCall] = useState(null) // { meetingNumber, password } | null
 
@@ -139,8 +189,7 @@ export default function MeetingRoom() {
 
   return (
     <div>
-      <PersonalRoomCard profile={profile} onJoin={setActiveCall} />
-      <CallsCard profile={profile} onOpenLead={setActiveLead} onJoin={setActiveCall} />
+      <MeetingRoomBody profile={profile} onOpenLead={setActiveLead} onJoin={setActiveCall} />
       {activeLead && <CloserLeadModal lead={activeLead} onClose={() => setActiveLead(null)} />}
       {activeCall && (
         <ZoomCallModal

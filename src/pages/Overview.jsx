@@ -793,10 +793,14 @@ function CloserBookedPipeline({ profile }) {
 // format unchanged.
 // Prompt 618 — opt-in `onEmbedJoin`: when passed, the Join control becomes
 // a button that opens the call in-page (Meeting Room's own use) instead of
-// the plain external link every other caller here still gets. Omitted by
-// both of this file's own call sites, so Overview's own Strategy Calls
-// section is unchanged.
-export function StrategyCallRow({ lead, tz, onOpen, showDate, onEmbedJoin }) {
+// the plain external link every other caller here still gets.
+// Prompt 636 — the Join control is now gated to a 15-minute window before
+// `strategy_call_at` (no upper bound — a call in progress stays joinable),
+// on top of the existing "does a zoom_join_url exist yet" check. This is a
+// deliberate, in-scope change to Overview's own Strategy Calls section too
+// — `now` must be passed by every caller (both of this file's own call
+// sites now do, via useStrategyCalls' live `now`).
+export function StrategyCallRow({ lead, tz, onOpen, showDate, onEmbedJoin, now }) {
   const when = showDate
     ? new Date(lead.strategy_call_at).toLocaleString('en-US', {
         timeZone: tz, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -804,6 +808,8 @@ export function StrategyCallRow({ lead, tz, onOpen, showDate, onEmbedJoin }) {
     : new Date(lead.strategy_call_at).toLocaleTimeString('en-US', {
         timeZone: tz, hour: 'numeric', minute: '2-digit',
       })
+  const windowOpensAt = new Date(lead.strategy_call_at).getTime() - 15 * 60 * 1000
+  const isJoinable = now >= windowOpensAt
   return (
     <tr onClick={onOpen} className="cursor-pointer border-t border-line font-sans text-sm hover:bg-surface">
       <td className="px-5 py-4 font-mono text-fg-primary [font-variant-numeric:tabular-nums]">{when}</td>
@@ -812,28 +818,31 @@ export function StrategyCallRow({ lead, tz, onOpen, showDate, onEmbedJoin }) {
         {lead.contact_name || 'No contact name'} · {formatPhone(lead.phone) || 'No phone'}
       </td>
       <td className="px-5 py-4">
-        {lead.zoom_join_url ? (
-          onEmbedJoin ? (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onEmbedJoin(lead) }}
-              className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 font-sans text-sm font-semibold text-white transition-opacity hover:opacity-90"
-            >
-              <Video size={15} /> Join
-            </button>
-          ) : (
-            <a
-              href={lead.zoom_join_url}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 font-sans text-sm font-semibold text-white transition-opacity hover:opacity-90"
-            >
-              <Video size={15} /> Join
-            </a>
-          )
-        ) : (
+        {!lead.zoom_join_url ? (
           <span className="font-sans text-sm text-fg-faint">Zoom pending</span>
+        ) : !isJoinable ? (
+          <span className="font-sans text-sm text-fg-faint">
+            Available at{' '}
+            {new Date(windowOpensAt).toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' })}
+          </span>
+        ) : onEmbedJoin ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onEmbedJoin(lead) }}
+            className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 font-sans text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            <Video size={15} /> Join
+          </button>
+        ) : (
+          <a
+            href={lead.zoom_join_url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 font-sans text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            <Video size={15} /> Join
+          </a>
         )}
       </td>
     </tr>
@@ -857,7 +866,7 @@ export function CloserOverview({ profile, title = 'Overview' }) {
   // 608: raw closer_outcome, NOT displayOutcome — a No Show that happened
   // today still belongs on today's list so the closer can log the real
   // outcome, rather than silently dropping off once its time passes.
-  const { leads, isLoading, tz, todaysCalls, upcomingCalls } = useStrategyCalls(profile)
+  const { leads, isLoading, tz, todaysCalls, upcomingCalls, now } = useStrategyCalls(profile)
   const [activeLead, setActiveLead] = useState(null)
 
   const weekRange = useMemo(() => {
@@ -1001,7 +1010,7 @@ export function CloserOverview({ profile, title = 'Overview' }) {
                 </tr>
               )}
               {todaysCalls.map((lead) => (
-                <StrategyCallRow key={lead.id} lead={lead} tz={tz} onOpen={() => setActiveLead(lead)} />
+                <StrategyCallRow key={lead.id} lead={lead} tz={tz} now={now} onOpen={() => setActiveLead(lead)} />
               ))}
               {todaysCalls.length > 0 && upcomingCalls.length > 0 && (
                 <tr>
@@ -1011,7 +1020,7 @@ export function CloserOverview({ profile, title = 'Overview' }) {
                 </tr>
               )}
               {upcomingCalls.map((lead) => (
-                <StrategyCallRow key={lead.id} lead={lead} tz={tz} onOpen={() => setActiveLead(lead)} showDate />
+                <StrategyCallRow key={lead.id} lead={lead} tz={tz} now={now} onOpen={() => setActiveLead(lead)} showDate />
               ))}
             </tbody>
           </table>

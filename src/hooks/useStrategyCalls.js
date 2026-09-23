@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMyBooked } from './useLeads'
 import { inRange } from './useStats'
 import { zonedDateStr, zonedDayRange } from '../lib/dates'
@@ -12,9 +12,21 @@ import { DEFAULT_TIMEZONE } from '../lib/timezones'
 // upcoming list sorted chronologically.
 const UPCOMING_CALLS_LIMIT = 5
 
+// Prompt 636 — a live `now` that ticks every 30s independent of the actual
+// data refetch, so the Join-window gating (StrategyCallRow, Meeting Room's
+// status card) flips from locked to joinable on its own without a manual
+// page refresh.
+const NOW_TICK_MS = 30 * 1000
+
 export function useStrategyCalls(profile) {
   const { data: leads, isLoading } = useMyBooked(profile.id)
   const tz = profile.timezone || DEFAULT_TIMEZONE
+
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), NOW_TICK_MS)
+    return () => clearInterval(id)
+  }, [])
 
   const todayRange = useMemo(() => zonedDayRange(zonedDateStr(Date.now(), tz), tz), [tz])
 
@@ -45,5 +57,5 @@ export function useStrategyCalls(profile) {
     [leads, todayRange]
   )
 
-  return { leads, isLoading, tz, todaysCalls, upcomingCalls }
+  return { leads, isLoading, tz, todaysCalls, upcomingCalls, now }
 }
