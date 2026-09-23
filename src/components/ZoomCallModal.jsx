@@ -25,6 +25,7 @@ export default function ZoomCallModal({ meetingNumber, password, displayName, on
   const [errorMessage, setErrorMessage] = useState('')
   const rootRef = useRef(null)
   const clientRef = useRef(null)
+  const embeddedRef = useRef(null)
   const signatureMutation = useZoomSdkSignature()
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export default function ZoomCallModal({ meetingNumber, password, displayName, on
         // runs on the app's React 19 and can't render. See loadZoomEmbedded.
         const ZoomMtgEmbedded = await loadZoomEmbedded()
         if (cancelled) return
+        embeddedRef.current = ZoomMtgEmbedded
 
         const client = ZoomMtgEmbedded.createClient()
         clientRef.current = client
@@ -91,7 +93,26 @@ export default function ZoomCallModal({ meetingNumber, password, displayName, on
 
     return () => {
       cancelled = true
-      clientRef.current?.leaveMeeting?.().catch(() => {})
+      const client = clientRef.current
+      const embedded = embeddedRef.current
+      if (!client) return
+      // Prompt 635 — the embedded SDK carries state across createClient()
+      // calls on the same page (devforum-acknowledged bug ZOOM-372963:
+      // a second createClient() silently reuses the previous client's
+      // internals). Reproduced in a local harness: without destroyClient()
+      // here, a rejoin left the old client's event listeners still firing
+      // and the join UI never rendered into zoomAppRoot — exactly Brayden's
+      // "Connected but blank" symptom. Calling destroyClient() once the
+      // leave settles fixed it across 3/3 harness rejoin cycles.
+      client.leaveMeeting?.()
+        .catch(() => {})
+        .finally(() => {
+          try {
+            embedded?.destroyClient?.()
+          } catch {
+            // best-effort cleanup only
+          }
+        })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- join params are fixed for this modal's lifetime; re-running on signatureMutation identity would re-join needlessly
   }, [meetingNumber, password, displayName])
