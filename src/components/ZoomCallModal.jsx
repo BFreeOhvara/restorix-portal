@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import Modal from './ui/Modal'
 import { Button } from './ui/Button'
 import { useZoomSdkSignature } from '../hooks/useZoom'
+import { loadZoomEmbedded } from '../lib/loadZoomEmbedded'
 
 // Prompt 618 — Phase 3 of bringing Zoom into the portal: the actual
 // embedded call, via Zoom's Meeting SDK (`@zoom/meetingsdk/embedded`),
@@ -39,7 +40,9 @@ export default function ZoomCallModal({ meetingNumber, password, displayName, on
         const signature = await signatureMutation.mutateAsync({ meetingNumber, role: 1 })
         if (cancelled) return
 
-        const { default: ZoomMtgEmbedded } = await import('@zoom/meetingsdk/embedded')
+        // Prompt 633 — not `import('@zoom/meetingsdk/embedded')`: that build
+        // runs on the app's React 19 and can't render. See loadZoomEmbedded.
+        const ZoomMtgEmbedded = await loadZoomEmbedded()
         if (cancelled) return
 
         const client = ZoomMtgEmbedded.createClient()
