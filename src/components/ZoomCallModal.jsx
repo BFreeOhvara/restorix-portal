@@ -48,10 +48,6 @@ export default function ZoomCallModal({ meetingNumber, password, displayName, on
         const client = ZoomMtgEmbedded.createClient()
         clientRef.current = client
 
-        client.on('connection-change', (payload) => {
-          if (payload?.state === 'Closed') setStatus((s) => (s === 'error' ? s : 'ended'))
-        })
-
         const initResult = await client.init({
           zoomAppRoot: rootRef.current,
           language: 'en-US',
@@ -60,6 +56,13 @@ export default function ZoomCallModal({ meetingNumber, password, displayName, on
         })
         if (cancelled) return
         if (isSdkFailure(initResult)) throw new Error(initResult.reason || 'Failed to initialize the Zoom SDK.')
+
+        // Prompt 634 — must come after init(): the ES5 build only sets up
+        // its supported-events list inside init(), so on() before it
+        // throws "Cannot read properties of undefined (reading 'includes')".
+        client.on('connection-change', (payload) => {
+          if (payload?.state === 'Closed') setStatus((s) => (s === 'error' ? s : 'ended'))
+        })
 
         const joinResult = await client.join({
           signature,
@@ -72,9 +75,14 @@ export default function ZoomCallModal({ meetingNumber, password, displayName, on
 
         setStatus('joined')
       } catch (e) {
+        // Prompt 634 — the UI only shows a one-line message, so keep the
+        // full error (with stack) one devtools-open away. join() also
+        // rejects with a plain {type, reason, errorCode} object, not an
+        // Error, so fall back to its `reason`.
+        console.error('ZoomCallModal:', e)
         if (!cancelled) {
           setStatus('error')
-          setErrorMessage(e?.message || 'Could not connect to Zoom.')
+          setErrorMessage(e?.message || e?.reason || 'Could not connect to Zoom.')
         }
       }
     }
