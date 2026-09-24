@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { Play, Loader2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
-import { useMyCallsForDay, fetchRecordingUrl } from '../hooks/useCalls'
+import { useMyCallsForDay, fetchRecordingUrl, useMyStrategyRecordings, fetchStrategyRecordingUrl } from '../hooks/useCalls'
 import StatusBadge from '../components/ui/StatusBadge'
 import { DayPaginator } from '../components/ui/DayPaginator'
 import { DateCalendar } from '../components/ui/DateCalendar'
@@ -99,8 +99,8 @@ function RecordingCell({ callId }) {
 // Prompt 646 — closer-only Setter/Closer split, same boxed SegmentedTabs
 // variant="grouped" My Pipeline/Setter Activity use. Setter = the dialer
 // calls this page has always listed; Closer = Zoom strategy-call
-// recordings, which aren't captured anywhere yet, so it's an honest Soon
-// state (same SoonBadge as Settings 624 / Meeting Room 644), no fake rows.
+// recordings (Prompt 647: real rows from zoom_recordings once
+// zoom-recording-webhook has stored any; honest Soon state until then).
 const RECORDING_TABS = [
   { key: 'setter', label: 'Setter' },
   { key: 'closer', label: 'Closer' },
@@ -115,8 +115,113 @@ function CloserRecordingsSoon() {
           <SoonBadge />
         </p>
         <p className="mt-1.5 font-sans text-xs text-fg-faint">
-          Once Zoom recording is set up, each strategy call you run will show up here with its recording and transcript, attached to the lead. Nothing is being recorded yet.
+          Each strategy call you run on Zoom will show up here with its recording, attached to the lead, once Zoom finishes processing it. No recordings yet.
         </p>
+      </div>
+    </div>
+  )
+}
+
+// Prompt 647 — same modal lifecycle as the Setter RecordingModal, but the
+// file is a short-lived signed URL on the private call-recordings bucket
+// (streamed by the <video> element) rather than a proxied blob.
+function StrategyRecordingModal({ storagePath, onClose }) {
+  const [state, setState] = useState('loading') // loading | ready | error
+  const [url, setUrl] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    fetchStrategyRecordingUrl(storagePath)
+      .then((signed) => {
+        if (cancelled) return
+        setUrl(signed)
+        setState('ready')
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(e.message || 'Failed to load recording')
+          setState('error')
+        }
+      })
+    return () => { cancelled = true }
+  }, [storagePath])
+
+  return (
+    <Modal title="Strategy Call Recording" onClose={onClose}>
+      {state === 'loading' && (
+        <div className="flex items-center justify-center gap-2 py-6 font-sans text-sm text-fg-secondary">
+          <Loader2 size={16} className="animate-spin" /> Loading…
+        </div>
+      )}
+      {state === 'error' && <p className="py-2 font-sans text-sm text-danger">{error}</p>}
+      {state === 'ready' && url && <video controls autoPlay src={url} className="w-full rounded-card bg-black" />}
+    </Modal>
+  )
+}
+
+function StrategyRecordingCell({ recording }) {
+  const [open, setOpen] = useState(false)
+
+  if (recording.status === 'failed') {
+    return <span className="font-sans text-xs text-danger">Couldn't save</span>
+  }
+  if (recording.status !== 'stored' || !recording.storage_path) {
+    return <span className="font-sans text-xs text-fg-faint">Processing…</span>
+  }
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1.5 rounded-full border border-line bg-elevated px-3 py-1.5 font-sans text-xs font-medium text-fg-primary hover:border-fg-primary/40"
+      >
+        <Play size={13} /> Play Recording
+      </button>
+      {open && <StrategyRecordingModal storagePath={recording.storage_path} onClose={() => setOpen(false)} />}
+    </>
+  )
+}
+
+// Same box/row geometry as the Setter table (736px box, 63px rows) so
+// switching tabs never moves the page.
+function CloserRecordings() {
+  const { data: recordings, isLoading } = useMyStrategyRecordings()
+
+  if (!isLoading && !recordings?.length) return <CloserRecordingsSoon />
+
+  return (
+    <div className="mt-5 h-[736px] overflow-hidden rounded-card border border-line bg-elevated">
+      <div className="h-full overflow-y-auto">
+        <table className={clsx('w-full text-left', recordings?.length > 0 && 'border-b border-line')}>
+          <thead className="eyebrow sticky top-0 z-10 bg-surface">
+            <tr>
+              <th className="px-5 py-3">Lead</th>
+              <th className="px-5 py-3">When</th>
+              <th className="px-5 py-3">Duration</th>
+              <th className="px-5 py-3">Recording</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <tr>
+                <td colSpan={99} className="h-[693px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
+                  Loading…
+                </td>
+              </tr>
+            ) : (
+              recordings.map((r) => (
+                <tr key={r.id} className="h-[63px] border-t border-line font-sans text-sm">
+                  <td className="px-5 py-4 font-medium text-fg-primary">{r.leads?.facility_name || '—'}</td>
+                  <td className="px-5 py-4 text-fg-secondary">{fmt(r.recorded_at || r.created_at)}</td>
+                  <td className="px-5 py-4 text-fg-secondary">{fmtDuration(r.duration_seconds)}</td>
+                  <td className="px-5 py-4">
+                    <StrategyRecordingCell recording={r} />
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   )
@@ -203,7 +308,7 @@ export default function MyCalls() {
           closer's top margin drops 24px→20px (here and in
           CloserRecordingsSoon) to keep total page height, and 605's
           no-page-scroll fit, unchanged. */}
-      {tab === 'closer' ? <CloserRecordingsSoon /> : (<>
+      {tab === 'closer' ? <CloserRecordings /> : (<>
       {/* Own scroll region, same treatment as Overview's lead table
           (Prompt 440). Prompt 602 — box quantized to the sticky header's
           own height (~43px) plus a whole number of rows, so the box's

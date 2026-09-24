@@ -83,3 +83,33 @@ export async function fetchRecordingUrl(callId) {
   const blob = await resp.blob()
   return URL.createObjectURL(blob)
 }
+
+// Prompt 647 — Zoom cloud recordings of the closer's strategy calls,
+// written by zoom-recording-webhook. RLS scopes this to the caller's own
+// rows (admin sees all). Not day-scoped: a closer runs a handful of
+// strategy calls, not a dialer's hundred calls a day.
+export function useMyStrategyRecordings({ enabled = true } = {}) {
+  return useQuery({
+    queryKey: ['zoom_recordings'],
+    enabled,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('zoom_recordings')
+        .select('id, status, duration_seconds, recorded_at, created_at, storage_path, leads(facility_name)')
+        .order('recorded_at', { ascending: false, nullsFirst: false })
+      if (error) throw error
+      return data
+    },
+    refetchInterval: 30000,
+  })
+}
+
+// Private call-recordings bucket; storage RLS only signs objects whose
+// zoom_recordings row the caller can see.
+export async function fetchStrategyRecordingUrl(storagePath) {
+  const { data, error } = await supabase.storage
+    .from('call-recordings')
+    .createSignedUrl(storagePath, 60 * 60)
+  if (error) throw error
+  return data.signedUrl
+}
