@@ -8,7 +8,7 @@ import { useZoomConnection } from '../hooks/useZoom'
 import { Button } from '../components/ui/Button'
 import OutcomeBadge from '../components/ui/OutcomeBadge'
 import { usePageHeader } from '../components/Layout'
-import { StrategyCallRow, Tile, DateClockRow } from './Overview'
+import { StrategyCallRow } from './Overview'
 import { SoonBadge } from './Settings'
 import { AGENT_CATALOG } from '../lib/agentCatalog'
 import { displayOutcome } from '../lib/closerOutcome'
@@ -55,23 +55,15 @@ function MeetingStatusCard({ tz, now, todaysCalls, upcomingCalls, onJoin }) {
       timeZone: tz, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
     })
     return (
-      <div className="rounded-card border border-line bg-elevated p-6">
-        <p className="font-sans text-sm font-semibold text-fg-primary">You have a meeting to join</p>
-        <p className="mt-1 font-sans text-xs text-fg-secondary">
-          {joinable.facility_name} · {when}
-        </p>
-        <div className="mt-4">
-          <Button
-            type="button"
-            onClick={() =>
-              onJoin({ meetingNumber: joinable.zoom_meeting_id, password: joinable.zoom_meeting_password })
-            }
-            className="!px-6 !py-3 !text-base"
-          >
-            <Video size={18} /> Join the Meeting Room
-          </Button>
-        </div>
-      </div>
+      <JoinPanel
+        active
+        title="You have a meeting to join"
+        detail={`${joinable.facility_name} · ${when}`}
+        hint="The room is open. The call runs right here in the portal."
+        onJoin={() =>
+          onJoin({ meetingNumber: joinable.zoom_meeting_id, password: joinable.zoom_meeting_password })
+        }
+      />
     )
   }
 
@@ -85,14 +77,80 @@ function MeetingStatusCard({ tz, now, todaysCalls, upcomingCalls, onJoin }) {
         })
     : null
 
+  // Prompt 645 — display only: says when the (disabled) button will come
+  // alive. The gating decision itself is the useMemo above, unchanged.
+  const opensAt = next ? new Date(next.strategy_call_at).getTime() - JOIN_WINDOW_MS : null
+  const opensLabel = next
+    ? isNextToday
+      ? new Date(opensAt).toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' })
+      : fmtWhen(new Date(opensAt).toISOString(), tz)
+    : null
+
   return (
-    <div className="rounded-card border border-line bg-elevated p-6">
-      <p className="font-sans text-sm font-semibold text-fg-primary">You have no meetings to join</p>
-      {next && (
-        <p className="mt-1 font-sans text-xs text-fg-secondary">
-          Next call: {nextWhen} with {next.facility_name}
-        </p>
+    <JoinPanel
+      title="You have no meetings to join"
+      detail={next ? `Next call: ${nextWhen} with ${next.facility_name}` : 'No strategy calls booked yet.'}
+      hint={
+        !next
+          ? 'Unlocks 15 minutes before your next booked call.'
+          : next.zoom_join_url
+            ? `Unlocks at ${opensLabel}.`
+            : `Unlocks at ${opensLabel}, once the call’s Zoom meeting is created.`
+      }
+    />
+  )
+}
+
+// Prompt 645 — the one join button, active or not. Same size, icon and
+// label in both states so an empty room reads as "this button, not yet"
+// rather than a different object; disabled swaps the accent fill for a
+// muted one (a 50%-opacity accent still looked clickable).
+function JoinRoomButton({ disabled, onClick }) {
+  return (
+    <Button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="!px-6 !py-3 !text-base disabled:!bg-muted disabled:!text-fg-faint disabled:!opacity-100"
+    >
+      <Video size={18} /> Join the Meeting Room
+    </Button>
+  )
+}
+
+// Prompt 645 — MeetingStatusCard's frame for both states: status line,
+// headline, detail, then the join button with a hint beside it.
+function JoinPanel({ active = false, title, detail, hint, onJoin }) {
+  return (
+    <div
+      className={clsx(
+        'relative flex h-full flex-col overflow-hidden rounded-card border bg-elevated p-6 sm:p-8',
+        active ? 'border-accent/40' : 'border-line'
       )}
+    >
+      {active && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-accent/10 via-transparent to-transparent"
+        />
+      )}
+      <div className="relative flex flex-1 flex-col">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2.5 w-2.5">
+            {active && (
+              <span className="absolute inline-flex h-full w-full rounded-full bg-success opacity-60 motion-safe:animate-ping" />
+            )}
+            <span className={clsx('relative inline-flex h-2.5 w-2.5 rounded-full', active ? 'bg-success' : 'bg-fg-faint')} />
+          </span>
+          <p className="eyebrow">{active ? 'Room open' : 'Room closed'}</p>
+        </div>
+        <p className="mt-4 font-display text-2xl font-medium text-fg-primary sm:text-3xl">{title}</p>
+        <p className="mt-2 font-sans text-sm text-fg-secondary">{detail}</p>
+        <div className="mt-auto flex flex-col items-start gap-3 pt-8 sm:flex-row sm:items-center sm:gap-4">
+          <JoinRoomButton disabled={!active} onClick={onJoin} />
+          <p className="font-sans text-xs text-fg-faint">{hint}</p>
+        </div>
+      </div>
     </div>
   )
 }
@@ -232,10 +290,10 @@ function RoomCheckCard({ profile }) {
   const connected = !!connection
 
   return (
-    <div className="flex h-full flex-col rounded-card border border-line bg-elevated p-6">
-      <p className="font-sans text-sm font-semibold text-fg-primary">Room check</p>
-      <p className="mt-1 font-sans text-xs text-fg-secondary">What the Meeting Room needs before a call.</p>
-      <div className="mt-4 divide-y divide-line overflow-hidden rounded-lg border border-line">
+    <div className="flex h-full flex-col rounded-card border border-line bg-elevated p-6 sm:p-8">
+      <p className="eyebrow">Room check</p>
+      <p className="mt-2 font-sans text-sm text-fg-secondary">What the Meeting Room needs before a call.</p>
+      <div className="mt-5 divide-y divide-line overflow-hidden rounded-lg border border-line">
         {isLoading ? (
           <p className="bg-surface px-4 py-3 font-sans text-sm text-fg-secondary">Checking…</p>
         ) : (
@@ -260,7 +318,7 @@ function RoomCheckCard({ profile }) {
       </div>
       <Link
         to="/settings"
-        className="mt-4 inline-flex items-center gap-1.5 self-start font-sans text-sm font-semibold text-accent hover:opacity-80"
+        className="mt-auto inline-flex items-center gap-1.5 self-start pt-5 font-sans text-sm font-semibold text-accent hover:opacity-80"
       >
         Manage in Settings <ArrowRight size={14} />
       </Link>
@@ -289,12 +347,25 @@ function RoomStats({ isLoading, leads, tz, now, todaysCalls }) {
     return { nextWeek, zoomReady: open.length ? `${ready} / ${open.length}` : '—', awaiting }
   }, [leads, tz, now])
 
+  const items = [
+    { label: 'Calls Today', value: todaysCalls.length },
+    { label: 'Next 7 Days', value: stats.nextWeek },
+    { label: 'Zoom Links Ready', value: stats.zoomReady },
+    { label: 'Awaiting Outcome', value: stats.awaiting },
+  ]
+
+  // Prompt 645 — one strip with hairline dividers (gap-px over bg-line)
+  // instead of four separate bordered boxes; same numbers as before.
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      <Tile label="Calls Today" value={isLoading ? '—' : todaysCalls.length} />
-      <Tile label="Next 7 Days" value={isLoading ? '—' : stats.nextWeek} />
-      <Tile label="Zoom Links Ready" value={isLoading ? '—' : stats.zoomReady} />
-      <Tile label="Awaiting Outcome" value={isLoading ? '—' : stats.awaiting} />
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-card border border-line bg-line bg-clip-padding sm:grid-cols-4">
+      {items.map((s) => (
+        <div key={s.label} className="bg-elevated px-5 py-4">
+          <p className="eyebrow">{s.label}</p>
+          <p className="mt-1.5 font-display text-2xl font-medium text-fg-primary [font-variant-numeric:tabular-nums]">
+            {isLoading ? '—' : s.value}
+          </p>
+        </div>
+      ))}
     </div>
   )
 }
@@ -318,8 +389,21 @@ function CallPrepCard({ isLoading, tz, now, todaysCalls, upcomingCalls, onOpenLe
 
   return (
     <div>
-      <SectionHeading title="Call Prep" />
-      <div className="mt-3 rounded-card border border-line bg-elevated p-6">
+      <SectionHeading
+        title="Call Prep"
+        action={
+          call && (
+            <button
+              type="button"
+              onClick={() => onOpenLead(call)}
+              className="inline-flex items-center gap-1.5 font-sans text-sm font-semibold text-accent hover:opacity-80"
+            >
+              Open lead <ArrowRight size={14} />
+            </button>
+          )
+        }
+      />
+      <div className="mt-3 rounded-card border border-line bg-elevated p-6 sm:p-8">
         {isLoading ? (
           <p className="text-center font-sans text-sm text-fg-secondary">Loading…</p>
         ) : !call ? (
@@ -327,7 +411,7 @@ function CallPrepCard({ isLoading, tz, now, todaysCalls, upcomingCalls, onOpenLe
             Nothing booked to prep for yet. Your next call’s details land here.
           </p>
         ) : (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-8">
             <div className="min-w-0">
               <p className="eyebrow">{isJoinable ? 'Joinable now' : 'Next up'}</p>
               <p className="mt-2 font-display text-xl font-medium text-fg-primary">{call.facility_name}</p>
@@ -348,7 +432,8 @@ function CallPrepCard({ isLoading, tz, now, todaysCalls, upcomingCalls, onOpenLe
               )}
             </div>
 
-            <div className="flex min-w-0 flex-col">
+            <div className="min-w-0">
+              <p className="eyebrow mb-2">Readiness</p>
               <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
                 <CheckRow
                   ok={!!call.zoom_join_url}
@@ -392,11 +477,6 @@ function CallPrepCard({ isLoading, tz, now, todaysCalls, upcomingCalls, onOpenLe
                       : 'Not run yet — run it with them on the call'
                   }
                 />
-              </div>
-              <div className="mt-4">
-                <Button type="button" variant="secondary" onClick={() => onOpenLead(call)}>
-                  Open lead
-                </Button>
               </div>
             </div>
           </div>
@@ -442,9 +522,9 @@ function RecentCallsCard({ isLoading, leads, tz, now, onOpenLead }) {
           <table className="w-full text-left">
             <thead className="eyebrow bg-surface">
               <tr>
-                <th className="px-5 py-3">When</th>
-                <th className="px-5 py-3">Business</th>
-                <th className="px-5 py-3">Outcome</th>
+                <th className="px-4 py-3 sm:px-5">When</th>
+                <th className="px-4 py-3 sm:px-5">Business</th>
+                <th className="px-4 py-3 sm:px-5">Outcome</th>
               </tr>
             </thead>
             <tbody>
@@ -454,11 +534,20 @@ function RecentCallsCard({ isLoading, leads, tz, now, onOpenLead }) {
                   onClick={() => onOpenLead(lead)}
                   className="cursor-pointer border-t border-line font-sans text-sm hover:bg-surface"
                 >
-                  <td className="px-5 py-4 font-mono text-fg-primary [font-variant-numeric:tabular-nums]">
-                    {fmtWhen(lead.strategy_call_at, tz)}
+                  {/* Prompt 645 — day over time, so the date can't wrap to
+                      five lines at phone width. */}
+                  <td className="whitespace-nowrap px-4 py-4 font-mono text-fg-primary [font-variant-numeric:tabular-nums] sm:px-5">
+                    {new Date(lead.strategy_call_at).toLocaleDateString('en-US', {
+                      timeZone: tz, weekday: 'short', month: 'short', day: 'numeric',
+                    })}
+                    <span className="block text-xs text-fg-secondary">
+                      {new Date(lead.strategy_call_at).toLocaleTimeString('en-US', {
+                        timeZone: tz, hour: 'numeric', minute: '2-digit',
+                      })}
+                    </span>
                   </td>
-                  <td className="px-5 py-4 font-medium text-fg-primary">{lead.facility_name}</td>
-                  <td className="px-5 py-4">
+                  <td className="px-4 py-4 font-medium text-fg-primary sm:px-5">{lead.facility_name}</td>
+                  <td className="whitespace-nowrap px-4 py-4 sm:px-5">
                     <OutcomeBadge outcome={displayOutcome(lead)} />
                   </td>
                 </tr>
@@ -484,11 +573,11 @@ const SOON_ITEMS = [
 
 function SoonCard() {
   return (
-    <div className="rounded-card border border-line bg-elevated p-6">
-      <p className="font-sans text-sm font-semibold text-fg-primary">Coming to the Meeting Room</p>
-      <div className="mt-4 divide-y divide-line overflow-hidden rounded-lg border border-line">
+    <div>
+      <SectionHeading title="Coming to the Meeting Room" />
+      <div className="mt-3 divide-y divide-line overflow-hidden rounded-card border border-line bg-elevated">
         {SOON_ITEMS.map((item) => (
-          <div key={item.title} className="bg-surface px-4 py-3">
+          <div key={item.title} className="px-5 py-4">
             <p className="flex items-center gap-2 font-sans text-sm font-medium text-fg-faint">
               {item.title}
               <SoonBadge />
@@ -508,23 +597,23 @@ function SoonCard() {
 function MeetingRoomBody({ profile, onOpenLead, onJoin }) {
   const { leads, isLoading, tz, todaysCalls, upcomingCalls, now } = useStrategyCalls(profile)
 
+  // Prompt 645 — clock row removed; hero (status + room check) with the
+  // stat strip tucked under it, then one consistent 40px rhythm between
+  // sections, each introduced by the same heading style.
   return (
     <div>
-      <div className="flex justify-end">
-        <DateClockRow timezone={tz} />
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <MeetingStatusCard tz={tz} now={now} todaysCalls={todaysCalls} upcomingCalls={upcomingCalls} onJoin={onJoin} />
-          <div className="mt-5">
-            <RoomStats isLoading={isLoading} leads={leads} tz={tz} now={now} todaysCalls={todaysCalls} />
-          </div>
         </div>
         <RoomCheckCard profile={profile} />
       </div>
 
-      <div className="mt-8">
+      <div className="mt-5">
+        <RoomStats isLoading={isLoading} leads={leads} tz={tz} now={now} todaysCalls={todaysCalls} />
+      </div>
+
+      <div className="mt-10">
         <CallPrepCard
           isLoading={isLoading}
           tz={tz}
@@ -535,7 +624,8 @@ function MeetingRoomBody({ profile, onOpenLead, onJoin }) {
         />
       </div>
 
-      <div className="mt-8">
+      {/* CallsCard (unchanged since 636) carries its own mt-6: 16 + 24 = the same 40px rhythm. */}
+      <div className="mt-4">
         <CallsCard
           isLoading={isLoading}
           tz={tz}
@@ -547,13 +637,11 @@ function MeetingRoomBody({ profile, onOpenLead, onJoin }) {
         />
       </div>
 
-      <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-3">
+      <div className="mt-10 grid grid-cols-1 gap-10 lg:grid-cols-3 lg:gap-5">
         <div className="lg:col-span-2">
           <RecentCallsCard isLoading={isLoading} leads={leads} tz={tz} now={now} onOpenLead={onOpenLead} />
         </div>
-        <div className="lg:pt-10">
-          <SoonCard />
-        </div>
+        <SoonCard />
       </div>
     </div>
   )
