@@ -64,7 +64,7 @@ function noAnswerTimeLeft(noAnswerAt) {
   return mins >= 60 ? `${Math.floor(mins / 60)}h left` : `${mins}m left`
 }
 
-function Tile({ label, value }) {
+export function Tile({ label, value }) {
   return (
     <div className="rounded-card border border-line bg-elevated p-5">
       <p className="eyebrow">{label}</p>
@@ -77,7 +77,7 @@ function Tile({ label, value }) {
 // page title's own header row (was stacked date-above-time, floating below
 // the title with a visible gap — Prompt 460). Parent components now place
 // this directly beside the "Overview" h1 instead of above the stat grid.
-function DateClockRow({ timezone }) {
+export function DateClockRow({ timezone }) {
   const dateLabel = new Date().toLocaleDateString('en-US', {
     timeZone: timezone, weekday: 'long', month: 'short', day: 'numeric',
   })

@@ -126,7 +126,7 @@ function SettingsSection({ title, description, action, badge, children }) {
   )
 }
 
-function SoonBadge() {
+export function SoonBadge() {
   return (
     <span className="rounded-full border border-line-strong px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-accent-deep">
       Soon
