@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Moon, Sun, SunMoon, Video, CheckCircle2, ShieldCheck } from 'lucide-react'
 import clsx from 'clsx'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
-import { useZoomConnection, useConnectZoom, useDisconnectZoom } from '../hooks/useZoom'
+import { useZoomConnection, useConnectZoom, useDisconnectZoom, useZoomRecordingSetting, useEnableZoomCloudRecording } from '../hooks/useZoom'
 import { Field, inputClass } from '../components/ui/Field'
 import { Button } from '../components/ui/Button'
 import { PillToggle } from '../components/ui/PillToggle'
@@ -728,6 +729,12 @@ function ZoomForm({ profile }) {
           <Button type="button" variant="secondary" onClick={disconnect} disabled={disconnectZoom.isPending}>
             {disconnectZoom.isPending ? 'Disconnecting…' : 'Disconnect'}
           </Button>
+          <CloudRecordingRow
+            closerId={profile.id}
+            connectedAt={connection.connected_at}
+            onReconnect={connect}
+            reconnecting={connectZoom.isPending || waitingForPopup}
+          />
         </div>
       ) : (
         <Button type="button" onClick={connect} disabled={connectZoom.isPending || waitingForPopup}>
@@ -737,6 +744,106 @@ function ZoomForm({ profile }) {
       )}
       {error && <p className="mt-3 font-sans text-sm text-danger">{error}</p>}
     </SettingsSection>
+  )
+}
+
+// Prompt 648 — the closer's own Zoom cloud-recording switch, shown under
+// the connected account. Prompt 647's strategy-call recordings only exist
+// when it's on. Turn-on only: switching it off here would silently stop
+// those recordings, so the "on" state is informational. Every state is
+// what Zoom actually reports (the edge function re-reads after enabling),
+// never an optimistic flip.
+const RECORDING_FAILURE_COPY = {
+  unsupported: "Your Zoom plan doesn't support cloud recording — contact Brayden.",
+  blocked: "Zoom didn't turn cloud recording on — it may be locked off by your Zoom account's admin. Contact Brayden.",
+}
+
+function CloudRecordingRow({ closerId, connectedAt, onReconnect, reconnecting }) {
+  const queryClient = useQueryClient()
+  const { data, isLoading, isError, refetch, isFetching } = useZoomRecordingSetting(closerId, connectedAt)
+  const enable = useEnableZoomCloudRecording()
+  const [failure, setFailure] = useState(null)
+  const [error, setError] = useState('')
+  const state = data?.state
+
+  async function turnOn() {
+    setFailure(null)
+    setError('')
+    try {
+      const result = await enable.mutateAsync()
+      if (result.state === 'unsupported' || result.state === 'blocked') {
+        setFailure(result.state)
+      } else {
+        queryClient.setQueryData(['zoom-recording-setting', closerId, connectedAt], result)
+      }
+    } catch (e) {
+      setError(e.message || "Couldn't reach Zoom — try again.")
+    }
+  }
+
+  let status = null
+  let body = null
+  if (isLoading) {
+    body = <p className="font-sans text-sm text-fg-secondary">Checking Zoom…</p>
+  } else if (isError) {
+    body = (
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="font-sans text-sm text-danger">Couldn't check this setting in Zoom.</p>
+        <Button type="button" variant="secondary" onClick={() => refetch()} disabled={isFetching}>
+          {isFetching ? 'Checking…' : 'Try again'}
+        </Button>
+      </div>
+    )
+  } else if (state === 'on') {
+    status = 'On'
+    body = (
+      <div className="flex items-center gap-2 font-sans text-sm text-success">
+        <CheckCircle2 size={16} />
+        Your strategy calls are recorded automatically.
+      </div>
+    )
+  } else if (state === 'off') {
+    status = 'Off'
+    body = (
+      <div className="space-y-3">
+        <p className="font-sans text-sm text-fg-secondary">Your strategy calls won't be recorded until this is on.</p>
+        <Button type="button" onClick={turnOn} disabled={enable.isPending}>
+          {enable.isPending ? 'Turning on…' : 'Turn on cloud recording'}
+        </Button>
+      </div>
+    )
+  } else if (state === 'needs_reconnect') {
+    status = 'Reconnect needed'
+    body = (
+      <div className="space-y-3">
+        <p className="font-sans text-sm text-fg-secondary">
+          Your Zoom was connected before the portal could manage recording. Reconnect once to give it permission — it only takes a click in Zoom.
+        </p>
+        <Button type="button" onClick={onReconnect} disabled={reconnecting}>
+          <Video size={15} />
+          {reconnecting ? 'Waiting for Zoom…' : 'Reconnect Zoom'}
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-2 border-t border-line pt-4">
+      <div className="mb-2 flex items-center gap-2">
+        <p className="font-sans text-sm font-semibold text-fg-primary">Cloud recording</p>
+        {status && (
+          <span className={clsx(
+            'rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide',
+            status === 'On' ? 'border-success/40 text-success' : 'border-line-strong text-fg-secondary',
+          )}>
+            {status}
+          </span>
+        )}
+      </div>
+      {body}
+      {failure && <p className="mt-3 font-sans text-sm text-danger">{RECORDING_FAILURE_COPY[failure]}</p>}
+      {error && <p className="mt-3 font-sans text-sm text-danger">{error}</p>}
+    </div>
   )
 }
 
