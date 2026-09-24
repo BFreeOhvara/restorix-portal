@@ -10,6 +10,8 @@ import Modal from '../components/ui/Modal'
 import { zonedDateStr, monthOf } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 import { usePageHeader } from '../components/Layout'
+import { SegmentedTabs } from '../components/ui/SegmentedTabs'
+import { SoonBadge } from './Settings'
 
 function fmt(dt) {
   return new Date(dt).toLocaleString(undefined, {
@@ -94,19 +96,53 @@ function RecordingCell({ callId }) {
   )
 }
 
+// Prompt 646 — closer-only Setter/Closer split, same boxed SegmentedTabs
+// variant="grouped" My Pipeline/Setter Activity use. Setter = the dialer
+// calls this page has always listed; Closer = Zoom strategy-call
+// recordings, which aren't captured anywhere yet, so it's an honest Soon
+// state (same SoonBadge as Settings 624 / Meeting Room 644), no fake rows.
+const RECORDING_TABS = [
+  { key: 'setter', label: 'Setter' },
+  { key: 'closer', label: 'Closer' },
+]
+
+function CloserRecordingsSoon() {
+  return (
+    <div className="mt-5 flex h-[736px] items-center justify-center rounded-card border border-line bg-elevated px-8">
+      <div className="max-w-sm text-center">
+        <p className="flex items-center justify-center gap-2 font-sans text-sm font-medium text-fg-faint">
+          Strategy call recordings
+          <SoonBadge />
+        </p>
+        <p className="mt-1.5 font-sans text-xs text-fg-faint">
+          Once Zoom recording is set up, each strategy call you run will show up here with its recording and transcript, attached to the lead. Nothing is being recorded yet.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export default function MyCalls() {
   const { profile } = useAuth()
   const tz = profile?.timezone || DEFAULT_TIMEZONE
   const [date, setDate] = useState(() => zonedDateStr(Date.now(), tz))
   const { data: calls, isLoading } = useMyCallsForDay(date, tz)
   const isAdmin = profile?.role === 'admin'
+  // Prompt 646 — only closers get the tabs; a setter's page and admin's
+  // "My Calls" render exactly as before.
+  const isCloser = profile?.role === 'closer'
+  const [tab, setTab] = useState('setter')
   // Prompt 474 / 561: page heading side of the label swap — setter (474)
   // and closer (561) both read "My Recordings"; only admin keeps "My Calls".
   // Same route/data either way.
   const heading = isAdmin ? 'My Calls' : 'My Recordings'
+  // Prompt 646 — Closer tab gets its own subtitle, same per-tab swap My
+  // Pipeline does; the Setter tab keeps the existing copy.
   usePageHeader({
     title: heading,
-    subtitle: isAdmin ? 'Every call placed through the dashboard, this day' : 'Calls you\'ve placed through the dashboard, this day',
+    subtitle: isAdmin
+      ? 'Every call placed through the dashboard, this day'
+      : tab === 'closer' ? 'Your strategy call recordings' : 'Calls you\'ve placed through the dashboard, this day',
   })
 
   // Prompt 602 — jump-to-date popover next to the day-paginator arrows.
@@ -125,9 +161,20 @@ export default function MyCalls() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [calendarOpen])
 
+  // Prompt 646 — closes the jump-to-date popover so it doesn't reopen on
+  // its own when switching back to Setter.
+  function handleTabChange(key) {
+    setTab(key)
+    setCalendarOpen(false)
+  }
+
   return (
     <div>
-      <div className="flex justify-end">
+      <div className={clsx('flex', isCloser ? 'flex-wrap items-center justify-between gap-3' : 'justify-end')}>
+        {isCloser && (
+          <SegmentedTabs tabs={RECORDING_TABS} active={tab} onChange={handleTabChange} variant="grouped" />
+        )}
+        {tab === 'setter' && (
         <div ref={calendarRef} className="relative">
           <DayPaginator
             date={date}
@@ -149,8 +196,14 @@ export default function MyCalls() {
             </div>
           )}
         </div>
+        )}
       </div>
 
+      {/* Prompt 646 — the tabs row is 42px vs the paginator's 38px, so the
+          closer's top margin drops 24px→20px (here and in
+          CloserRecordingsSoon) to keep total page height, and 605's
+          no-page-scroll fit, unchanged. */}
+      {tab === 'closer' ? <CloserRecordingsSoon /> : (<>
       {/* Own scroll region, same treatment as Overview's lead table
           (Prompt 440). Prompt 602 — box quantized to the sticky header's
           own height (~43px) plus a whole number of rows, so the box's
@@ -173,7 +226,7 @@ export default function MyCalls() {
           the local checkout has no `.env.local`, so the dev server
           can't authenticate — flagged for Brayden rather than guessing
           at numbers. */}
-      <div className="mt-6 h-[736px] overflow-hidden rounded-card border border-line bg-elevated">
+      <div className={clsx(isCloser ? 'mt-5' : 'mt-6', 'h-[736px] overflow-hidden rounded-card border border-line bg-elevated')}>
         <div className="h-full overflow-y-auto">
           <table className={clsx('w-full text-left', calls?.length > 0 && 'border-b border-line')}>
             <thead className="eyebrow sticky top-0 z-10 bg-surface">
@@ -225,6 +278,7 @@ export default function MyCalls() {
           </table>
         </div>
       </div>
+      </>)}
     </div>
   )
 }
