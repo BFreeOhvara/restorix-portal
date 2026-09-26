@@ -68,7 +68,7 @@ export function AuthProvider({ children }) {
     if (session?.user?.id) await fetchProfile(session.user.id)
   }
 
-  const loading = session === undefined || profileLoading
+  const loading = session === undefined || (profileLoading && !profile)
 
   return (
     <AuthContext.Provider value={{ session, profile, signIn, signOut, refreshProfile, loading }}>
