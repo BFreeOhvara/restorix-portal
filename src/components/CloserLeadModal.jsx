@@ -7,18 +7,20 @@ import { Button } from './ui/Button'
 import { LogOutcomeForm } from './LogOutcomeModal'
 import { ConfirmedStackSummary } from './ConfirmedStackSummary'
 import { SurveyBody } from '../pages/Survey'
-import { useRescheduleLead, useSaveSurveyStack } from '../hooks/useLeads'
+import { useReopenLead, useRescheduleLead, useSaveSurveyStack } from '../hooks/useLeads'
 import { useConfirmDeal, useDealForLead } from '../hooks/useDeals'
-import { displayOutcome } from '../lib/closerOutcome'
-
-const BASE_TABS = [
-  { key: 'outcome', label: 'Log Outcome' },
-  { key: 'survey', label: 'Closer Survey' },
-]
+import { displayOutcome, tabsForStatus } from '../lib/closerOutcome'
+import OutcomeBadge from './ui/OutcomeBadge'
 
 function toLocalInputValue(d) {
   const pad = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function fmtDateTime(dt) {
+  return new Date(dt).toLocaleString(undefined, {
+    month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+  })
 }
 
 // Prompt 540 — sets a new strategy_call_at on a Pending/No Show lead. Once
@@ -57,6 +59,72 @@ function RescheduleForm({ lead, onClose }) {
         </Button>
       </div>
     </form>
+  )
+}
+
+// Prompt 658 — a Lost lead's dedicated view: no action tabs pretending
+// it's still an active deal (Log Outcome/Survey/Reschedule/Client Portal
+// all assume the lead is still moving forward), just what happened and one
+// deliberate way back in. Reopen always asks for a fresh call time rather
+// than being a same-row status flip — the old strategy_call_at is what let
+// this lead go stale in the first place, so silently restoring it would
+// just recreate the same problem.
+function LostHistory({ lead, onClose }) {
+  const [reopening, setReopening] = useState(false)
+  const [when, setWhen] = useState(() => toLocalInputValue(new Date()))
+  const reopenLead = useReopenLead()
+
+  async function handleReopen(e) {
+    e.preventDefault()
+    await reopenLead.mutateAsync({ id: lead.id, strategy_call_at: new Date(when).toISOString() })
+    onClose()
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <OutcomeBadge outcome="lost" />
+        {lead.closer_outcome_at && (
+          <span className="font-sans text-xs text-fg-secondary">
+            Marked Lost on {fmtDateTime(lead.closer_outcome_at)}
+          </span>
+        )}
+      </div>
+
+      <Field label="Notes">
+        <p className="whitespace-pre-wrap rounded-lg border border-line bg-surface px-4 py-3 font-sans text-sm text-fg-primary">
+          {lead.closer_notes || 'No notes were left.'}
+        </p>
+      </Field>
+
+      {!reopening ? (
+        <div className="flex justify-end border-t border-line pt-4">
+          <Button type="button" variant="secondary" onClick={() => setReopening(true)}>
+            Reopen
+          </Button>
+        </div>
+      ) : (
+        <form onSubmit={handleReopen} className="space-y-4 border-t border-line pt-4">
+          <Field label="New strategy call date & time">
+            <input
+              type="datetime-local"
+              className={inputClass()}
+              value={when}
+              onChange={(e) => setWhen(e.target.value)}
+              required
+            />
+          </Field>
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="ghost" onClick={() => setReopening(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={reopenLead.isPending}>
+              {reopenLead.isPending ? 'Reopening…' : 'Reopen lead'}
+            </Button>
+          </div>
+        </form>
+      )}
+    </div>
   )
 }
 
@@ -169,13 +237,22 @@ function ClientPortalForm({ lead, frontRunner, subAgents }) {
 // precedence is gone entirely: reaching the survey's summary step (this
 // session or a past one) is the only way this Stack is ever set, and it
 // simply overwrites whatever was there before.
+// Prompt 658 — the tab/action set is now gated on the lead's actual status,
+// not shown uniformly: Pending/No Show only get Log Outcome + Reschedule
+// (Closer Survey and Client Portal both assume a call already happened or
+// a deal already closed, neither of which is true yet); Closed only gets
+// Closer Survey + Client Portal (there's no more strategy call left to
+// reschedule, and Log Outcome's job — deciding Lost vs. Closed — is already
+// done); Lost drops every action tab in favor of `LostHistory` (its own
+// read-then-Reopen view, not a same-row status flip). Only Pending/No Show
+// and Closed still use a real tab bar — Lost renders as one single view.
 export default function CloserLeadModal({ lead, onClose }) {
-  const canReschedule = ['pending', 'no_show'].includes(displayOutcome(lead))
-  const existingDeal = useDealForLead(lead.id)
+  const status = displayOutcome(lead)
+  const isPendingOrNoShow = status === 'pending' || status === 'no_show'
+  const isLost = status === 'lost'
+  const isClosedStatus = status === 'closed'
   const saveSurveyStack = useSaveSurveyStack()
-  const [tab, setTab] = useState(
-    lead.closer_outcome === 'closed' && !existingDeal.data ? 'client_portal' : 'outcome'
-  )
+  const [tab, setTab] = useState(isClosedStatus ? 'client_portal' : 'outcome')
   const [frontRunner, setFrontRunner] = useState(lead.survey_front_runner || '')
   const [subAgents, setSubAgents] = useState(() => new Set(lead.survey_sub_agents || []))
   // Prompt 614 — same "lift to local state" precedent as frontRunner/
@@ -207,34 +284,33 @@ export default function CloserLeadModal({ lead, onClose }) {
     [lead.id, saveSurveyStack]
   )
 
-  const tabs = [
-    ...BASE_TABS,
-    ...(canReschedule ? [{ key: 'reschedule', label: 'Reschedule' }] : []),
-    { key: 'client_portal', label: 'Client Portal' },
-  ]
+  const tabs = tabsForStatus(status)
 
   return (
     <Modal title={lead.facility_name} onClose={onClose} width="max-w-2xl">
-      <div className="flex flex-wrap gap-2 border-b border-line pb-4">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className={clsx(
-              'eyebrow rounded-full px-4 py-2 transition-colors',
-              tab === t.key
-                ? 'bg-accent !text-white'
-                : 'bg-surface !text-fg-secondary hover:!text-fg-primary'
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {tabs.length > 0 && (
+        <div className="flex flex-wrap gap-2 border-b border-line pb-4">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              className={clsx(
+                'eyebrow rounded-full px-4 py-2 transition-colors',
+                tab === t.key
+                  ? 'bg-accent !text-white'
+                  : 'bg-surface !text-fg-secondary hover:!text-fg-primary'
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
-      <div className="mt-5 max-h-[70vh] overflow-y-auto pr-1">
-        {tab === 'outcome' && (
+      <div className={clsx('max-h-[70vh] overflow-y-auto pr-1', tabs.length > 0 && 'mt-5')}>
+        {isLost && <LostHistory lead={lead} onClose={onClose} />}
+        {isPendingOrNoShow && tab === 'outcome' && (
           <LogOutcomeForm
             lead={lead}
             onClose={onClose}
@@ -244,9 +320,9 @@ export default function CloserLeadModal({ lead, onClose }) {
             admissionValue={admissionValue}
           />
         )}
-        {tab === 'survey' && <SurveyBody onResults={handleSurveyResults} />}
-        {tab === 'reschedule' && <RescheduleForm lead={lead} onClose={onClose} />}
-        {tab === 'client_portal' && (
+        {isPendingOrNoShow && tab === 'reschedule' && <RescheduleForm lead={lead} onClose={onClose} />}
+        {isClosedStatus && tab === 'survey' && <SurveyBody onResults={handleSurveyResults} />}
+        {isClosedStatus && tab === 'client_portal' && (
           <ClientPortalForm lead={lead} frontRunner={frontRunner} subAgents={subAgents} />
         )}
       </div>

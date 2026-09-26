@@ -12,7 +12,14 @@ import { priceForSurveyValue } from '../lib/agentCatalog'
 // action (CloserLeadModal's own tab) replaces what this button used to
 // stand in for. Was at 0 leads in production at retirement time, so
 // nothing to migrate.
-const OUTCOMES = ['pending', 'lost', 'closed']
+// Prompt 658 — 'pending' dropped too: CloserLeadModal only ever mounts this
+// form while the lead's own status is already Pending/No Show, so
+// "Pending" isn't a real outcome to pick, it's the status quo. Lost and
+// Closed are the only two things that actually happen next, and they're no
+// longer offered as free-swappable peers once a lead is Lost or Closed —
+// this form simply doesn't render for those statuses anymore (see
+// CloserLeadModal's tab gating).
+const OUTCOMES = ['lost', 'closed']
 
 // Prompt 464 — same interaction shape as setters' LogCallModal (pick an
 // outcome, optional notes, Save), for the deal-outcome tracking closers
@@ -66,7 +73,7 @@ export function LogOutcomeForm({ lead, onClose, frontRunner, subAgents = new Set
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <Field label="Outcome">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {OUTCOMES.map((o) => (
             <button
               type="button"

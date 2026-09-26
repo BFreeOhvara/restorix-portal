@@ -612,6 +612,30 @@ export function useRescheduleLead() {
   })
 }
 
+// Prompt 658 — Reopen is a Lost lead's one deliberate way back in (its own
+// action in CloserLeadModal's history view, not a same-row status flip).
+// Unlike useRescheduleLead (only ever offered on a lead that's already
+// displaying as Pending/No Show, so closer_outcome is already 'pending'
+// underneath), this one also has to clear the stored 'lost' outcome itself
+// — a fresh strategy_call_at alone wouldn't be enough, since displayOutcome()
+// only derives No Show off of 'pending', never off of 'lost'.
+export function useReopenLead() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, strategy_call_at }) => {
+      const { error } = await supabase
+        .from('leads')
+        .update({ closer_outcome: 'pending', strategy_call_at })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-booked'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-closer-leads'] })
+    },
+  })
+}
+
 // Admin-only pipeline health: pool size, no-answer cooldown, follow-ups due.
 // Prompt 458: "follow-ups due" used to compare against
 // `new Date().setHours(23,59,59,999)` — the admin's own browser clock, not

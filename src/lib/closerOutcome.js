@@ -22,6 +22,31 @@ export function displayOutcome(lead) {
   return isNoShow(lead) ? 'no_show' : (lead.closer_outcome || 'pending')
 }
 
+// Prompt 658 — CloserLeadModal's tab/action set, keyed off displayOutcome()
+// rather than shown uniformly: Pending/No Show only get Log Outcome +
+// Reschedule (Closer Survey and Client Portal both assume a call already
+// happened or a deal already closed, neither of which is true yet); Closed
+// only gets Closer Survey + Client Portal (no more strategy call to
+// reschedule, and Log Outcome's own job is already done); Lost gets no
+// action tabs at all — CloserLeadModal renders its own LostHistory view
+// instead. Pulled out as its own pure function (not left inline in the
+// component) so this exact mapping is unit-testable without mounting React.
+export function tabsForStatus(status) {
+  if (status === 'pending' || status === 'no_show') {
+    return [
+      { key: 'outcome', label: 'Log Outcome' },
+      { key: 'reschedule', label: 'Reschedule' },
+    ]
+  }
+  if (status === 'closed') {
+    return [
+      { key: 'survey', label: 'Closer Survey' },
+      { key: 'client_portal', label: 'Client Portal' },
+    ]
+  }
+  return [] // lost
+}
+
 // A no-show that's sat 7+ days past its missed appointment time with no
 // reschedule becomes genuinely, durably Lost — not just a display
 // computation, since Lost feeds real reporting (Commissions, pipeline
