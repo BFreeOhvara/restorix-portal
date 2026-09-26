@@ -240,7 +240,14 @@ export default function MyCalls() {
   // Prompt 646 — only closers get the tabs; a setter's page and admin's
   // "My Calls" render exactly as before.
   const isCloser = profile?.role === 'closer'
+  // Prompt 657 — a closer who's flipped "I also set" off doesn't self-dial,
+  // so the Setter tab (their dialer call history) is dead weight: no tab
+  // bar at all, always the Closer (strategy-call recordings) content.
+  // Undefined defaults to true (every existing closer's row).
+  const isSetter = profile?.is_setter !== false
+  const showRecordingTabs = isCloser && isSetter
   const [tab, setTab] = useState('setter')
+  const effectiveTab = isCloser && !isSetter ? 'closer' : tab
   // Prompt 653 — Meeting Room's Recordings card links here with
   // ?tab=closer (a closer just recorded a call, or wants their most recent
   // one) so it lands on the right tab instead of always defaulting to
@@ -259,7 +266,7 @@ export default function MyCalls() {
     title: heading,
     subtitle: isAdmin
       ? 'Every call placed through the dashboard, this day'
-      : tab === 'closer' ? 'Your strategy call recordings' : 'Calls you\'ve placed through the dashboard, this day',
+      : effectiveTab === 'closer' ? 'Your strategy call recordings' : 'Calls you\'ve placed through the dashboard, this day',
   })
 
   // Prompt 602 — jump-to-date popover next to the day-paginator arrows.
@@ -287,11 +294,15 @@ export default function MyCalls() {
 
   return (
     <div>
-      <div className={clsx('flex', isCloser ? 'flex-wrap items-center justify-between gap-3' : 'justify-end')}>
-        {isCloser && (
+      {/* Prompt 657 — a closer with "I also set" off never sees the Setter
+          tab or its date paginator, so this row is skipped entirely rather
+          than rendering empty. */}
+      {(showRecordingTabs || effectiveTab === 'setter') && (
+      <div className={clsx('flex', showRecordingTabs ? 'flex-wrap items-center justify-between gap-3' : 'justify-end')}>
+        {showRecordingTabs && (
           <SegmentedTabs tabs={RECORDING_TABS} active={tab} onChange={handleTabChange} variant="grouped" />
         )}
-        {tab === 'setter' && (
+        {effectiveTab === 'setter' && (
         <div ref={calendarRef} className="relative">
           <DayPaginator
             date={date}
@@ -315,12 +326,13 @@ export default function MyCalls() {
         </div>
         )}
       </div>
+      )}
 
       {/* Prompt 646 — the tabs row is 42px vs the paginator's 38px, so the
           closer's top margin drops 24px→20px (here and in
           CloserRecordingsSoon) to keep total page height, and 605's
           no-page-scroll fit, unchanged. */}
-      {tab === 'closer' ? <CloserRecordings /> : (<>
+      {effectiveTab === 'closer' ? <CloserRecordings /> : (<>
       {/* Own scroll region, same treatment as Overview's lead table
           (Prompt 440). Prompt 602 — box quantized to the sticky header's
           own height (~43px) plus a whole number of rows, so the box's

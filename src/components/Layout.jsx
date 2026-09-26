@@ -65,7 +65,11 @@ const NAV_GROUPS = [
       // (outcome tracking, same content shape as Overview already has for
       // closers — confirmed with Brayden as a separate addition, not a
       // replacement). Closer-only.
-      { to: '/my-leads', label: 'My Leads', icon: UserPlus, roles: ['closer'] },
+      // Prompt 657 — setter-facing, so a closer who's flipped "I also set"
+      // off in Settings shouldn't see it. `hideIfNotSetter` is a new,
+      // narrowly-scoped filter flag checked below alongside `roles` — no
+      // other item uses it.
+      { to: '/my-leads', label: 'My Leads', icon: UserPlus, roles: ['closer'], hideIfNotSetter: true },
       { to: '/my-pipeline', label: 'My Pipeline', icon: GitBranch, roles: ['closer'] },
       // Prompt 615 — first piece of Phase 2 ("bring the call into the
       // portal"): one destination for a closer's Personal Meeting Room +
@@ -458,7 +462,13 @@ export default function Layout() {
             labels, or the divider under the logo at all. */}
         <nav className="space-y-4 px-3 pt-2">
           {navGroups.map(({ label: groupLabel, items }) => {
-            const visible = items.filter((l) => l.roles.includes(profile?.role))
+            // Prompt 657 — `hideIfNotSetter` items (currently just My Leads)
+            // also require the closer's own `is_setter` toggle to be on.
+            // Undefined defaults to true (every existing closer's row) so
+            // this only changes behavior once a closer explicitly flips it.
+            const visible = items.filter(
+              (l) => l.roles.includes(profile?.role) && !(l.hideIfNotSetter && profile?.is_setter === false)
+            )
             if (visible.length === 0) return null
             return (
               <div key={groupLabel}>

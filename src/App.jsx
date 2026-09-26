@@ -72,9 +72,13 @@ function Gate({ children }) {
   return children
 }
 
-function RoleRoute({ roles, children }) {
+function RoleRoute({ roles, children, denyIf }) {
   const { profile } = useAuth()
   if (!roles.includes(profile.role)) return <Navigate to="/" replace />
+  // Prompt 657 — optional extra guard beyond role, e.g. My Leads redirecting
+  // a closer who's flipped "I also set" off back to Home even though their
+  // role alone would otherwise let them through.
+  if (denyIf && denyIf(profile)) return <Navigate to="/" replace />
   return children
 }
 
@@ -228,7 +232,7 @@ export default function App() {
                       <Route
                         path="/my-leads"
                         element={
-                          <RoleRoute roles={['closer']}>
+                          <RoleRoute roles={['closer']} denyIf={(p) => p.is_setter === false}>
                             <MyLeads />
                           </RoleRoute>
                         }

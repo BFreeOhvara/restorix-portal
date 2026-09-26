@@ -141,7 +141,42 @@ function ProfilePanel({ profile }) {
     <div className="space-y-5">
       <BasicInfoCard profile={profile} />
       <AccountCard profile={profile} />
+      <SetterToggleCard profile={profile} />
     </div>
+  )
+}
+
+// Prompt 657 — self-service toggle for closer accounts evaluating a future
+// where they aren't also setters (e.g. an AI outbound bot replaces human
+// setters). Off hides My Leads, the Setter tab on My Pipeline/My Recordings,
+// and Training's setter script — display-only, no data touched, and the
+// closer can flip it back on any time. Same self-service RPC pattern as
+// update_own_phone/update_own_timezone (profiles has no self-UPDATE RLS
+// policy).
+function SetterToggleCard({ profile }) {
+  const { refreshProfile } = useAuth()
+  const [isSetter, setIsSetter] = useState(profile.is_setter !== false)
+  const [saving, setSaving] = useState(false)
+
+  async function onChange(value) {
+    setIsSetter(value)
+    setSaving(true)
+    const { error } = await supabase.rpc('update_own_is_setter', { p_is_setter: value })
+    setSaving(false)
+    if (error) { setIsSetter(!value); return }
+    await refreshProfile()
+  }
+
+  return (
+    <SettingsSection
+      title="Setter work"
+      description="Turn this off if you don't work leads as a setter — hides My Leads, the Setter tab on My Pipeline and My Recordings, and the setter script in Training. Flip it back on anytime."
+    >
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-line bg-surface px-4 py-3.5">
+        <p className="font-sans text-sm font-medium text-fg-primary">I also work leads as a setter</p>
+        <Switch checked={isSetter} onChange={onChange} disabled={saving} label="I also work leads as a setter" />
+      </div>
+    </SettingsSection>
   )
 }
 

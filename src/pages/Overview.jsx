@@ -586,6 +586,12 @@ const MY_PIPELINE_TABS = [
 export function CloserPipeline({ profile, title = 'My Pipeline' }) {
   const brand = useBrand()
   const [view, setView] = useState('closer')
+  // Prompt 657 — a closer who's flipped "I also set" off in Settings
+  // doesn't self-dial, so the Setter tab (My Leads' working pool) is dead
+  // weight for them: no tab bar at all, always the Closer content.
+  // Undefined defaults to true (every existing closer's row).
+  const isSetter = profile?.is_setter !== false
+  const effectiveView = isSetter ? view : 'closer'
 
   // Prompt 590 — Brayden dropped the live count (558/589's subtitle): the
   // Closer tab's "N booked leads" was wrong since that count included
@@ -594,7 +600,7 @@ export function CloserPipeline({ profile, title = 'My Pipeline' }) {
   // "Your whole book of business" style. Exact copy is a judgment call
   // (not specified beyond "no number, more like what the page really is")
   // — flag for Brayden to tweak if it's not quite right.
-  const subtitle = view === 'closer' ? 'Your appointment outcomes' : 'Your working lead pool'
+  const subtitle = effectiveView === 'closer' ? 'Your appointment outcomes' : 'Your working lead pool'
 
   // Prompt 589 — title/subtitle now render in Layout's header bar instead
   // of this page's own body; re-registers whenever the subtitle's wording
@@ -612,12 +618,14 @@ export function CloserPipeline({ profile, title = 'My Pipeline' }) {
           Setter = leads this closer personally dials via My Leads, i.e.
           SetterOverview scoped to their own id. Empty Setter tab for a
           closer who never self-dials. No Unassigned — admin-only concept. */}
-      <div className="mt-4">
-        <SegmentedTabs tabs={MY_PIPELINE_TABS} active={view} onChange={setView} variant="grouped" />
-      </div>
+      {isSetter && (
+        <div className="mt-4">
+          <SegmentedTabs tabs={MY_PIPELINE_TABS} active={view} onChange={setView} variant="grouped" />
+        </div>
+      )}
 
-      <div className="mt-6">
-        {view === 'closer' ? (
+      <div className={isSetter ? 'mt-6' : 'mt-4'}>
+        {effectiveView === 'closer' ? (
           <CloserBookedPipeline profile={profile} />
         ) : (
           <SetterOverview profile={profile} niche={brand.niche} embedded />

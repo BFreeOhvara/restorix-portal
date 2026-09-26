@@ -5,6 +5,7 @@ import { PillToggle } from '../components/ui/PillToggle'
 import { usePageHeader } from '../components/Layout'
 import { SurveyBody } from './Survey'
 import { useBrand } from '../hooks/useBrand'
+import { useAuth } from '../hooks/useAuth'
 import Modal from '../components/ui/Modal'
 
 // Plain-text content area — Brayden edits SCRIPT_SECTIONS directly to update
@@ -249,6 +250,13 @@ export default function Training() {
   const [tab, setTab] = useState('script')
   const [scriptRole, setScriptRole] = useState('closer')
   const { niche } = useBrand()
+  const { profile } = useAuth()
+  // Prompt 657 — a closer who's flipped "I also set" off in Settings never
+  // reads off the setter cold-call script, so the Closer/Setter toggle here
+  // is dead weight for them: closer content only, no toggle bar. Undefined
+  // defaults to true (every existing closer's row); non-closer roles
+  // (setter, admin) are untouched.
+  const hideSetterScript = profile?.role === 'closer' && profile?.is_setter === false
   usePageHeader({ title: 'Training', subtitle: 'Reference materials for the team' })
 
   return (
@@ -260,12 +268,14 @@ export default function Training() {
       <div className="mt-6">
         {tab === 'script' && (
           <div>
-            <div className="flex">
-              <PillToggle options={SCRIPT_ROLE_TABS} active={scriptRole} onChange={setScriptRole} />
-            </div>
+            {!hideSetterScript && (
+              <div className="flex">
+                <PillToggle options={SCRIPT_ROLE_TABS} active={scriptRole} onChange={setScriptRole} />
+              </div>
+            )}
             <div className="mt-6">
-              {scriptRole === 'closer' && <SurveyBody niche={niche} hidePageHeader />}
-              {scriptRole === 'setter' && <ScriptTab />}
+              {(hideSetterScript || scriptRole === 'closer') && <SurveyBody niche={niche} hidePageHeader />}
+              {!hideSetterScript && scriptRole === 'setter' && <ScriptTab />}
             </div>
           </div>
         )}
