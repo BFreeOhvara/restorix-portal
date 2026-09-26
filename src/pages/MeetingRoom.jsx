@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import clsx from 'clsx'
 import { Video, CheckCircle2, Circle, ArrowRight } from 'lucide-react'
@@ -16,6 +17,8 @@ import { formatPhone } from '../lib/phone'
 import { zonedDateStr, zonedDayRange } from '../lib/dates'
 import CloserLeadModal from '../components/CloserLeadModal'
 import ZoomCallModal from '../components/ZoomCallModal'
+import { RecordingIndicator, RecordingSaveBanner } from '../components/CallRecordingStatus'
+import { startCallRecording } from '../lib/callRecorder'
 
 // Prompt 615 — first piece of Phase 2 ("bring the call into the portal"):
 // one destination for quick-join links into a closer's booked Strategy
@@ -61,7 +64,7 @@ function MeetingStatusCard({ tz, now, todaysCalls, upcomingCalls, onJoin }) {
         detail={`${joinable.facility_name} · ${when}`}
         hint="The room is open. The call runs right here in the portal."
         onJoin={() =>
-          onJoin({ meetingNumber: joinable.zoom_meeting_id, password: joinable.zoom_meeting_password })
+          onJoin({ leadId: joinable.id, meetingNumber: joinable.zoom_meeting_id, password: joinable.zoom_meeting_password })
         }
       />
     )
@@ -195,7 +198,7 @@ function CallsCard({ isLoading, tz, now, todaysCalls, upcomingCalls, onOpenLead,
                   tz={tz}
                   now={now}
                   onOpen={() => onOpenLead(lead)}
-                  onEmbedJoin={() => onJoin({ meetingNumber: lead.zoom_meeting_id, password: lead.zoom_meeting_password })}
+                  onEmbedJoin={() => onJoin({ leadId: lead.id, meetingNumber: lead.zoom_meeting_id, password: lead.zoom_meeting_password })}
                 />
               ))}
               {todaysCalls.length > 0 && upcomingCalls.length > 0 && (
@@ -213,7 +216,7 @@ function CallsCard({ isLoading, tz, now, todaysCalls, upcomingCalls, onOpenLead,
                   now={now}
                   onOpen={() => onOpenLead(lead)}
                   showDate
-                  onEmbedJoin={() => onJoin({ meetingNumber: lead.zoom_meeting_id, password: lead.zoom_meeting_password })}
+                  onEmbedJoin={() => onJoin({ leadId: lead.id, meetingNumber: lead.zoom_meeting_id, password: lead.zoom_meeting_password })}
                 />
               ))}
             </tbody>
@@ -651,20 +654,72 @@ export default function MeetingRoom() {
   const { profile } = useAuth()
   usePageHeader({ title: 'Meeting Room', subtitle: 'Join a call without leaving the app.' })
   const [activeLead, setActiveLead] = useState(null)
-  const [activeCall, setActiveCall] = useState(null) // { meetingNumber, password } | null
+  const [activeCall, setActiveCall] = useState(null) // { leadId, meetingNumber, password } | null
+  // Prompt 649 — tab-capture recording of the call, started from the Join
+  // click itself (the browser only allows the share prompt during a user
+  // gesture) and stopped when the call modal closes.
+  const recorderRef = useRef(null)
+  const joinedRef = useRef(false)
+  const [recording, setRecording] = useState(null)
+  const queryClient = useQueryClient()
 
   if (!profile) return null
 
+  function joinCall(call) {
+    joinedRef.current = false
+    // Token, not the recorder itself: onChange fires synchronously inside
+    // startCallRecording, before its return value exists.
+    const token = {}
+    recorderRef.current = token
+    const recorder = startCallRecording({
+      leadId: call.leadId,
+      closerId: profile.id,
+      meetingNumber: call.meetingNumber,
+      onChange: (next) => {
+        // In-call states only matter for the call still open; the upload
+        // outcome is shown whenever it lands.
+        const live = recorderRef.current === token || recorderRef.current?.token === token
+        if (!live && next.phase !== 'saving' && next.phase !== 'saved' && next.phase !== 'save_failed') return
+        setRecording(next)
+        if (next.phase === 'saved' || next.phase === 'save_failed') {
+          queryClient.invalidateQueries({ queryKey: ['zoom_recordings'] })
+        }
+      },
+    })
+    recorder.token = token
+    recorderRef.current = recorder
+    setActiveCall(call)
+  }
+
+  function handleCallStatus(status) {
+    if (status === 'joined') {
+      joinedRef.current = true
+      recorderRef.current?.markJoined()
+    }
+  }
+
+  function closeCall() {
+    const recorder = recorderRef.current
+    recorderRef.current = null
+    // Only the upload banner outlives the modal; in-call states clear.
+    setRecording(null)
+    recorder?.stop({ keepIt: joinedRef.current })
+    setActiveCall(null)
+  }
+
   return (
     <div>
-      <MeetingRoomBody profile={profile} onOpenLead={setActiveLead} onJoin={setActiveCall} />
+      <RecordingSaveBanner state={recording} onDismiss={() => setRecording(null)} />
+      <MeetingRoomBody profile={profile} onOpenLead={setActiveLead} onJoin={joinCall} />
       {activeLead && <CloserLeadModal lead={activeLead} onClose={() => setActiveLead(null)} />}
       {activeCall && (
         <ZoomCallModal
           meetingNumber={activeCall.meetingNumber}
           password={activeCall.password}
           displayName={profile.full_name || profile.username}
-          onClose={() => setActiveCall(null)}
+          onClose={closeCall}
+          onStatusChange={handleCallStatus}
+          recordingIndicator={<RecordingIndicator state={recording} />}
         />
       )}
     </div>

@@ -11,7 +11,6 @@ import { zonedDateStr, monthOf } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 import { usePageHeader } from '../components/Layout'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
-import { SoonBadge } from './Settings'
 
 function fmt(dt) {
   return new Date(dt).toLocaleString(undefined, {
@@ -101,6 +100,9 @@ function RecordingCell({ callId }) {
 // calls this page has always listed; Closer = Zoom strategy-call
 // recordings (Prompt 647: real rows from zoom_recordings once
 // zoom-recording-webhook has stored any; honest Soon state until then).
+// Prompt 649: the rows now come from the closer's own browser tab
+// (lib/callRecorder) — recording is live, so the empty state is just
+// "none yet", no Soon badge.
 const RECORDING_TABS = [
   { key: 'setter', label: 'Setter' },
   { key: 'closer', label: 'Closer' },
@@ -110,12 +112,9 @@ function CloserRecordingsSoon() {
   return (
     <div className="mt-5 flex h-[736px] items-center justify-center rounded-card border border-line bg-elevated px-8">
       <div className="max-w-sm text-center">
-        <p className="flex items-center justify-center gap-2 font-sans text-sm font-medium text-fg-faint">
-          Strategy call recordings
-          <SoonBadge />
-        </p>
+        <p className="font-sans text-sm font-medium text-fg-faint">Strategy call recordings</p>
         <p className="mt-1.5 font-sans text-xs text-fg-faint">
-          Each strategy call you run on Zoom will show up here with its recording, attached to the lead, once Zoom finishes processing it. No recordings yet.
+          Each strategy call you run in the Meeting Room is recorded from your browser tab and shows up here, attached to the lead, once the call ends. No recordings yet.
         </p>
       </div>
     </div>
@@ -211,7 +210,11 @@ function CloserRecordings() {
             ) : (
               recordings.map((r) => (
                 <tr key={r.id} className="h-[63px] border-t border-line font-sans text-sm">
-                  <td className="px-5 py-4 font-medium text-fg-primary">{r.leads?.facility_name || '—'}</td>
+                  <td className="px-5 py-4 font-medium text-fg-primary">
+                    {r.leads?.facility_name || '—'}
+                    {/* Prompt 649 — long calls are saved in ~15-minute parts. */}
+                    {r.part_number > 1 && <span className="ml-2 font-normal text-fg-faint">Part {r.part_number}</span>}
+                  </td>
                   <td className="px-5 py-4 text-fg-secondary">{fmt(r.recorded_at || r.created_at)}</td>
                   <td className="px-5 py-4 text-fg-secondary">{fmtDuration(r.duration_seconds)}</td>
                   <td className="px-5 py-4">

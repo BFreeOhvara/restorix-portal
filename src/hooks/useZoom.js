@@ -89,34 +89,3 @@ export function useZoomSdkSignature() {
     },
   })
 }
-
-// Prompt 648 — the closer's own Zoom cloud-recording switch (Prompt 647's
-// recordings only exist if it's on). Resolves to { state } — one of
-// not_connected / needs_reconnect / on / off (see the zoom-recording-setting
-// edge function for the full list). Keyed on connected_at so a reconnect
-// (new token, new scopes) re-reads instead of showing the stale state.
-export function useZoomRecordingSetting(closerId, connectedAt) {
-  return useQuery({
-    queryKey: ['zoom-recording-setting', closerId, connectedAt],
-    queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('zoom-recording-setting', { body: { action: 'get' } })
-      if (error) throw error
-      return data
-    },
-    enabled: !!closerId && !!connectedAt,
-    staleTime: 60 * 1000,
-    retry: false,
-  })
-}
-
-// Asks Zoom to turn cloud recording on, then reports what Zoom actually
-// shows afterwards — on / unsupported / blocked / needs_reconnect.
-export function useEnableZoomCloudRecording() {
-  return useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('zoom-recording-setting', { body: { action: 'enable' } })
-      if (error) throw error
-      return data
-    },
-  })
-}

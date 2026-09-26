@@ -85,7 +85,9 @@ export async function fetchRecordingUrl(callId) {
 }
 
 // Prompt 647 — Zoom cloud recordings of the closer's strategy calls,
-// written by zoom-recording-webhook. RLS scopes this to the caller's own
+// written by zoom-recording-webhook. Prompt 649: in practice written by the
+// closer's own browser (lib/callRecorder, source 'tab_capture') — the Zoom
+// account is Basic, so the webhook never fires. RLS scopes this to the caller's own
 // rows (admin sees all). Not day-scoped: a closer runs a handful of
 // strategy calls, not a dialer's hundred calls a day.
 export function useMyStrategyRecordings({ enabled = true } = {}) {
@@ -95,7 +97,7 @@ export function useMyStrategyRecordings({ enabled = true } = {}) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('zoom_recordings')
-        .select('id, status, duration_seconds, recorded_at, created_at, storage_path, leads(facility_name)')
+        .select('id, status, duration_seconds, recorded_at, created_at, storage_path, part_number, leads(facility_name)')
         .order('recorded_at', { ascending: false, nullsFirst: false })
       if (error) throw error
       return data

@@ -162,9 +162,10 @@ Deno.serve(async (req) => {
       start_time: lead.strategy_call_at,
       duration: 30,
       timezone: 'UTC',
-      // Prompt 647: auto_recording 'cloud' — Zoom records every strategy
-      // call once it starts; zoom-recording-webhook stores the file.
-      settings: { join_before_host: true, waiting_room: false, auto_recording: 'cloud' },
+      // Prompt 649: no auto_recording — the Zoom account is free Basic
+      // (no cloud recording); calls are recorded from the closer's own
+      // browser tab instead (src/lib/callRecorder.js).
+      settings: { join_before_host: true, waiting_room: false },
     }),
   })
   if (!meetingResp.ok) {

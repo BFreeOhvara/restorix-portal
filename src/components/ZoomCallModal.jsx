@@ -20,13 +20,23 @@ function isSdkFailure(result) {
   return result && typeof result === 'object' && 'reason' in result
 }
 
-export default function ZoomCallModal({ meetingNumber, password, displayName, onClose }) {
+// Prompt 649 — two optional, display-only props for the tab-capture
+// recorder that runs alongside the call (the join/leave flow below is
+// untouched): `onStatusChange` reports connecting/joined/ended/error so
+// the recorder knows whether the call really connected, and
+// `recordingIndicator` renders next to the status line.
+export default function ZoomCallModal({ meetingNumber, password, displayName, onClose, onStatusChange, recordingIndicator }) {
   const [status, setStatus] = useState('connecting') // connecting | joined | ended | error
   const [errorMessage, setErrorMessage] = useState('')
   const rootRef = useRef(null)
   const clientRef = useRef(null)
   const embeddedRef = useRef(null)
   const signatureMutation = useZoomSdkSignature()
+
+  useEffect(() => {
+    onStatusChange?.(status)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- report status changes only
+  }, [status])
 
   useEffect(() => {
     let cancelled = false
@@ -131,11 +141,14 @@ export default function ZoomCallModal({ meetingNumber, password, displayName, on
 
   return (
     <Modal title="Meeting Room" onClose={handleClose} width="max-w-4xl">
-      <div className="flex items-center justify-between">
-        <p className="font-sans text-xs text-fg-secondary">{statusLabel}</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <p className="font-sans text-xs text-fg-secondary">{statusLabel}</p>
+          {recordingIndicator}
+        </div>
         {/* Explicit, obvious exit — the SDK takes over most of the modal
             once joined, so the small header X alone isn't enough. */}
-        <Button type="button" variant="secondary" onClick={handleClose}>
+        <Button type="button" variant="secondary" onClick={handleClose} className="shrink-0 whitespace-nowrap">
           Leave Call
         </Button>
       </div>
