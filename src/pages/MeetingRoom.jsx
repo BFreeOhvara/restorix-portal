@@ -2,15 +2,14 @@ import { useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import clsx from 'clsx'
-import { Video, CheckCircle2, Circle, ArrowRight } from 'lucide-react'
+import { Video, CheckCircle2, Circle, ArrowRight, Mic } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useStrategyCalls } from '../hooks/useStrategyCalls'
 import { useZoomConnection } from '../hooks/useZoom'
+import { useMyStrategyRecordings } from '../hooks/useCalls'
 import { Button } from '../components/ui/Button'
-import OutcomeBadge from '../components/ui/OutcomeBadge'
 import { usePageHeader } from '../components/Layout'
 import { StrategyCallRow } from './Overview'
-import { SoonBadge } from './Settings'
 import { AGENT_CATALOG } from '../lib/agentCatalog'
 import { displayOutcome } from '../lib/closerOutcome'
 import { formatPhone } from '../lib/phone'
@@ -231,10 +230,9 @@ function CallsCard({ isLoading, tz, now, todaysCalls, upcomingCalls, onOpenLead,
 // (both untouched). Everything below reads the same useMyBooked `leads`
 // array useStrategyCalls already holds, plus the closer's own Zoom
 // connection row and profile — no new queries against new tables, no new
-// schema. Anything not backed by real data yet is an honest "Soon" card.
+// schema.
 
 const DAY_MS = 24 * 60 * 60 * 1000
-const RECENT_CALLS_LIMIT = 5
 
 function fmtWhen(iso, tz) {
   return new Date(iso).toLocaleString('en-US', {
@@ -489,105 +487,205 @@ function CallPrepCard({ isLoading, tz, now, todaysCalls, upcomingCalls, onOpenLe
   )
 }
 
-// The other end of the call: the closer's most recent past calls with the
-// outcome each one actually has (displayOutcome, so an unlogged past call
-// reads as No Show exactly as it does on Overview/My Pipeline). Clicking a
-// row opens the same lead modal to log or change the outcome.
-function RecentCallsCard({ isLoading, leads, tz, now, onOpenLead }) {
-  const recent = useMemo(
-    () =>
-      (leads || [])
-        .filter((l) => l.strategy_call_at && new Date(l.strategy_call_at).getTime() < now)
-        .sort((a, b) => new Date(b.strategy_call_at) - new Date(a.strategy_call_at))
-        .slice(0, RECENT_CALLS_LIMIT),
-    [leads, now]
-  )
+function fmtRecordedAt(dt) {
+  return new Date(dt).toLocaleString(undefined, {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  })
+}
+
+function fmtRecordingDuration(seconds) {
+  if (seconds == null) return null
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+// Prompt 653 — replaces the "Recordings & transcripts" Soon placeholder
+// with the real thing: 649 already records every Meeting Room call from
+// the closer's own browser tab, so this reads the same zoom_recordings
+// rows My Recordings' Closer tab shows (useMyStrategyRecordings), and
+// surfaces the single most recent one rather than duplicating that
+// page's full table here.
+function RecordingsCard() {
+  const { data: recordings, isLoading } = useMyStrategyRecordings()
+  const latest = recordings?.[0]
+  const count = recordings?.length || 0
 
   return (
-    <div>
-      <SectionHeading
-        title="Recent Calls"
-        action={
-          <Link
-            to="/my-pipeline"
-            className="inline-flex items-center gap-1.5 font-sans text-sm font-semibold text-accent hover:opacity-80"
-          >
-            My Pipeline <ArrowRight size={14} />
-          </Link>
-        }
-      />
-      <div className="mt-3 overflow-hidden rounded-card border border-line bg-elevated">
+    <div className="flex h-full flex-col rounded-card border border-line bg-elevated p-6 sm:p-8">
+      <p className="eyebrow">Recordings</p>
+      <p className="mt-2 font-sans text-sm text-fg-secondary">
+        Strategy calls you join here are recorded from your browser tab.
+      </p>
+      <div className="mt-5 flex-1">
         {isLoading ? (
-          <p className="p-8 text-center font-sans text-sm text-fg-secondary">Loading…</p>
-        ) : !recent.length ? (
-          <p className="p-8 text-center font-sans text-sm text-fg-secondary">No past calls yet.</p>
+          <p className="font-sans text-sm text-fg-secondary">Checking…</p>
+        ) : !latest ? (
+          <p className="font-sans text-sm text-fg-faint">No recordings yet — nothing recorded so far.</p>
         ) : (
-          <table className="w-full text-left">
-            <thead className="eyebrow bg-surface">
-              <tr>
-                <th className="px-4 py-3 sm:px-5">When</th>
-                <th className="px-4 py-3 sm:px-5">Business</th>
-                <th className="px-4 py-3 sm:px-5">Outcome</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recent.map((lead) => (
-                <tr
-                  key={lead.id}
-                  onClick={() => onOpenLead(lead)}
-                  className="cursor-pointer border-t border-line font-sans text-sm hover:bg-surface"
-                >
-                  {/* Prompt 645 — day over time, so the date can't wrap to
-                      five lines at phone width. */}
-                  <td className="whitespace-nowrap px-4 py-4 font-mono text-fg-primary [font-variant-numeric:tabular-nums] sm:px-5">
-                    {new Date(lead.strategy_call_at).toLocaleDateString('en-US', {
-                      timeZone: tz, weekday: 'short', month: 'short', day: 'numeric',
-                    })}
-                    <span className="block text-xs text-fg-secondary">
-                      {new Date(lead.strategy_call_at).toLocaleTimeString('en-US', {
-                        timeZone: tz, hour: 'numeric', minute: '2-digit',
-                      })}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4 font-medium text-fg-primary sm:px-5">{lead.facility_name}</td>
-                  <td className="whitespace-nowrap px-4 py-4 sm:px-5">
-                    <OutcomeBadge outcome={displayOutcome(lead)} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="rounded-lg border border-line bg-surface px-4 py-3">
+            <p className="font-sans text-sm font-medium text-fg-primary">
+              {latest.leads?.facility_name || 'Unknown lead'}
+              {latest.part_number > 1 && (
+                <span className="ml-2 font-normal text-fg-faint">Part {latest.part_number}</span>
+              )}
+            </p>
+            <p className="mt-0.5 font-mono text-xs text-fg-secondary [font-variant-numeric:tabular-nums]">
+              {fmtRecordedAt(latest.recorded_at || latest.created_at)}
+              {fmtRecordingDuration(latest.duration_seconds) && ` · ${fmtRecordingDuration(latest.duration_seconds)}`}
+            </p>
+            <p className={clsx('mt-1.5 font-sans text-xs font-medium', latest.status === 'failed' ? 'text-danger' : 'text-success')}>
+              {latest.status === 'failed' ? "Couldn't save" : 'Saved'}
+            </p>
+          </div>
         )}
       </div>
+      <Link
+        to="/my-calls?tab=closer"
+        className="mt-auto inline-flex items-center gap-1.5 self-start pt-5 font-sans text-sm font-semibold text-accent hover:opacity-80"
+      >
+        {count > 0 ? `View all ${count} recording${count === 1 ? '' : 's'}` : 'View My Recordings'} <ArrowRight size={14} />
+      </Link>
     </div>
   )
 }
 
-const SOON_ITEMS = [
-  {
-    title: 'Recordings & transcripts',
-    description: 'Each call’s Zoom recording and transcript, attached to the lead afterward.',
-  },
-  {
-    title: 'Camera & mic check',
-    description: 'Test your devices here before the join window opens.',
-  },
-]
+const CAMERA_MIC_ERROR_COPY = {
+  denied: 'Camera/mic access was denied. Allow access in your browser’s site settings, then try again.',
+  'no-device': 'No camera or microphone was found on this device.',
+  error: 'Couldn’t start the camera/mic check.',
+}
 
-function SoonCard() {
+// Live mic level (0–1) from a getUserMedia stream's audio track, via a Web
+// Audio analyser rather than MediaRecorder — this never records or saves
+// anything, it just reads the level while the check is running.
+function useMicLevel(stream) {
+  const [level, setLevel] = useState(0)
+
+  useEffect(() => {
+    if (!stream || !stream.getAudioTracks().length) {
+      setLevel(0)
+      return
+    }
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext
+    const ctx = new AudioContextClass()
+    const source = ctx.createMediaStreamSource(stream)
+    const analyser = ctx.createAnalyser()
+    analyser.fftSize = 512
+    source.connect(analyser)
+    const data = new Uint8Array(analyser.fftSize)
+    let raf
+
+    function tick() {
+      analyser.getByteTimeDomainData(data)
+      let sumSquares = 0
+      for (let i = 0; i < data.length; i++) {
+        const v = (data[i] - 128) / 128
+        sumSquares += v * v
+      }
+      setLevel(Math.min(1, Math.sqrt(sumSquares / data.length) * 4))
+      raf = requestAnimationFrame(tick)
+    }
+    tick()
+
+    return () => {
+      cancelAnimationFrame(raf)
+      source.disconnect()
+      analyser.disconnect()
+      ctx.close().catch(() => {})
+    }
+  }, [stream])
+
+  return level
+}
+
+// Prompt 653 — replaces the "Camera & mic check" Soon placeholder with a
+// real self-test: a live camera preview and a mic level meter from the
+// browser's own devices, independent of Zoom's SDK (matches 649's own tab
+// capture, which is also plain browser APIs, not Zoom). Access is only
+// requested on click, not on page load, and permission-denied/no-device
+// are shown honestly rather than faked as a passing check.
+function CameraMicCheckCard() {
+  const [state, setState] = useState('idle') // idle | requesting | active | denied | no-device | error
+  const [stream, setStream] = useState(null)
+  const videoRef = useRef(null)
+  const level = useMicLevel(state === 'active' ? stream : null)
+
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.srcObject = stream || null
+  }, [stream])
+
+  // Stops the tracks if the closer navigates away mid-check.
+  useEffect(() => {
+    return () => {
+      stream?.getTracks().forEach((t) => t.stop())
+    }
+  }, [stream])
+
+  async function runCheck() {
+    setState('requesting')
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      setStream(s)
+      setState('active')
+    } catch (e) {
+      setState(e?.name === 'NotAllowedError' || e?.name === 'SecurityError'
+        ? 'denied'
+        : e?.name === 'NotFoundError' || e?.name === 'OverconstrainedError'
+          ? 'no-device'
+          : 'error')
+    }
+  }
+
+  function stopCheck() {
+    stream?.getTracks().forEach((t) => t.stop())
+    setStream(null)
+    setState('idle')
+  }
+
   return (
-    <div>
-      <SectionHeading title="Coming to the Meeting Room" />
-      <div className="mt-3 divide-y divide-line overflow-hidden rounded-card border border-line bg-elevated">
-        {SOON_ITEMS.map((item) => (
-          <div key={item.title} className="px-5 py-4">
-            <p className="flex items-center gap-2 font-sans text-sm font-medium text-fg-faint">
-              {item.title}
-              <SoonBadge />
+    <div className="flex h-full flex-col rounded-card border border-line bg-elevated p-6 sm:p-8">
+      <p className="eyebrow">Camera &amp; mic check</p>
+      <p className="mt-2 font-sans text-sm text-fg-secondary">Test your devices before the join window opens.</p>
+
+      <div className="mt-5 flex flex-1 flex-col">
+        {state === 'active' ? (
+          <>
+            <div className="aspect-video w-full overflow-hidden rounded-lg border border-line bg-black">
+              <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
+            </div>
+            <div className="mt-4">
+              <p className="flex items-center gap-1.5 font-sans text-xs text-fg-secondary">
+                <Mic size={14} /> Microphone level
+              </p>
+              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-surface">
+                <div
+                  className="h-full rounded-full bg-success transition-[width] duration-75"
+                  style={{ width: `${Math.round(level * 100)}%` }}
+                />
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-line bg-surface px-4 py-8 text-center">
+            {['denied', 'no-device', 'error'].includes(state) && (
+              <p className="font-sans text-xs text-danger">{CAMERA_MIC_ERROR_COPY[state]}</p>
+            )}
+            <p className="font-sans text-sm text-fg-secondary">
+              {state === 'requesting' ? 'Requesting camera and microphone access…' : 'See a live preview and mic level before you join.'}
             </p>
-            <p className="mt-0.5 font-sans text-xs text-fg-faint">{item.description}</p>
           </div>
-        ))}
+        )}
+      </div>
+
+      <div className="mt-5">
+        {state === 'active' ? (
+          <Button type="button" variant="secondary" onClick={stopCheck}>Stop check</Button>
+        ) : (
+          <Button type="button" variant="secondary" onClick={runCheck} disabled={state === 'requesting'}>
+            <Video size={16} /> {['denied', 'no-device', 'error'].includes(state) ? 'Try again' : 'Run check'}
+          </Button>
+        )}
       </div>
     </div>
   )
@@ -600,20 +698,19 @@ function SoonCard() {
 function MeetingRoomBody({ profile, onOpenLead, onJoin }) {
   const { leads, isLoading, tz, todaysCalls, upcomingCalls, now } = useStrategyCalls(profile)
 
-  // Prompt 645 — clock row removed; hero (status + room check) with the
-  // stat strip tucked under it, then one consistent 40px rhythm between
-  // sections, each introduced by the same heading style.
+  // Prompt 653 — the stat strip now leads the page (Brayden's own layout
+  // pass, same idea as Stats' top-of-page summary tiles), with the
+  // join/room-check hero below it. Same 40px rhythm between sections,
+  // each introduced by the same heading style.
   return (
     <div>
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+      <RoomStats isLoading={isLoading} leads={leads} tz={tz} now={now} todaysCalls={todaysCalls} />
+
+      <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <MeetingStatusCard tz={tz} now={now} todaysCalls={todaysCalls} upcomingCalls={upcomingCalls} onJoin={onJoin} />
         </div>
         <RoomCheckCard profile={profile} />
-      </div>
-
-      <div className="mt-5">
-        <RoomStats isLoading={isLoading} leads={leads} tz={tz} now={now} todaysCalls={todaysCalls} />
       </div>
 
       <div className="mt-10">
@@ -640,11 +737,14 @@ function MeetingRoomBody({ profile, onOpenLead, onJoin }) {
         />
       </div>
 
-      <div className="mt-10 grid grid-cols-1 gap-10 lg:grid-cols-3 lg:gap-5">
-        <div className="lg:col-span-2">
-          <RecentCallsCard isLoading={isLoading} leads={leads} tz={tz} now={now} onOpenLead={onOpenLead} />
+      {/* Prompt 653 — Recent Calls removed (duplicated Overview/My Pipeline
+          and now My Recordings); the two Soon items are now real. */}
+      <div className="mt-10">
+        <SectionHeading title="In the Meeting Room" />
+        <div className="mt-3 grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <RecordingsCard />
+          <CameraMicCheckCard />
         </div>
-        <SoonCard />
       </div>
     </div>
   )

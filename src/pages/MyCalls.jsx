@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import clsx from 'clsx'
 import { Play, Loader2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
@@ -240,6 +241,14 @@ export default function MyCalls() {
   // "My Calls" render exactly as before.
   const isCloser = profile?.role === 'closer'
   const [tab, setTab] = useState('setter')
+  // Prompt 653 — Meeting Room's Recordings card links here with
+  // ?tab=closer (a closer just recorded a call, or wants their most recent
+  // one) so it lands on the right tab instead of always defaulting to
+  // Setter. Only applies once we know this profile is actually a closer.
+  const [searchParams] = useSearchParams()
+  useEffect(() => {
+    if (isCloser && searchParams.get('tab') === 'closer') setTab('closer')
+  }, [isCloser, searchParams])
   // Prompt 474 / 561: page heading side of the label swap — setter (474)
   // and closer (561) both read "My Recordings"; only admin keeps "My Calls".
   // Same route/data either way.

@@ -54,7 +54,7 @@ export function RecordingSaveBanner({ state, onDismiss }) {
         <CheckCircle2 size={15} />
         <span>
           Call recording saved to{' '}
-          <Link to="/my-calls" className="underline underline-offset-2">My Recordings</Link>.
+          <Link to="/my-calls?tab=closer" className="underline underline-offset-2">My Recordings</Link>.
         </span>
       </>
     )
