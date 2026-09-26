@@ -3,9 +3,11 @@ import clsx from 'clsx'
 import { Field, inputClass } from './ui/Field'
 import { Button } from './ui/Button'
 import { ConfirmedStackSummary } from './ConfirmedStackSummary'
-import { OUTCOME_LABELS, OUTCOME_SOLID, OUTCOME_TINT } from './ui/OutcomeBadge'
-import { useLogCloserOutcome } from '../hooks/useLeads'
+import { OUTCOME_SOLID, OUTCOME_TINT } from './ui/OutcomeBadge'
+import { useCreatePaymentRequest, useLogCloserOutcome } from '../hooks/useLeads'
 import { priceForSurveyValue } from '../lib/agentCatalog'
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // Prompt 540 — 'needs_reschedule' retired as a manual pick: No Show is now
 // a derived display state (lib/closerOutcome.js) and a real Reschedule
@@ -14,12 +16,19 @@ import { priceForSurveyValue } from '../lib/agentCatalog'
 // nothing to migrate.
 // Prompt 658 — 'pending' dropped too: CloserLeadModal only ever mounts this
 // form while the lead's own status is already Pending/No Show, so
-// "Pending" isn't a real outcome to pick, it's the status quo. Lost and
-// Closed are the only two things that actually happen next, and they're no
-// longer offered as free-swappable peers once a lead is Lost or Closed —
-// this form simply doesn't render for those statuses anymore (see
-// CloserLeadModal's tab gating).
-const OUTCOMES = ['lost', 'closed']
+// "Pending" isn't a real outcome to pick, it's the status quo.
+// Prompt 660 — 'closed' is no longer a free pick either: a lead only ever
+// becomes Closed once stripe-payment-webhook confirms a real ACH payment
+// landed. This form's second mode sends a Stripe payment request instead
+// (moves the lead to 'awaiting_payment', not 'closed') — Lost is still a
+// real, immediate, manually-logged outcome (a call happened and the client
+// said no, no payment ever in the picture).
+const MODES = ['lost', 'payment_request']
+const MODE_LABELS = { lost: 'Lost', payment_request: 'Send Payment Request' }
+// 'payment_request' reuses the awaiting_payment color — that's the state
+// this action is about to put the lead into.
+const MODE_TINT = { lost: OUTCOME_TINT.lost, payment_request: OUTCOME_TINT.awaiting_payment }
+const MODE_SOLID = { lost: OUTCOME_SOLID.lost, payment_request: OUTCOME_SOLID.awaiting_payment }
 
 // Prompt 464 — same interaction shape as setters' LogCallModal (pick an
 // outcome, optional notes, Save), for the deal-outcome tracking closers
@@ -49,24 +58,35 @@ const OUTCOMES = ['lost', 'closed']
 // gated on a Stack (frontRunner) existing, not on value data existing —
 // missing value data just floors the price at the FLOOR baseline.
 export function LogOutcomeForm({ lead, onClose, frontRunner, subAgents = new Set(), missedCallsPerWeek, admissionValue }) {
-  const [outcome, setOutcome] = useState(lead.closer_outcome || 'pending')
+  const [mode, setMode] = useState('lost')
   const [notes, setNotes] = useState(lead.closer_notes || '')
-  const logOutcome = useLogCloserOutcome()
-
-  const isClosed = outcome === 'closed'
   const price = priceForSurveyValue(missedCallsPerWeek, admissionValue)
-  const canSubmit = !isClosed || !!frontRunner
+  const [setupFee, setSetupFee] = useState(price.setupFee)
+  const [firstMonthFee, setFirstMonthFee] = useState(price.monthlyFee)
+  const [contactEmail, setContactEmail] = useState(lead.contact_email || '')
+  const logOutcome = useLogCloserOutcome()
+  const createPaymentRequest = useCreatePaymentRequest()
+
+  const isPaymentRequest = mode === 'payment_request'
+  const emailValid = EMAIL_RE.test(contactEmail.trim())
+  const canSubmit = isPaymentRequest
+    ? !!frontRunner && emailValid && setupFee >= 0 && firstMonthFee >= 0
+    : true
+  const isPending = logOutcome.isPending || createPaymentRequest.isPending
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (!canSubmit) return
-    await logOutcome.mutateAsync({
-      id: lead.id,
-      closer_outcome: outcome,
-      closer_notes: notes,
-      deal_setup_fee: isClosed ? price.setupFee : undefined,
-      deal_first_month_fee: isClosed ? price.monthlyFee : undefined,
-    })
+    if (isPaymentRequest) {
+      await createPaymentRequest.mutateAsync({
+        leadId: lead.id,
+        setupFee: Number(setupFee),
+        firstMonthFee: Number(firstMonthFee),
+        contactEmail: contactEmail.trim(),
+      })
+    } else {
+      await logOutcome.mutateAsync({ id: lead.id, closer_outcome: 'lost', closer_notes: notes })
+    }
     onClose()
   }
 
@@ -74,55 +94,102 @@ export function LogOutcomeForm({ lead, onClose, frontRunner, subAgents = new Set
     <form onSubmit={handleSubmit} className="space-y-4">
       <Field label="Outcome">
         <div className="grid grid-cols-2 gap-2">
-          {OUTCOMES.map((o) => (
+          {MODES.map((m) => (
             <button
               type="button"
-              key={o}
-              onClick={() => setOutcome(o)}
+              key={m}
+              onClick={() => setMode(m)}
               className={clsx(
                 'rounded-lg px-3 py-2 font-sans text-sm font-medium transition-colors hover:opacity-85',
-                outcome === o ? OUTCOME_SOLID[o] : OUTCOME_TINT[o]
+                mode === m ? MODE_SOLID[m] : MODE_TINT[m]
               )}
             >
-              {OUTCOME_LABELS[o]}
+              {MODE_LABELS[m]}
             </button>
           ))}
         </div>
       </Field>
 
-      {isClosed && (
+      {isPaymentRequest && (
         <>
           <ConfirmedStackSummary frontRunner={frontRunner} subAgents={subAgents} />
           {frontRunner ? (
-            <p className="rounded-lg border border-line bg-surface px-4 py-3 font-sans text-sm text-fg-primary">
-              Setup fee: <span className="font-medium">${price.setupFee.toLocaleString()}</span> · First month
-              total: <span className="font-medium">${price.firstMonthTotal.toLocaleString()}</span> · Then{' '}
-              <span className="font-medium">${price.monthlyFee.toLocaleString()}/mo</span>
-            </p>
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Setup fee">
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className={inputClass()}
+                    value={setupFee}
+                    onChange={(e) => setSetupFee(e.target.value)}
+                  />
+                </Field>
+                <Field label="First month fee">
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className={inputClass()}
+                    value={firstMonthFee}
+                    onChange={(e) => setFirstMonthFee(e.target.value)}
+                  />
+                </Field>
+              </div>
+              <Field label="Client email (for the Stripe invoice)">
+                <input
+                  type="email"
+                  className={inputClass()}
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  placeholder="billing@facility.com"
+                  required
+                />
+              </Field>
+              <p className="rounded-lg border border-line bg-surface px-4 py-3 font-sans text-sm text-fg-secondary">
+                Sends a Stripe invoice for{' '}
+                <span className="font-medium text-fg-primary">
+                  ${(Number(setupFee) + Number(firstMonthFee)).toLocaleString()}
+                </span>{' '}
+                (setup + first month), collected via ACH Direct Debit only. The client's bank account also
+                becomes the recurring{' '}
+                <span className="font-medium text-fg-primary">${Number(firstMonthFee).toLocaleString()}/mo</span>{' '}
+                charge, starting the following month — but only once this invoice is actually paid.
+              </p>
+            </>
           ) : (
             <p className="rounded-lg border border-line bg-surface px-4 py-3 font-sans text-sm text-fg-secondary">
-              Run the Closer Survey with this client first — Closed needs a Stack and price from it.
+              Run the Closer Survey with this client first — a payment request needs a Stack and price from it.
             </p>
           )}
         </>
       )}
 
-      <Field label="Notes">
-        <textarea
-          className={inputClass()}
-          rows={3}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="What's the status of this deal…"
-        />
-      </Field>
+      {!isPaymentRequest && (
+        <Field label="Notes">
+          <textarea
+            className={inputClass()}
+            rows={3}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="What's the status of this deal…"
+          />
+        </Field>
+      )}
+
+      {createPaymentRequest.isError && (
+        <p className="font-sans text-sm text-danger">
+          {createPaymentRequest.error?.message || 'Something went wrong sending the payment request.'}
+        </p>
+      )}
 
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="ghost" onClick={onClose}>
           Cancel
         </Button>
-        <Button type="submit" disabled={!canSubmit || logOutcome.isPending}>
-          {logOutcome.isPending ? 'Saving…' : 'Save'}
+        <Button type="submit" disabled={!canSubmit || isPending}>
+          {isPending ? 'Saving…' : isPaymentRequest ? 'Send Payment Request' : 'Save'}
         </Button>
       </div>
     </form>

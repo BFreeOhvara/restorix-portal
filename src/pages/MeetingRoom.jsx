@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import clsx from 'clsx'
 import { Video, CheckCircle2, Circle, ArrowRight, Mic } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { useStrategyCalls } from '../hooks/useStrategyCalls'
 import { useZoomConnection } from '../hooks/useZoom'
@@ -804,6 +805,20 @@ export default function MeetingRoom() {
     // Only the upload banner outlives the modal; in-call states clear.
     setRecording(null)
     recorder?.stop({ keepIt: joinedRef.current })
+    // Prompt 660 — the Zoom call join/leave lifecycle's own end point:
+    // a lead still 'pending' (no outcome ever logged, no payment ever
+    // requested) with a strategy call that just happened becomes Lost
+    // automatically rather than sitting there for a closer to remember.
+    // Best-effort/fire-and-forget — this never blocks closing the modal,
+    // and the RPC itself is a no-op for any other status (awaiting_payment
+    // gets its own time-based grace period instead, see
+    // expire-awaiting-payment; closed/lost are already final).
+    if (activeCall?.leadId) {
+      supabase.rpc('mark_call_ended_no_outcome', { p_lead_id: activeCall.leadId }).then(({ error }) => {
+        if (error) console.error('mark_call_ended_no_outcome:', error)
+        else queryClient.invalidateQueries({ queryKey: ['my-booked'] })
+      })
+    }
     setActiveCall(null)
   }
 

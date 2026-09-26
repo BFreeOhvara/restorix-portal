@@ -128,6 +128,46 @@ function LostHistory({ lead, onClose }) {
   )
 }
 
+// Prompt 660 — a lead sitting on a sent Stripe payment request: nothing
+// left for the closer to do here but wait for stripe-payment-webhook (a
+// real ACH payment landing flips this to Closed) or the grace-period
+// timeout (expire-awaiting-payment flips it to Lost). Same "read-only
+// history view, no action tabs" shape as LostHistory — see
+// tabsForStatus()'s own [] for this status.
+function AwaitingPaymentView({ lead }) {
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <OutcomeBadge outcome="awaiting_payment" />
+        {lead.awaiting_payment_at && (
+          <span className="font-sans text-xs text-fg-secondary">
+            Payment request sent {fmtDateTime(lead.awaiting_payment_at)}
+          </span>
+        )}
+      </div>
+
+      <p className="rounded-lg border border-line bg-surface px-4 py-3 font-sans text-sm text-fg-primary">
+        Invoice sent to <span className="font-medium">{lead.contact_email || 'the client'}</span> for{' '}
+        <span className="font-medium">
+          ${((lead.deal_setup_fee || 0) + (lead.deal_first_month_fee || 0)).toLocaleString()}
+        </span>{' '}
+        (setup + first month) via ACH Direct Debit.
+      </p>
+      <p className="font-sans text-xs text-fg-secondary">
+        This becomes Closed automatically once Stripe confirms the payment. If it goes unpaid too long, it
+        flips to Lost on its own — nothing to do here in the meantime.
+      </p>
+
+      {lead.payment_failed_at && (
+        <div className="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3">
+          <p className="font-sans text-sm font-semibold text-danger">Payment issue flagged</p>
+          <p className="mt-1 font-sans text-xs text-fg-secondary">{lead.payment_failed_note}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Prompt 546 — the confirm-the-Stack step. Shown once a deal is logged
 // Closed: the closer confirms the client's Stack, plus the client's phone.
 // Submitting writes the `deals` row and fires the SMS invite in one action
@@ -250,6 +290,7 @@ export default function CloserLeadModal({ lead, onClose }) {
   const status = displayOutcome(lead)
   const isPendingOrNoShow = status === 'pending' || status === 'no_show'
   const isLost = status === 'lost'
+  const isAwaitingPayment = status === 'awaiting_payment'
   const isClosedStatus = status === 'closed'
   const saveSurveyStack = useSaveSurveyStack()
   const [tab, setTab] = useState(isClosedStatus ? 'client_portal' : 'outcome')
@@ -310,6 +351,13 @@ export default function CloserLeadModal({ lead, onClose }) {
 
       <div className={clsx('max-h-[70vh] overflow-y-auto pr-1', tabs.length > 0 && 'mt-5')}>
         {isLost && <LostHistory lead={lead} onClose={onClose} />}
+        {isAwaitingPayment && <AwaitingPaymentView lead={lead} />}
+        {isClosedStatus && lead.payment_failed_at && (
+          <div className="mb-5 rounded-lg border border-danger/30 bg-danger/10 px-4 py-3">
+            <p className="font-sans text-sm font-semibold text-danger">Payment issue flagged</p>
+            <p className="mt-1 font-sans text-xs text-fg-secondary">{lead.payment_failed_note}</p>
+          </div>
+        )}
         {isPendingOrNoShow && tab === 'outcome' && (
           <LogOutcomeForm
             lead={lead}

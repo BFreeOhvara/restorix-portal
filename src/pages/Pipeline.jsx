@@ -111,7 +111,7 @@ function FollowUpCountdown({ target }) {
 // CloserTab below) — it displays the derived No Show state correctly from
 // data alone, it just never runs the auto-Lost escalation write itself
 // (see useMyBooked in useLeads.js for where that happens).
-const OUTCOME_FILTERS = ['pending', 'no_show', 'lost', 'closed']
+const OUTCOME_FILTERS = ['pending', 'no_show', 'awaiting_payment', 'lost', 'closed']
 
 // Prompt 465 — the raw backlog still sitting in the pool before day-end
 // distributes it into an actual setter/closer's working queue
@@ -435,7 +435,7 @@ function CloserTab() {
   }, [reps])
 
   const counts = useMemo(() => {
-    const c = { pending: 0, no_show: 0, lost: 0, closed: 0 }
+    const c = { pending: 0, no_show: 0, awaiting_payment: 0, lost: 0, closed: 0 }
     for (const lead of leads || []) {
       const key = displayOutcome(lead)
       c[key] = (c[key] || 0) + 1

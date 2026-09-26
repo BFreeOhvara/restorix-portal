@@ -196,6 +196,28 @@ export function useLogCloserOutcome() {
   })
 }
 
+// Prompt 660 — replaces freely picking "Closed": sends a real Stripe ACH
+// invoice via the create-payment-request edge function (Stripe secret key
+// stays server-side) and moves the lead to `awaiting_payment`. Closed now
+// only happens once stripe-payment-webhook confirms the invoice was
+// actually paid.
+export function useCreatePaymentRequest() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ leadId, setupFee, firstMonthFee, contactEmail }) => {
+      const { data, error } = await supabase.functions.invoke('create-payment-request', {
+        body: { leadId, setupFee, firstMonthFee, contactEmail },
+      })
+      if (error || data?.error) throw new Error(data?.error || error.message)
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-booked'] })
+      queryClient.invalidateQueries({ queryKey: ['pipeline-closer-leads'] })
+    },
+  })
+}
+
 // Prompt 468: every closed deal, for both My Commissions (setter, filtered
 // client-side to their own `last_action_by`) and the admin rollup (every
 // setter at once) — same one-fetch-many-views shape Stats.jsx already

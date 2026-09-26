@@ -11,19 +11,23 @@ import clsx from 'clsx'
 // (still a valid legacy DB value, just no longer a manually-selectable
 // outcome — see LogOutcomeModal.jsx) so an old row would still render
 // correctly rather than falling through to the `|| outcome` fallback.
+// Prompt 660 — `awaiting_payment`: a real stored value now, sitting between
+// Pending and Closed — a Stripe ACH payment request is out, not yet
+// confirmed by stripe-payment-webhook.
 export const OUTCOME_LABELS = {
   pending: 'Pending',
   no_show: 'No Show',
   needs_reschedule: 'Needs Rescheduling',
+  awaiting_payment: 'Awaiting Payment',
   lost: 'Lost',
   closed: 'Closed',
 }
 
-// The four closer-outcome categories, in display order — the vocabulary
+// The closer-outcome categories, in display order — the vocabulary
 // My Pipeline's filter chips (CloserBookedPipeline), the Closer Overview
 // tiles, and the Stats page's Outcome Mix / admin rollup all share.
 // 'no_show' is derived, never stored (see lib/closerOutcome.js).
-export const CLOSER_OUTCOME_TILES = ['pending', 'no_show', 'lost', 'closed']
+export const CLOSER_OUTCOME_TILES = ['pending', 'no_show', 'awaiting_payment', 'lost', 'closed']
 
 // Prompt 502: the raw (non-token) Tailwind palette/hex strings below
 // don't auto-inherit dark values the way token classes do, so each gets
@@ -43,10 +47,14 @@ export const CLOSER_OUTCOME_TILES = ['pending', 'no_show', 'lost', 'closed']
 // Prompt 540 — `no_show` gets its own purple, distinct from every existing
 // hue here (orange/yellow/red/green all already own a real meaning) so it
 // reads as its own state rather than a shade of Pending or Lost.
+// Prompt 660 — `awaiting_payment` gets blue: distinct from Pending's
+// orange (a real invoice is out, this isn't "nothing happened yet") and
+// from Closed's green (money hasn't landed yet).
 export const OUTCOME_TINT = {
   pending: 'bg-orange-100 !text-orange-800 dark:bg-orange-900/50 dark:!text-orange-300',
   no_show: 'bg-purple-100 !text-purple-800 dark:bg-purple-900/50 dark:!text-purple-300',
   needs_reschedule: 'bg-yellow-100 !text-yellow-800 dark:bg-yellow-900/50 dark:!text-yellow-300',
+  awaiting_payment: 'bg-blue-100 !text-blue-800 dark:bg-blue-900/50 dark:!text-blue-300',
   lost: 'bg-[#fbe2de] !text-danger dark:bg-[#3d211c]',
   closed: 'bg-[#dcf3e6] !text-success dark:bg-[#173a28]',
 }
@@ -55,6 +63,7 @@ export const OUTCOME_SOLID = {
   pending: 'bg-orange-600 !text-white dark:bg-orange-500 dark:!text-orange-950',
   no_show: 'bg-purple-600 !text-white dark:bg-purple-500 dark:!text-purple-950',
   needs_reschedule: 'bg-yellow-600 !text-white dark:bg-yellow-500 dark:!text-yellow-950',
+  awaiting_payment: 'bg-blue-600 !text-white dark:bg-blue-500 dark:!text-blue-950',
   lost: 'bg-danger !text-white',
   closed: 'bg-success !text-white',
 }

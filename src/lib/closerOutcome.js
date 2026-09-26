@@ -31,6 +31,11 @@ export function displayOutcome(lead) {
 // action tabs at all — CloserLeadModal renders its own LostHistory view
 // instead. Pulled out as its own pure function (not left inline in the
 // component) so this exact mapping is unit-testable without mounting React.
+// Prompt 660 — `awaiting_payment` also gets no action tabs: a Stripe
+// invoice is already out, there's nothing left for the closer to do here
+// but wait for stripe-payment-webhook (or the grace-period timeout) to
+// resolve it. CloserLeadModal renders its own AwaitingPaymentView instead,
+// same shape as LostHistory.
 export function tabsForStatus(status) {
   if (status === 'pending' || status === 'no_show') {
     return [
@@ -44,7 +49,7 @@ export function tabsForStatus(status) {
       { key: 'client_portal', label: 'Client Portal' },
     ]
   }
-  return [] // lost
+  return [] // lost, awaiting_payment
 }
 
 // A no-show that's sat 7+ days past its missed appointment time with no

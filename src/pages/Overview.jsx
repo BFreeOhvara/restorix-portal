@@ -889,7 +889,7 @@ export function CloserOverview({ profile, title = 'Overview' }) {
   // CLOSER_OUTCOME_TILES and My Pipeline's own Closer-tab chips, over the
   // same all-time `leads` array already in memory (no new query).
   const outcomeCounts = useMemo(() => {
-    const counts = { pending: 0, no_show: 0, lost: 0, closed: 0 }
+    const counts = { pending: 0, no_show: 0, awaiting_payment: 0, lost: 0, closed: 0 }
     for (const l of leads || []) {
       const o = displayOutcome(l)
       if (o in counts) counts[o] += 1
@@ -968,7 +968,7 @@ export function CloserOverview({ profile, title = 'Overview' }) {
           Pipeline. Placed above the calls list so the page has an
           at-a-glance whole-book view before the time-sensitive detail. */}
       <h2 className="mt-8 font-display text-lg font-medium text-fg-primary">Pipeline Snapshot</h2>
-      <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {CLOSER_OUTCOME_TILES.map((key) => (
           <Link
             key={key}
