@@ -8,6 +8,7 @@ import ParticleField from './ui/ParticleField'
 import { Avatar } from './ui/Avatar'
 import BugReportModal from './BugReportModal'
 import AddToHomeScreenModal from './AddToHomeScreenModal'
+import PageErrorBoundary from './PageErrorBoundary'
 
 // Prompt 448: grouped into labeled sections (matching ohvara-dashboard's
 // Sidebar.jsx grouped-nav pattern) instead of one flat list. Bucket names
@@ -556,12 +557,16 @@ export default function Layout() {
           // filling the viewport). Messages.jsx's own root uses `flex-1`
           // for the same reason, not `h-full`.
           <main className="flex flex-1 flex-col overflow-hidden">
-            <Outlet />
+            <PageErrorBoundary key={location.pathname}>
+              <Outlet />
+            </PageErrorBoundary>
           </main>
         ) : (
           <main className="flex-1 px-6 py-8">
             <div className="mx-auto max-w-7xl">
-              <Outlet />
+              <PageErrorBoundary key={location.pathname}>
+                <Outlet />
+              </PageErrorBoundary>
             </div>
           </main>
         )}
