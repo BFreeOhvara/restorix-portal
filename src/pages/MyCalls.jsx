@@ -8,7 +8,7 @@ import StatusBadge from '../components/ui/StatusBadge'
 import { DayPaginator } from '../components/ui/DayPaginator'
 import { DateCalendar } from '../components/ui/DateCalendar'
 import Modal from '../components/ui/Modal'
-import { zonedDateStr, monthOf } from '../lib/dates'
+import { zonedDateStr, zonedDayRange, monthOf } from '../lib/dates'
 import { DEFAULT_TIMEZONE } from '../lib/timezones'
 import { usePageHeader } from '../components/Layout'
 import { SegmentedTabs } from '../components/ui/SegmentedTabs'
@@ -109,15 +109,16 @@ const RECORDING_TABS = [
   { key: 'closer', label: 'Closer' },
 ]
 
-function CloserRecordingsSoon() {
+// Prompt 656 — same copy as before 656, just rendered inside the table's
+// body instead of replacing the whole box, so the header (Lead/When/
+// Duration/Recording) stays visible even with zero rows.
+function CloserRecordingsEmptyState() {
   return (
-    <div className="mt-5 flex h-[736px] items-center justify-center rounded-card border border-line bg-elevated px-8">
-      <div className="max-w-sm text-center">
-        <p className="font-sans text-sm font-medium text-fg-faint">Strategy call recordings</p>
-        <p className="mt-1.5 font-sans text-xs text-fg-faint">
-          Each strategy call you run in the Meeting Room is recorded from your browser tab and shows up here, attached to the lead, once the call ends. No recordings yet.
-        </p>
-      </div>
+    <div className="mx-auto max-w-sm">
+      <p className="font-sans text-sm font-medium text-fg-faint">Strategy call recordings</p>
+      <p className="mt-1.5 font-sans text-xs text-fg-faint">
+        Each strategy call you run in the Meeting Room is recorded from your browser tab and shows up here, attached to the lead, once the call ends. No recordings yet.
+      </p>
     </div>
   )
 }
@@ -184,10 +185,20 @@ function StrategyRecordingCell({ recording }) {
 
 // Same box/row geometry as the Setter table (736px box, 63px rows) so
 // switching tabs never moves the page.
-function CloserRecordings() {
-  const { data: recordings, isLoading } = useMyStrategyRecordings()
-
-  if (!isLoading && !recordings?.length) return <CloserRecordingsSoon />
+// Prompt 656 — `date`/`tz` add the same day filter the Setter tab already
+// has (DayPaginator + jump-to-date calendar, driven by the shared `date`
+// state in MyCalls below). useMyStrategyRecordings() itself stays flat
+// (Prompt 649's own note: "a closer runs a handful of strategy calls, not
+// a dialer's hundred calls a day") — filtered client-side by day instead
+// of adding a second, day-scoped query.
+function CloserRecordings({ date, tz }) {
+  const { data: allRecordings, isLoading } = useMyStrategyRecordings()
+  const { start, end } = zonedDayRange(date, tz)
+  const recordings = allRecordings?.filter((r) => {
+    const t = r.recorded_at || r.created_at
+    return t >= start && t < end
+  })
+  const isEmpty = !isLoading && !recordings?.length
 
   return (
     <div className="mt-5 h-[736px] overflow-hidden rounded-card border border-line bg-elevated">
@@ -206,6 +217,12 @@ function CloserRecordings() {
               <tr>
                 <td colSpan={99} className="h-[693px] px-8 text-center align-middle font-sans text-sm text-fg-secondary">
                   Loading…
+                </td>
+              </tr>
+            ) : isEmpty ? (
+              <tr>
+                <td colSpan={99} className="h-[693px] px-8 text-center align-middle">
+                  <CloserRecordingsEmptyState />
                 </td>
               </tr>
             ) : (
@@ -294,15 +311,16 @@ export default function MyCalls() {
 
   return (
     <div>
-      {/* Prompt 657 — a closer with "I also set" off never sees the Setter
-          tab or its date paginator, so this row is skipped entirely rather
-          than rendering empty. */}
-      {(showRecordingTabs || effectiveTab === 'setter') && (
+      {/* Prompt 656 — the date paginator now applies to both tabs (the
+          Closer tab filters its own recordings by the same selected day,
+          same as Setter always has), so it's no longer gated on
+          effectiveTab === 'setter'. 657's "skip the row entirely for a
+          closer-only user" no longer applies either, since that user's
+          sole (Closer) tab still needs the date filter. */}
       <div className={clsx('flex', showRecordingTabs ? 'flex-wrap items-center justify-between gap-3' : 'justify-end')}>
         {showRecordingTabs && (
           <SegmentedTabs tabs={RECORDING_TABS} active={tab} onChange={handleTabChange} variant="grouped" />
         )}
-        {effectiveTab === 'setter' && (
         <div ref={calendarRef} className="relative">
           <DayPaginator
             date={date}
@@ -324,15 +342,13 @@ export default function MyCalls() {
             </div>
           )}
         </div>
-        )}
       </div>
-      )}
 
       {/* Prompt 646 — the tabs row is 42px vs the paginator's 38px, so the
           closer's top margin drops 24px→20px (here and in
-          CloserRecordingsSoon) to keep total page height, and 605's
-          no-page-scroll fit, unchanged. */}
-      {effectiveTab === 'closer' ? <CloserRecordings /> : (<>
+          CloserRecordingsEmptyState's box) to keep total page height, and
+          605's no-page-scroll fit, unchanged. */}
+      {effectiveTab === 'closer' ? <CloserRecordings date={date} tz={tz} /> : (<>
       {/* Own scroll region, same treatment as Overview's lead table
           (Prompt 440). Prompt 602 — box quantized to the sticky header's
           own height (~43px) plus a whole number of rows, so the box's
