@@ -29,23 +29,23 @@ export function CustomDatePicker({ range, onChange, initialMonth, today }) {
 
   return (
     <div ref={ref} className="relative">
-      <div className="flex h-[38px] items-center rounded-full border border-line bg-elevated pl-4 pr-1.5 transition-colors hover:bg-surface">
+      <div className={`flex h-[38px] items-center justify-center rounded-full border border-line bg-elevated px-4 transition-colors hover:bg-surface ${range ? 'pr-7' : ''}`}>
         <button
           onClick={() => setOpen((v) => !v)}
           className="min-w-[120px] text-center font-sans text-xs font-medium text-fg-primary"
         >
           {label}
         </button>
-        {range && (
-          <button
-            onClick={() => onChange(null)}
-            aria-label="Clear custom date range"
-            className="ml-1 shrink-0 rounded-full p-1 text-fg-faint transition-colors hover:bg-elevated hover:text-fg-primary"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        )}
       </div>
+      {range && (
+        <button
+          onClick={() => onChange(null)}
+          aria-label="Clear custom date range"
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 shrink-0 rounded-full p-1 text-fg-faint transition-colors hover:bg-elevated hover:text-fg-primary"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
       {open && (
         <div className="absolute right-0 top-full z-20 mt-2 w-72 shadow-lg">
           <p className="mb-2 rounded-card border border-line bg-elevated px-3 py-2 font-sans text-[11px] text-fg-secondary">
