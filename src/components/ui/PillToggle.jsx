@@ -13,7 +13,7 @@ import clsx from 'clsx'
 // SegmentedTabs' `grouped` variant's own `rounded-lg` (same token, not a
 // new radius value), so Settings' tab bar can match Training's Script/
 // Videos toggle. Defaults false — every other caller (Stats, Training's
-// own Closer/Setter toggle, SetterActivity) renders exactly as before.
+// own Closer/Setter toggle, TeamActivity) renders exactly as before.
 export function PillToggle({ options, active, onChange, stretch = false, square = false }) {
   const radius = square ? 'rounded-lg' : 'rounded-full'
   return (

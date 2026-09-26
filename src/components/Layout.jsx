@@ -45,7 +45,7 @@ const NAV_GROUPS = [
       { to: '/goals', label: 'My Goals', icon: Target, roles: ['setter'] },
       { to: '/stats', label: 'Stats', icon: TrendingUp, roles: ['setter', 'closer'] },
       { to: '/activity', label: 'Activity', icon: ActivityIcon, roles: ['setter'] },
-      { to: '/setter-activity', label: 'Setter Activity', icon: Users2, roles: ['closer'] },
+      { to: '/team-activity', label: 'Team Activity', icon: Users2, roles: ['closer'] },
       { to: '/commissions', label: 'Commissions', icon: DollarSign, roles: ['setter', 'admin', 'closer'] },
     ],
   },

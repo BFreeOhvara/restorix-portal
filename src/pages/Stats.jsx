@@ -389,7 +389,7 @@ function mockCloseWeeks(currentMonday) {
 }
 
 // Prompt 606 — CustomDatePicker (and formatRangeLabel) moved to
-// src/components/ui/CustomDatePicker.jsx so SetterActivity's own All Time
+// src/components/ui/CustomDatePicker.jsx so TeamActivity's own All Time
 // tab can share it instead of duplicating it. See that file for the full
 // Prompt 536 reopen-round history that shaped this control.
 

@@ -4,7 +4,7 @@ import { DateRangeCalendar } from './DateRangeCalendar'
 
 // Prompt 606 — extracted out of Stats.jsx (where it originated across
 // Prompt 536's several reopen rounds — see that file's history for the
-// full design rationale) so SetterActivity's own All Time tab can reuse
+// full design rationale) so TeamActivity's own All Time tab can reuse
 // the exact same control instead of a second copy. Behavior/appearance
 // unchanged from Stats.jsx's version.
 export function formatRangeLabel(range) {

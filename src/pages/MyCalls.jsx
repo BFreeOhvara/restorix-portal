@@ -96,7 +96,7 @@ function RecordingCell({ callId }) {
 }
 
 // Prompt 646 — closer-only Setter/Closer split, same boxed SegmentedTabs
-// variant="grouped" My Pipeline/Setter Activity use. Setter = the dialer
+// variant="grouped" My Pipeline/Team Activity use. Setter = the dialer
 // calls this page has always listed; Closer = Zoom strategy-call
 // recordings (Prompt 647: real rows from zoom_recordings once
 // zoom-recording-webhook has stored any; honest Soon state until then).

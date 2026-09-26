@@ -12,7 +12,7 @@ import Pipeline from './pages/Pipeline'
 import Users from './pages/Users'
 import Training from './pages/Training'
 import Activity from './pages/Activity'
-import SetterActivity from './pages/SetterActivity'
+import TeamActivity from './pages/TeamActivity'
 import Commissions from './pages/Commissions'
 import MyGoals from './pages/MyGoals'
 import Messages from './pages/Messages'
@@ -210,10 +210,10 @@ export default function App() {
                         }
                       />
                       <Route
-                        path="/setter-activity"
+                        path="/team-activity"
                         element={
                           <RoleRoute roles={['closer']}>
-                            <SetterActivity />
+                            <TeamActivity />
                           </RoleRoute>
                         }
                       />

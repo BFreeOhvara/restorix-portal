@@ -166,7 +166,7 @@ function InviteRepBubble() {
   )
 }
 
-export default function SetterActivity() {
+export default function TeamActivity() {
   const { profile } = useAuth()
   const { data: leads, isLoading } = useAllLeadsForStats()
   const { data: reps } = useReps()
@@ -224,7 +224,7 @@ export default function SetterActivity() {
       })
   }, [leads, reps, rawRange, roleTab])
 
-  usePageHeader({ title: 'Setter Activity', subtitle: 'See who\'s feeding your pipeline' })
+  usePageHeader({ title: 'Team Activity', subtitle: 'See who\'s feeding your pipeline' })
 
   return (
     <div>
