@@ -96,7 +96,7 @@ function CloserSettingsHub({ profile }) {
   return (
     <div className="max-w-3xl">
       <div className="mb-8">
-        <PillToggle options={CLOSER_TABS} active={tab} onChange={setTab} stretch />
+        <PillToggle options={CLOSER_TABS} active={tab} onChange={setTab} stretch square />
       </div>
 
       {tab === 'profile' && <ProfilePanel profile={profile} />}

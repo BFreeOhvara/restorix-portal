@@ -9,9 +9,15 @@ import clsx from 'clsx'
 // width segments filling the container, vs. the default shrink-to-content).
 // Neither existing caller (Stats, My Goals via MyGoals.jsx, Training) passes
 // either, so their rendering is unchanged.
-export function PillToggle({ options, active, onChange, stretch = false }) {
+// Prompt 650 — optional `square` prop swaps the fully-round corners for
+// SegmentedTabs' `grouped` variant's own `rounded-lg` (same token, not a
+// new radius value), so Settings' tab bar can match Training's Script/
+// Videos toggle. Defaults false — every other caller (Stats, Training's
+// own Closer/Setter toggle, SetterActivity) renders exactly as before.
+export function PillToggle({ options, active, onChange, stretch = false, square = false }) {
+  const radius = square ? 'rounded-lg' : 'rounded-full'
   return (
-    <div className={clsx('flex gap-1 rounded-full border border-line bg-elevated p-1', stretch && 'w-full')}>
+    <div className={clsx('flex gap-1 border border-line bg-elevated p-1', radius, stretch && 'w-full')}>
       {options.map((opt) => {
         const Icon = opt.icon
         return (
@@ -21,7 +27,8 @@ export function PillToggle({ options, active, onChange, stretch = false }) {
             onClick={() => !opt.disabled && onChange(opt.key)}
             disabled={opt.disabled}
             className={clsx(
-              'flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 font-sans text-xs font-medium transition-colors',
+              'flex items-center justify-center gap-1.5 whitespace-nowrap px-3 py-1 font-sans text-xs font-medium transition-colors',
+              radius,
               stretch && 'flex-1',
               opt.disabled
                 ? 'cursor-not-allowed text-fg-faint'
